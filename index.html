@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telegram Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/wordcloud@1.2.2/src/wordcloud2.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="theme-default">
+    <div class="container">
+        <header class="header">
+            <i class="fab fa-telegram header-icon"></i>
+            <h1>Telegram Analyzer</h1>
+            <button id="themeToggleBtn" title="Переключить тему" class="theme-toggle-button">
+                <i class="fas fa-palette"></i>
+            </button>
+        </header>
+
+        <div class="upload-section">
+            <!-- Drop Zone -->
+            <div id="dropZone" class="drop-zone">
+                 <input type="file" id="jsonFile" accept=".json" style="display: none;">
+                 <div class="drop-zone-content">
+                    <i class="fas fa-file-upload drop-icon"></i>
+                    <p>Перетащите JSON файл сюда</p>
+                    <p class="separator">или</p>
+                    <label for="jsonFile" class="upload-button">
+                         <span>Выберите файл</span>
+                    </label>
+                    <p id="dropFileName" class="file-name"></p>
+                </div>
+            </div>
+            <div id="loadingIndicator" class="loading-indicator">
+                <i class="fas fa-spinner fa-spin"></i>
+                <span>Загрузка и анализ данных...</span>
+            </div>
+        </div>
+
+        <div class="stats-container">
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="all">
+                    <i class="fas fa-globe"></i> Общая статистика
+                </button>
+                <button class="tab-btn" data-tab="monthly">
+                    <i class="fas fa-calendar-alt"></i> По месяцам
+                </button>
+            </div>
+
+            <!-- All Time Stats -->
+            <div class="tab-content active" id="all">
+                <div class="general-stats card">
+                    <div class="card-header">
+                        <i class="fas fa-chart-bar"></i>
+                        <h2>Общая статистика</h2>
+                    </div>
+                    <div class="card-content">
+                        <div id="messageCount" class="stat-box"></div>
+                        <div id="participantStats" class="stat-box"></div>
+                        <div id="averageResponseDelayStats" class="stat-box"></div>
+                        <div id="wordCountStats" class="stat-box"></div>
+                        <div id="mediaTypeStats" class="stat-box"></div>
+                        <div id="thresholdExceededMessagesStats" class="stat-box">
+                            <div class="stat-box">
+                                <h3><i class="fas fa-eye-slash"></i> Настройка порога для сообщений с долгим ответом (в минутах):</h3>
+                                <input type="number" id="ignoredThreshold" value="60" min="1" style="color: black;">
+                            </div>
+                        </div>
+                        <div id="topWordsStats" class="stat-box"></div>
+                    </div>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container card">
+                        <div class="card-header">
+                            <i class="fas fa-calendar-alt"></i>
+                            <h3>Сообщения по месяцам</h3>
+                        </div>
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                    <div class="chart-container card">
+                        <div class="card-header">
+                            <i class="fas fa-clock"></i>
+                            <h3>Время ответа</h3>
+                        </div>
+                        <canvas id="responseTimeChart"></canvas>
+                    </div>
+                    <div class="chart-container card">
+                        <div class="card-header">
+                            <i class="fas fa-sun"></i>
+                            <h3>Активность по времени суток</h3>
+                        </div>
+                        <canvas id="timeOfDayChart"></canvas>
+                    </div>
+                    <div class="chart-container card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-pie"></i>
+                            <h3>Типы сообщений</h3>
+                        </div>
+                        <canvas id="messageTypesChart"></canvas>
+                    </div>
+                     <div class="chart-container card">
+                        <div class="card-header">
+                            <i class="fas fa-calendar-week"></i>
+                            <h3>Активность по дням недели</h3>
+                        </div>
+                        <canvas id="dayOfWeekChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly Stats -->
+            <div class="tab-content" id="monthly">
+                <div class="month-selector">
+                    <button class="nav-btn" id="prevMonth">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <h2 id="currentMonth">Выберите месяц</h2>
+                    <button class="nav-btn" id="nextMonth">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <div class="monthly-stats-grid">
+                    <div class="card">
+                        <div class="card-header">
+                            <i class="fas fa-chart-bar"></i>
+                            <h3>Статистика за месяц</h3>
+                        </div>
+                        <div class="card-content">
+                            <div id="monthlyMessageCount" class="stat-box"></div>
+                            <div id="monthlyParticipantStats" class="stat-box"></div>
+                            <div id="monthlyWordCountStats" class="stat-box"></div>
+                            <div id="monthlyMediaTypeStats" class="stat-box"></div>
+                            <div id="monthlyAverageResponseDelayStats" class="stat-box"></div>
+                            <div id="monthlyThresholdExceededMessagesStats" class="stat-box"></div>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <div class="chart-container card">
+                            <div class="card-header">
+                                <i class="fas fa-clock"></i>
+                                <h3>Активность по дням</h3>
+                            </div>
+                            <canvas id="dailyActivityChart"></canvas>
+                        </div>
+                        <div class="chart-container card">
+                            <div class="card-header">
+                                <i class="fas fa-sun"></i>
+                                <h3>Время суток (за месяц)</h3>
+                            </div>
+                            <canvas id="monthlyTimeOfDayChart"></canvas>
+                        </div>
+                        <div class="chart-container card">
+                            <div class="card-header">
+                                <i class="fas fa-comments"></i>
+                                <h3>Типы сообщений за месяц</h3>
+                            </div>
+                            <canvas id="monthlyMessageTypesChart"></canvas>
+                        </div>
+                        <div class="chart-container card">
+                            <div class="card-header">
+                                <i class="fas fa-clock"></i>
+                                <h3>Время ответа за месяц</h3>
+                            </div>
+                            <canvas id="monthlyResponseTimeChart"></canvas>
+                        </div>
+                         <div class="chart-container card">
+                            <div class="card-header">
+                                <i class="fas fa-calendar-week"></i>
+                                <h3>Активность по дням недели (месяц)</h3>
+                            </div>
+                            <canvas id="monthlyDayOfWeekChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="analyzer.js"></script>
+</body>
+</html>
