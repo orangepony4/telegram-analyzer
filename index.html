@@ -12,34 +12,56 @@
 <body class="theme-default">
     <div class="container">
         <header class="header">
-            <i class="fab fa-telegram header-icon"></i>
-            <h1>Telegram Analyzer</h1>
-            <button id="themeToggleBtn" title="Переключить тему" class="theme-toggle-button">
-                <i class="fas fa-palette"></i>
-            </button>
-        </header>
-
-        <div class="upload-section">
-            <!-- Drop Zone -->
-            <div id="dropZone" class="drop-zone">
-                 <input type="file" id="jsonFile" accept=".json" style="display: none;">
-                 <div class="drop-zone-content">
-                    <i class="fas fa-file-upload drop-icon"></i>
-                    <p>Перетащите JSON файл сюда</p>
-                    <p class="separator">или</p>
-                    <label for="jsonFile" class="upload-button">
-                         <span>Выберите файл</span>
-                    </label>
-                    <p id="dropFileName" class="file-name"></p>
+            <div class="header-left">
+                <div class="logo-pill">
+                    <i class="fab fa-telegram"></i>
+                </div>
+                <div class="header-text">
+                    <h1>Telegram Analyzer</h1>
+                    <p>Интерактивная аналитика ваших Telegram-чатов</p>
                 </div>
             </div>
-            <div id="loadingIndicator" class="loading-indicator">
-                <i class="fas fa-spinner fa-spin"></i>
-                <span>Загрузка и анализ данных...</span>
+            <div class="header-right">
+                <div class="header-highlights">
+                    <span class="highlight-pill"><i class="fas fa-shield-alt"></i> Данные остаются у вас</span>
+                    <span class="highlight-pill"><i class="fas fa-bolt"></i> Анализ в браузере</span>
+                </div>
+                <button id="themeToggleBtn" title="Переключить тему" class="theme-toggle-button">
+                    <span class="sr-only">Переключить тему</span>
+                    <i class="fas fa-sun"></i>
+                </button>
             </div>
-        </div>
+        </header>
 
-        <div class="stats-container">
+        <main class="page-main">
+            <section class="upload-card">
+                <h2><i class="fas fa-cloud-upload-alt"></i> Загрузите экспорт чата</h2>
+                <p class="lead">Перетащите JSON-файл экспорта Telegram или выберите его вручную — данные не покидают ваш браузер.</p>
+                <div id="dropZone" class="drop-zone">
+                     <input type="file" id="jsonFile" accept=".json" style="display: none;">
+                     <div class="drop-zone-content">
+                        <i class="fas fa-file-upload drop-icon"></i>
+                        <p>Перетащите JSON-файл сюда</p>
+                        <p class="separator">или</p>
+                        <label for="jsonFile" class="upload-button">
+                             <span>Выберите файл</span>
+                        </label>
+                        <p id="dropFileName" class="file-name"></p>
+                    </div>
+                </div>
+                <div id="loadingIndicator" class="loading-indicator">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Загрузка и анализ данных...</span>
+                </div>
+            </section>
+
+            <section class="stats-section stats-container">
+                <div class="stats-heading">
+                    <div>
+                        <h2><i class="fas fa-chart-line"></i> Панель аналитики</h2>
+                        <p>После загрузки экспорта исследуйте ключевые метрики, переключайте вкладки и отслеживайте динамику общения помесячно.</p>
+                    </div>
+                </div>
             <!-- Tabs -->
             <div class="tabs">
                 <button class="tab-btn active" data-tab="all">
@@ -63,12 +85,11 @@
                         <div id="averageResponseDelayStats" class="stat-box"></div>
                         <div id="wordCountStats" class="stat-box"></div>
                         <div id="mediaTypeStats" class="stat-box"></div>
-                        <div id="thresholdExceededMessagesStats" class="stat-box">
-                            <div class="stat-box">
-                                <h3><i class="fas fa-eye-slash"></i> Настройка порога для сообщений с долгим ответом (в минутах):</h3>
-                                <input type="number" id="ignoredThreshold" value="60" min="1" style="color: black;">
-                            </div>
+                        <div class="stat-box threshold-control">
+                            <h3><i class="fas fa-eye-slash"></i> Настройка порога для сообщений с долгим ответом (в минутах):</h3>
+                            <input type="number" id="ignoredThreshold" value="60" min="1">
                         </div>
+                        <div id="thresholdExceededMessagesStats" class="stat-box"></div>
                         <div id="topWordsStats" class="stat-box"></div>
                     </div>
                 </div>
@@ -179,7 +200,8 @@
                     </div>
                 </div>
             </div>
-        </div>
+            </section>
+        </main>
     </div>
     <script src="analyzer.js"></script>
 </body>

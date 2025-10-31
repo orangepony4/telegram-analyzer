@@ -5,6 +5,32 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const ignoredThresholdInput = document.getElementById('ignoredThreshold');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeToggleIcon = themeToggleBtn?.querySelector('i');
+    const bodyElement = document.body;
+    const dropZone = document.getElementById('dropZone');
+    const dropFileNameElement = document.getElementById('dropFileName');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
+    const DEFAULT_THEME_KEY = 'default';
+    const ALTERNATIVE_THEME_KEY = 'muted-light';
+    const DEFAULT_THEME_CLASS = 'theme-default';
+    const ALTERNATIVE_THEME_CLASS = 'theme-muted-light';
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', () => {
+            let savedTheme;
+            try {
+                savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME_KEY;
+            } catch (storageError) {
+                console.warn('Не удалось получить тему из localStorage', storageError);
+                savedTheme = DEFAULT_THEME_KEY;
+            }
+
+            const nextTheme = savedTheme === DEFAULT_THEME_KEY ? ALTERNATIVE_THEME_KEY : DEFAULT_THEME_KEY;
+            applyTheme(nextTheme, { refreshCharts: true });
+        });
+    }
 
     // --- HTML Element IDs (Updated)
     const averageResponseDelayStatsElement = document.getElementById('averageResponseDelayStats'); // Renamed from averageResponseTimes
@@ -17,10 +43,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let monthsData = [];
     let allParticipants = new Set();
     let ignoredMessageThreshold = 3600; // Порог игнорирования по умолчанию: 1 час (в секундах)
+    let chartTheme = {
+        textColor: '#e4e6ea',
+        borderColor: '#2a2d31',
+        gridColor: 'rgba(255, 255, 255, 0.1)'
+    };
+    const renderedCharts = new Map();
 
-    // Установка темной темы для Chart.js
-    Chart.defaults.color = '#e4e6ea';
-    Chart.defaults.borderColor = '#2a2d31';
+    initializeTheme();
 
     // Обработчики вкладок
     document.querySelectorAll('.tab-btn').forEach(button => {
@@ -56,34 +86,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    fileInput.addEventListener('change', handleFileSelect);
+    if (fileInput) {
+        fileInput.addEventListener('change', handleFileSelect);
+    }
+
+    if (dropZone) {
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, handleDragOver);
+        });
+
+        ['dragleave', 'dragend'].forEach(eventName => {
+            dropZone.addEventListener(eventName, handleDragLeave);
+        });
+
+        dropZone.addEventListener('drop', handleDrop);
+
+        // Клик по зоне тоже откроет диалог выбора файла
+        dropZone.addEventListener('click', (event) => {
+            const target = event.target;
+            if (target === fileInput || target?.closest('label')) {
+                return;
+            }
+            fileInput?.click();
+        });
+    }
 
     function handleFileSelect(event) {
-        const file = event.target.files[0];
+        const file = event.target.files?.[0];
         if (!file) {
             console.warn('Файл не выбран.');
             return;
         }
 
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                currentData = JSON.parse(e.target.result);
-                analyzeChat(currentData);
-                statsContainer.style.display = 'block';
-                animateCards();
-            } catch (error) {
-                console.error('Ошибка разбора JSON файла:', error);
-                alert('Ошибка обработки файла. Пожалуйста, убедитесь, что файл JSON корректен.');
-                statsContainer.style.display = 'none';
-            }
-        };
-        reader.onerror = () => {
-            console.error('Ошибка чтения файла');
-            alert('Не удалось прочитать файл.');
-            statsContainer.style.display = 'none';
-        };
-        reader.readAsText(file);
+        processSelectedFile(file);
     }
 
     // Helper function to sanitize HTML and prevent XSS
@@ -91,6 +126,335 @@ document.addEventListener('DOMContentLoaded', () => {
         const temp = document.createElement('div');
         temp.textContent = text;
         return temp.innerHTML;
+    }
+
+    function normalizeMessagesOrder(messages) {
+        if (!Array.isArray(messages)) {
+            return [];
+        }
+
+        return [...messages].sort((a, b) => {
+            const timeA = new Date(a?.date).getTime();
+            const timeB = new Date(b?.date).getTime();
+
+            if (Number.isNaN(timeA) && Number.isNaN(timeB)) {
+                return 0;
+            }
+            if (Number.isNaN(timeA)) {
+                return 1;
+            }
+            if (Number.isNaN(timeB)) {
+                return -1;
+            }
+
+            if (timeA === timeB) {
+                const idA = (typeof a?.id === 'number') ? a.id : 0;
+                const idB = (typeof b?.id === 'number') ? b.id : 0;
+                return idA - idB;
+            }
+
+            return timeA - timeB;
+        });
+    }
+
+    function processSelectedFile(file) {
+        if (!file) {
+            return;
+        }
+
+        if (!isJsonFile(file)) {
+            alert('Пожалуйста, выберите файл в формате JSON, экспортированный из Telegram.');
+            resetSelectedFileName();
+            clearFileInput();
+            return;
+        }
+
+        updateSelectedFileName(file.name);
+        statsContainer.style.display = 'none';
+        showLoadingIndicator();
+        currentData = null;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const rawContent = e.target?.result;
+                currentData = JSON.parse(rawContent);
+                if (Array.isArray(currentData?.messages)) {
+                    currentData.messages = normalizeMessagesOrder(currentData.messages);
+                }
+                analyzeChat(currentData);
+                statsContainer.style.display = 'block';
+                animateCards();
+            } catch (error) {
+                console.error('Ошибка разбора JSON файла:', error);
+                alert('Ошибка обработки файла. Пожалуйста, убедитесь, что файл JSON корректен.');
+                statsContainer.style.display = 'none';
+                resetSelectedFileName();
+            } finally {
+                hideLoadingIndicator();
+                clearFileInput();
+            }
+        };
+
+        reader.onerror = () => {
+            console.error('Ошибка чтения файла');
+            alert('Не удалось прочитать файл.');
+            statsContainer.style.display = 'none';
+            resetSelectedFileName();
+            hideLoadingIndicator();
+            clearFileInput();
+        };
+
+        try {
+            reader.readAsText(file);
+        } catch (fileError) {
+            console.error('Не удалось прочитать файл:', fileError);
+            alert('Произошла ошибка при чтении файла.');
+            statsContainer.style.display = 'none';
+            resetSelectedFileName();
+            hideLoadingIndicator();
+            clearFileInput();
+        }
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!dropZone) {
+            return;
+        }
+
+        dropZone.classList.add('dragover');
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'copy';
+        }
+    }
+
+    function handleDragLeave(event) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!dropZone) {
+            return;
+        }
+
+        const relatedTarget = event.relatedTarget;
+        if (relatedTarget && dropZone.contains(relatedTarget)) {
+            return;
+        }
+
+        dropZone.classList.remove('dragover');
+    }
+
+    function handleDrop(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (!dropZone) {
+            return;
+        }
+
+        dropZone.classList.remove('dragover');
+        const files = event.dataTransfer?.files;
+        if (!files?.length) {
+            return;
+        }
+
+        const file = files[0];
+
+        if (fileInput) {
+            try {
+                fileInput.files = files;
+            } catch (assignmentError) {
+                // В некоторых браузерах прямое присвоение может быть запрещено — игнорируем
+            }
+        }
+
+        processSelectedFile(file);
+    }
+
+    function showLoadingIndicator() {
+        if (!loadingIndicator) {
+            return;
+        }
+        loadingIndicator.style.display = 'flex';
+        loadingIndicator.setAttribute('aria-hidden', 'false');
+    }
+
+    function hideLoadingIndicator() {
+        if (!loadingIndicator) {
+            return;
+        }
+        loadingIndicator.style.display = 'none';
+        loadingIndicator.setAttribute('aria-hidden', 'true');
+    }
+
+    function updateSelectedFileName(fileName) {
+        if (!dropFileNameElement) {
+            return;
+        }
+        dropFileNameElement.textContent = fileName || '';
+        if (fileName) {
+            dropFileNameElement.title = fileName;
+        } else {
+            dropFileNameElement.removeAttribute('title');
+        }
+    }
+
+    function resetSelectedFileName() {
+        updateSelectedFileName('');
+    }
+
+    function clearFileInput() {
+        if (fileInput) {
+            fileInput.value = '';
+        }
+    }
+
+    function isJsonFile(file) {
+        if (!file) {
+            return false;
+        }
+
+        const fileName = file.name?.toLowerCase() || '';
+        if (fileName.endsWith('.json')) {
+            return true;
+        }
+
+        const mimeType = file.type?.toLowerCase();
+        return mimeType === 'application/json' || mimeType === 'text/json';
+    }
+
+    function initializeTheme() {
+        let savedThemeKey;
+        try {
+            savedThemeKey = localStorage.getItem(THEME_STORAGE_KEY);
+        } catch (storageError) {
+            console.warn('Не удалось прочитать сохранённую тему', storageError);
+        }
+
+        if (savedThemeKey === ALTERNATIVE_THEME_KEY) {
+            applyTheme(ALTERNATIVE_THEME_KEY, { persist: false });
+        } else {
+            applyTheme(DEFAULT_THEME_KEY, { persist: false });
+        }
+    }
+
+    function applyTheme(themeKey, { persist = true, refreshCharts = false } = {}) {
+        const isAlternativeTheme = themeKey === ALTERNATIVE_THEME_KEY;
+
+        if (isAlternativeTheme) {
+            bodyElement.classList.add(ALTERNATIVE_THEME_CLASS);
+            bodyElement.classList.remove(DEFAULT_THEME_CLASS);
+            themeKey = ALTERNATIVE_THEME_KEY;
+        } else {
+            bodyElement.classList.remove(ALTERNATIVE_THEME_CLASS);
+            bodyElement.classList.add(DEFAULT_THEME_CLASS);
+            themeKey = DEFAULT_THEME_KEY;
+        }
+
+        updateThemeToggleState(themeKey);
+        updateChartDefaults();
+
+        if (persist) {
+            try {
+                localStorage.setItem(THEME_STORAGE_KEY, themeKey);
+            } catch (storageError) {
+                console.warn('Не удалось сохранить выбранную тему', storageError);
+            }
+        }
+
+        if (refreshCharts) {
+            rethemeExistingCharts();
+        }
+    }
+
+    function updateThemeToggleState(themeKey) {
+        if (!themeToggleBtn) {
+            return;
+        }
+
+        if (themeToggleIcon) {
+            themeToggleIcon.classList.remove('fa-sun', 'fa-moon');
+        }
+
+        if (themeKey === ALTERNATIVE_THEME_KEY) {
+            themeToggleBtn.title = 'Переключить на тёмную тему';
+            themeToggleBtn.setAttribute('aria-label', 'Переключить на тёмную тему');
+            if (themeToggleIcon) {
+                themeToggleIcon.classList.add('fa-moon');
+            }
+        } else {
+            themeToggleBtn.title = 'Переключить на светлую тему';
+            themeToggleBtn.setAttribute('aria-label', 'Переключить на светлую тему');
+            if (themeToggleIcon) {
+                themeToggleIcon.classList.add('fa-sun');
+            }
+        }
+    }
+
+    function updateChartDefaults() {
+        if (typeof Chart === 'undefined') {
+            return;
+        }
+
+        const styles = getComputedStyle(bodyElement);
+        const chartTextColor = styles.getPropertyValue('--chart-text-color').trim() || '#e4e6ea';
+        const chartBorderColor = styles.getPropertyValue('--chart-border-color').trim() || '#2a2d31';
+        const chartGridColor = styles.getPropertyValue('--chart-grid-color').trim() || 'rgba(255, 255, 255, 0.1)';
+
+        Chart.defaults.color = chartTextColor;
+        Chart.defaults.borderColor = chartBorderColor;
+        chartTheme = {
+            textColor: chartTextColor,
+            borderColor: chartBorderColor,
+            gridColor: chartGridColor
+        };
+    }
+
+    function applyThemeToChartInstance(chart) {
+        if (!chart) {
+            return;
+        }
+
+        const legendLabels = chart.options?.plugins?.legend?.labels;
+        if (legendLabels) {
+            legendLabels.color = chartTheme.textColor;
+        }
+
+        if (chart.scales) {
+            Object.values(chart.scales).forEach(scale => {
+                if (!scale?.options) {
+                    return;
+                }
+
+                scale.options.ticks = {
+                    ...(scale.options.ticks || {}),
+                    color: chartTheme.textColor
+                };
+
+                if (scale.options.grid) {
+                    scale.options.grid = {
+                        ...scale.options.grid,
+                        color: chartTheme.gridColor
+                    };
+                }
+
+                if (scale.axis === 'y' && typeof scale.options.beginAtZero === 'undefined') {
+                    scale.options.beginAtZero = true;
+                }
+            });
+        }
+    }
+
+    function rethemeExistingCharts() {
+        if (!renderedCharts.size) {
+            return;
+        }
+
+        renderedCharts.forEach(chart => {
+            applyThemeToChartInstance(chart);
+            chart.update();
+        });
     }
 
     function animateCards() {
@@ -404,9 +768,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function calculateThresholdExceededMessages(messages, thresholdSeconds) { // Renamed from calculateIgnoredMessages
         const thresholdMessages = {}; // Renamed variable
         allParticipants.forEach(sender => {
+            if (!sender) {
+                return;
+            }
             thresholdMessages[sender] = {};
             allParticipants.forEach(recipient => {
-                if (sender !== recipient) {
+                if (sender !== recipient && recipient) {
                     thresholdMessages[sender][recipient] = 0;
                 }
             });
@@ -416,19 +783,27 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentMsg = messages[i];
             const prevMsg = messages[i - 1];
 
-            if (prevMsg.from && currentMsg.from && prevMsg.from !== currentMsg.from) {
-                const responseTime = (new Date(currentMsg.date) - new Date(prevMsg.date)) / 1000;
-                if (responseTime > thresholdSeconds) {
-                    // Message from prevMsg.from to currentMsg.from exceeded threshold
-                    if (thresholdMessages[prevMsg.from]) { // Check if sender exists
-                        thresholdMessages[prevMsg.from][currentMsg.from]++;
-                    } else {
-                        // Handle cases where sender might not be in allParticipants (e.g., left chat)
-                         // console.warn(`Sender ${prevMsg.from} not found in initial participant list.`);
-                         // Optionally initialize here if needed, but it might distort stats if they weren't active otherwise
-                    }
-                }
+            if (!prevMsg?.from || !currentMsg?.from || prevMsg.from === currentMsg.from) {
+                continue;
             }
+
+            const responseTime = (new Date(currentMsg.date) - new Date(prevMsg.date)) / 1000;
+            if (Number.isNaN(responseTime) || responseTime <= thresholdSeconds) {
+                continue;
+            }
+
+            const sender = prevMsg.from;
+            const recipient = currentMsg.from;
+
+            if (!thresholdMessages[sender]) {
+                thresholdMessages[sender] = {};
+            }
+
+            if (!thresholdMessages[sender][recipient]) {
+                thresholdMessages[sender][recipient] = 0;
+            }
+
+            thresholdMessages[sender][recipient]++;
         }
         return thresholdMessages; // Renamed variable
     }
@@ -495,13 +870,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthAvgDelayStats = {};
         const participants = new Set(monthData.data.messages.map(m => m.from).filter(Boolean));
         participants.forEach(responder => {
-             monthAvgDelayStats[responder] = {};
-             participants.forEach(initiator => {
-                 if (responder !== initiator) {
-                     monthAvgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
-                 }
-             });
-         });
+            monthAvgDelayStats[responder] = {};
+            participants.forEach(initiator => {
+                if (responder !== initiator) {
+                    monthAvgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
+                }
+            });
+        });
 
         const monthMessages = monthData.data.messages;
          for (let i = 1; i < monthMessages.length; i++) {
@@ -520,19 +895,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
          // Calculate averages in minutes
          const finalAvgDelays = {};
-         for (const responder in monthAvgDelayStats) {
-             if (!finalAvgDelays[responder]) finalAvgDelays[responder] = {};
-             for (const initiator in monthAvgDelayStats[responder]) {
-                 const stats = monthAvgDelayStats[responder][initiator];
-                 if (stats.count > 0) {
-                     finalAvgDelays[responder][initiator] = (stats.totalTime / stats.count) / 60;
-                 }
-             }
-             if (Object.keys(finalAvgDelays[responder]).length === 0) {
-                 delete finalAvgDelays[responder];
-             }
-         }
-          return finalAvgDelays;
+        for (const responder in monthAvgDelayStats) {
+            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = {};
+            for (const initiator in monthAvgDelayStats[responder]) {
+                const stats = monthAvgDelayStats[responder][initiator];
+                if (stats.count > 0) {
+                    finalAvgDelays[responder][initiator] = (stats.totalTime / stats.count) / 60;
+                }
+            }
+            if (Object.keys(finalAvgDelays[responder]).length === 0) {
+                delete finalAvgDelays[responder];
+            }
+        }
+        return finalAvgDelays;
     }
 
     function calculateMonthlyThresholdExceededMessages(monthData, thresholdSeconds) { // Renamed from calculateMonthlyIgnoredMessages
@@ -566,41 +941,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function createChart(canvasId, config) {
-        const ctx = document.getElementById(canvasId).getContext('2d');
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) {
+            console.warn(`Элемент canvas с идентификатором ${canvasId} не найден.`);
+            return;
+        }
+
+        const ctx = canvas.getContext('2d');
         const existingChart = Chart.getChart(ctx);
         if (existingChart) {
             existingChart.destroy();
+            renderedCharts.delete(canvasId);
         }
-        new Chart(ctx, {
+
+        const chartOptions = {
+            responsive: true,
+            ...config.options
+        };
+
+        const chartInstance = new Chart(ctx, {
             ...config,
-            options: {
-                ...config.options,
-                plugins: {
-                    legend: {
-                        position: 'top',
-                        labels: {
-                            color: '#e4e6ea'
-                        }
-                    }
-                },
-                scales: {
-                    ...(config.options?.scales || {}),
-                    x: {
-                        ...(config.options?.scales?.x || {}),
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        }
-                    },
-                    y: {
-                        ...(config.options?.scales?.y || {}),
-                        grid: {
-                            color: 'rgba(255, 255, 255, 0.1)'
-                        },
-                        beginAtZero: true
-                    }
-                }
-            }
+            options: chartOptions
         });
+
+        applyThemeToChartInstance(chartInstance);
+        chartInstance.update();
+        renderedCharts.set(canvasId, chartInstance);
     }
 
     function createMonthlyCharts(monthData) {
@@ -800,8 +1166,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getRandomColor(alpha = 1) {
         const colors = [
-            '#8774e1', '#6c5ce7', '#a8a4ce', '#9b8cee',
-            '#7d71d3', '#5f58a3', '#b4aff0', '#7265e3'
+            '#6c5ce7', '#ff6b6b', '#10ac84', '#feca57', '#48dbfb', '#ff9f43', '#341f97',
+            '#00d2d3', '#ff4757', '#1dd1a1', '#c56cf0', '#5f27cd', '#54a0ff', '#ff6b81'
         ];
         const color = colors[Math.floor(Math.random() * colors.length)];
         if (alpha !== 1) {
@@ -863,43 +1229,40 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateThresholdExceededMessagesHTML(thresholdMessages, title) { // Renamed from generateIgnoredMessagesHTML
-        let html = `<h3>${title}</h3><ul>`;
-        const validSenders = Object.keys(thresholdMessages).filter(sender => sender);
-        if (validSenders.length === 0) {
-            return '<p>Нет данных для этой статистики.</p>';
-        }
+        const validSenders = Object.keys(thresholdMessages || {}).filter(Boolean);
+        const sections = [];
 
         validSenders.forEach(sender => {
-            const sanitizedSender = sanitizeHTML(sender);
-            const recipientCounts = thresholdMessages[sender];
-            const validRecipients = Object.keys(recipientCounts).filter(r => r);
+            const recipientCounts = thresholdMessages[sender] || {};
+            const recipientsWithCounts = Object.entries(recipientCounts)
+                .filter(([recipient, count]) => Boolean(recipient) && Number(count) > 0);
 
-             if (validRecipients.length > 0) {
-                html += `<li><strong>От ${sanitizedSender}:</strong><ul>`; // Minor text adjustment
-                validRecipients.forEach(recipient => {
-                    const sanitizedRecipient = sanitizeHTML(recipient);
-                    const count = recipientCounts[recipient] || 0;
-                    if (count > 0) { // Only show if count > 0
-                      html += `<li>К <strong>${sanitizedRecipient}</strong>: ${count}</li>`;
-                    }
-                });
-                 // Only add sender if they have recipients with count > 0
-                 if (html.endsWith('<ul>')) { // Check if no recipients were added
-                     html = html.slice(0, -4); // Remove empty <ul>
-                 } else {
-                    html += '</ul></li>';
-                 }
+            if (!recipientsWithCounts.length) {
+                return;
             }
+
+            const sanitizedSender = sanitizeHTML(sender);
+            const recipientItems = recipientsWithCounts.map(([recipient, count]) => {
+                return `<li>К <strong>${sanitizeHTML(recipient)}</strong>: ${count}</li>`;
+            }).join('');
+
+            const senderSection = `
+                <li>
+                    <strong>От ${sanitizedSender}:</strong>
+                    <ul>
+                        ${recipientItems}
+                    </ul>
+                </li>
+            `;
+
+            sections.push(senderSection);
         });
 
-        // Final check if any list item was actually added
-        if (html.endsWith('<ul>')) {
-            html = '<p>Нет данных для этой статистики (с учетом порога).</p>';
-        } else {
-            html += '</ul>';
+        if (!sections.length) {
+            return '<p>Нет данных для этой статистики (с учетом порога).</p>';
         }
 
-        return html;
+        return `<h3>${title}</h3><ul>${sections.join('')}</ul>`;
     }
 
     function generateWordCountHTML(wordCounts, title) {
