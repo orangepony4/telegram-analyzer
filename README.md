@@ -1,93 +1,92 @@
 # Telegram Analyzer
 
-**Telegram Analyzer** — это бесплатный и открытый инструмент для анализа переписок Telegram. Программа визуализирует статистику по сообщениям, участникам, времени ответа, активности и многому другому прямо в вашем браузере.
+**Telegram Analyzer** is a free and open-source tool for analyzing Telegram chats. The program visualizes statistics on messages, participants, response times, activity, and much more, directly in your browser.
 
 ---
 
-## 🚀 Быстрый старт
+## 🚀 Quick Start
 
-### 1. Экспортируйте чат из Telegram
+### 1. Export your chat from Telegram
 
-> **Важно:** Поддерживается только экспорт в формате **JSON** через Telegram Desktop.
+> **Important:** Only **JSON** format export via Telegram Desktop is supported.
 
-1. Откройте **Telegram Desktop** на компьютере.
-2. Перейдите в нужный чат (личный, групповой или канал).
-3. Нажмите на имя чата вверху, выберите пункт **«Экспорт истории чата»**.
-4. В появившемся окне:
-    - Убедитесь, что выбран формат **JSON** (НЕ HTML!).
-    - Уберите все галочки.
-    - Нажмите **Экспорт**.
-5. После завершения экспорта скачайте архив и извлеките из него файл, который обычно называется `result.json`.
-
----
-
-### 2. Откройте Telegram Analyzer
-
-- Просто откройте файл `index.html` в браузере (Google Chrome, Firefox, Edge, Opera и др.).
-- **ИЛИ** разверните проект на локальном сервере (например, с помощью расширения Live Server для VS Code).
+1. Open **Telegram Desktop** on your computer.
+2. Go to the desired chat (personal, group, or channel).
+3. Click on the chat name at the top, then select **"Export chat history"**.
+4. In the window that appears:
+    - Ensure that the **JSON** format is selected (NOT HTML!).
+    - Uncheck all boxes.
+    - Click **Export**.
+5. After the export is complete, download the archive and extract the file, which is usually named `result.json`.
 
 ---
 
-### 3. Загрузите ваш JSON-файл
+### 2. Open Telegram Analyzer
 
-- Перетащите файл `result.json` в выделенную область на странице **или** нажмите кнопку «Выберите файл» и выберите файл вручную.
-- После загрузки появится зелёное окно «Загрузка и анализ данных...». Подождите несколько секунд — анализ происходит прямо в вашем браузере.
-
----
-
-### 4. Изучайте статистику
-
-- После анализа появятся вкладки:
-    - **Общая статистика** — суммарные данные по всему чату.
-    - **По месяцам** — подробная статистика за каждый месяц, с возможностью переключения.
-- Вы увидите:
-    - Количество сообщений и участников.
-    - Графики активности по времени суток, дням недели, месяцам.
-    - Статистику по каждому участнику (сколько сообщений, средняя длина и т.д.).
-    - Анализ времени ответа между участниками.
-    - Статистику по медиафайлам (фото, видео, стикеры и др.).
-    - Количество «долгих» ответов (вы можете настроить порог в минутах).
+- Simply open the `index.html` file in your browser (Google Chrome, Firefox, Edge, Opera, etc.).
+- **OR** deploy the project on a local server (e.g., using the Live Server extension for VS Code).
 
 ---
 
-## ⚙️ Требования
+### 3. Upload your JSON file
 
-- Современный браузер (Google Chrome, Firefox, Edge, Opera и др.).
-- Файл чата Telegram в формате **JSON** (экспорт через Telegram Desktop).
-
----
-
-## 🔒 Безопасность
-
-- **Ваши данные никуда не отправляются!** Весь анализ происходит только в вашем браузере.
-- Исходный код открыт и прозрачен — вы можете проверить его самостоятельно.
-
-
-## ❓ Часто задаваемые вопросы (FAQ)
-
-**Q:** Почему не работает с HTML-файлом экспорта?  
-**A:** Программа поддерживает только JSON-экспорт Telegram. HTML-экспорт не содержит нужной структуры данных.
-
-**Q:** Мои данные куда-то отправляются?  
-**A:** Нет, все вычисления происходят только в вашем браузере. Файл не загружается на сервер.
-
-**Q:** Как сменить тему оформления?  
-**A:** Используйте кнопку с иконкой палитры в правом верхнем углу страницы.
-
-**Q:** Можно ли анализировать групповые чаты и каналы?  
-**A:** Да, поддерживаются любые чаты, экспортированные через Telegram Desktop.
-
-**Q:** Почему не отображается статистика?  
-**A:** Проверьте, что вы загрузили именно JSON-файл экспорта Telegram. Если проблема не решается — создайте issue на GitHub.
+- Drag and drop the `result.json` file into the designated area on the page **OR** click the "Choose file" button and select the file manually.
+- After uploading, a green window "Loading and analyzing data..." will appear. Wait a few seconds — the analysis happens directly in your browser.
 
 ---
 
-## 💡 Вклад в проект
+### 4. Explore the statistics
 
-- Приветствуются pull request, баг-репорты и предложения по улучшению!
-- Если вы нашли ошибку или хотите предложить новую функцию — создайте issue или напишите мне.
+- After the analysis, tabs will appear:
+    - **Overall statistics** — summary data for the entire chat.
+    - **By months** — detailed statistics for each month, with the ability to switch between them.
+- You will see:
+    - Number of messages and participants.
+    - Activity graphs by time of day, days of the week, months.
+    - Statistics for each participant (number of messages, average length, etc.).
+    - Analysis of response time between participants.
+    - Statistics on media files (photos, videos, stickers, etc.).
+    - Number of "long" replies (you can set the threshold in minutes).
 
 ---
 
-**P.S.** Если у вас остались вопросы — смело открывайте issue на GitHub! 
+## ⚙️ Requirements
 
+- A modern browser (Google Chrome, Firefox, Edge, Opera, etc.).
+- Telegram chat file in **JSON** format (exported via Telegram Desktop).
+
+---
+
+## 🔒 Security
+
+- **Your data is not sent anywhere!** All analysis happens only in your browser.
+- The source code is open and transparent — you can check it yourself.
+
+
+## ❓ Frequently Asked Questions (FAQ)
+
+**Q:** Why doesn't it work with an HTML export file?
+**A:** The program only supports Telegram's JSON export. HTML export does not contain the necessary data structure.
+
+**Q:** Is my data sent anywhere?
+**A:** No, all calculations happen only in your browser. The file is not uploaded to any server.
+
+**Q:** How can I change the theme?
+**A:** Use the palette icon button in the upper right corner of the page.
+
+**Q:** Can I analyze group chats and channels?
+**A:** Yes, any chats exported via Telegram Desktop are supported.
+
+**Q:** Why are the statistics not displaying?
+**A:** Make sure you have uploaded the correct Telegram JSON export file. If the problem persists, please create an issue on GitHub.
+
+---
+
+## 💡 Contributing to the project
+
+- Pull requests, bug reports, and improvement suggestions are welcome!
+- If you find an error or want to suggest a new feature — create an issue or write to me.
+
+---
+
+**P.S.** If you still have questions — feel free to open an issue on GitHub!
