@@ -313,7 +313,12 @@ h1, h2, h3 {
     box-shadow: 0 15px 30px rgba(108, 92, 231, 0.45);
 }
 
-.tab-btn:hover:not(.active) {
+.tab-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+}
+
+.tab-btn:hover:not(.active):not(:disabled) {
     background: rgba(255, 255, 255, 0.08);
     border-color: rgba(255, 255, 255, 0.1);
     transform: translateY(-1px);

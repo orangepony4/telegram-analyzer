@@ -2,6 +2,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
     const statsContainer = document.querySelector('.stats-container');
     const currentMonthDisplay = document.getElementById('currentMonth');
+    const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
+    const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const ignoredThresholdInput = document.getElementById('ignoredThreshold');
@@ -582,6 +584,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Показываем статистику за последний месяц
         currentMonthIndex = monthsData.length - 1;
+        monthlyStatsTab.disabled = monthsData.length === 0;
+        if (monthlyStatsTab.disabled && monthlyStatsTab.classList.contains('active')) {
+            allStatsTab.click();
+        }
         updateMonthlyStats();
         overallResponseTimes = responseTimes;
     }
