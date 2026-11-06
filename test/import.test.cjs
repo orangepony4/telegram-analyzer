@@ -137,6 +137,8 @@ test('counts cross-month replies once and skips service events', () => {
     });
     assert.deepEqual(app.alerts, []);
     assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 3 слов/);
+    assert.match(app.element('monthlyParticipantStats').innerHTML, /<strong>Bob<\/strong>/);
+    assert.doesNotMatch(app.element('monthlyParticipantStats').innerHTML, /<strong>__proto__<\/strong>/);
     assert.match(app.element('participantStats').innerHTML, /<strong>Bob<\/strong>: 10 мин/);
     for (const id of ['responseTimeChart', 'monthlyResponseTimeChart']) {
         const chart = app.charts.get(id);
@@ -148,5 +150,6 @@ test('counts cross-month replies once and skips service events', () => {
     assert.match(app.element('monthlyThresholdExceededMessagesStats').innerHTML, /<strong>Bob<\/strong>: 1/);
     app.element('prevMonth').click();
     assert.match(app.element('currentMonth').textContent, /октябрь/);
+    assert.doesNotMatch(app.element('monthlyWordCountStats').innerHTML, /<strong>Bob<\/strong>/);
     assert.equal(app.charts.get('monthlyResponseTimeChart').data.labels.length, 0);
 });

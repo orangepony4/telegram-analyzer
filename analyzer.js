@@ -505,45 +505,39 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!msg.from || !Number.isFinite(date.getTime())) return;
             const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
 
-            if (!messagesByMonth[monthKey]) {
-                messagesByMonth[monthKey] = {
-                    messages: [],
-                    participants: Object.create(null),
-                    messageTypes: Object.create(null),
-                    timeOfDay: new Array(24).fill(0),
-                    responseTimes: Object.create(null),
-                    wordCounts: Object.create(null),
-                    mediaTypesStats: Object.create(null),
-                    dayOfWeekActivity: new Array(7).fill(0)
-                };
-                allParticipants.forEach(p => {
-                    messagesByMonth[monthKey].participants[p] = [];
-                    messagesByMonth[monthKey].wordCounts[p] = 0;
-                    messagesByMonth[monthKey].mediaTypesStats[p] = Object.create(null);
-                });
-            }
+            const month = messagesByMonth[monthKey] ??= {
+                messages: [],
+                participants: Object.create(null),
+                messageTypes: Object.create(null),
+                timeOfDay: new Array(24).fill(0),
+                responseTimes: Object.create(null),
+                wordCounts: Object.create(null),
+                mediaTypesStats: Object.create(null),
+                dayOfWeekActivity: new Array(7).fill(0)
+            };
 
-            messagesByMonth[monthKey].messages.push(msg);
-            messagesByMonth[monthKey].participants[msg.from].push(msg);
+            month.messages.push(msg);
+            (month.participants[msg.from] ??= []).push(msg);
 
             const type = msg.media_type || 'text';
-            messagesByMonth[monthKey].messageTypes[type] = (messagesByMonth[monthKey].messageTypes[type] || 0) + 1;
+            month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
             if (type !== 'text') {
-                messagesByMonth[monthKey].mediaTypesStats[msg.from][type] = (messagesByMonth[monthKey].mediaTypesStats[msg.from][type] || 0) + 1;
+                const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
+                mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
 
-            messagesByMonth[monthKey].timeOfDay[date.getHours()]++;
-            messagesByMonth[monthKey].dayOfWeekActivity[date.getDay()]++;
+            month.timeOfDay[date.getHours()]++;
+            month.dayOfWeekActivity[date.getDay()]++;
 
             const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
-            messagesByMonth[monthKey].wordCounts[msg.from] += words.length;
+            month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words.length;
 
             if (msg.type !== 'service') {
                 if (previousMessage && previousMessage.sender !== msg.from) {
                     const { sender, date: previousDate } = previousMessage;
                     const seconds = (date - previousDate) / 1000;
                     recordResponse(responseTimes, sender, msg.from, seconds);
-                    recordResponse(messagesByMonth[monthKey].responseTimes, sender, msg.from, seconds);
+                    recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
                 previousMessage = { sender: msg.from, date };
             }
