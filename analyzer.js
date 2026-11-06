@@ -141,32 +141,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function normalizeMessagesOrder(messages) {
-        if (!Array.isArray(messages)) {
-            return [];
+        const datedMessages = [];
+        const undatedMessages = [];
+        for (const message of messages) {
+            const time = new Date(message.date).getTime();
+            if (Number.isNaN(time)) {
+                undatedMessages.push(message);
+            } else {
+                const id = typeof message.id === 'number' ? message.id : 0;
+                datedMessages.push({ message, time, id });
+            }
         }
-
-        return [...messages].sort((a, b) => {
-            const timeA = new Date(a?.date).getTime();
-            const timeB = new Date(b?.date).getTime();
-
-            if (Number.isNaN(timeA) && Number.isNaN(timeB)) {
-                return 0;
-            }
-            if (Number.isNaN(timeA)) {
-                return 1;
-            }
-            if (Number.isNaN(timeB)) {
-                return -1;
-            }
-
-            if (timeA === timeB) {
-                const idA = (typeof a?.id === 'number') ? a.id : 0;
-                const idB = (typeof b?.id === 'number') ? b.id : 0;
-                return idA - idB;
-            }
-
-            return timeA - timeB;
-        });
+        datedMessages.sort((a, b) => a.time - b.time || a.id - b.id);
+        return datedMessages.map(entry => entry.message).concat(undatedMessages);
     }
 
     function getMessageText(text) {

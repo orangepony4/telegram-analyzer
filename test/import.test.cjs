@@ -128,10 +128,11 @@ test('counts cross-month replies once and skips service events', () => {
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({
         messages: [
+            { id: 4, date: '2026-11-01T00:00:00', from: 'Bob', text: 'Follow-up' },
+            { id: 5, date: 'invalid', text: 'Unknown date' },
             { id: 1, date: '2026-10-31T23:50:00', from: '__proto__', text: 'Question' },
             { id: 2, date: '2026-10-31T23:55:00', type: 'service', actor: 'Carol' },
             { id: 3, date: '2026-11-01T00:00:00', from: 'Bob', text: ['Hi ', { type: 'bold', text: 'Alice' }] },
-            { id: 4, date: '2026-11-01T00:05:00', from: 'Bob', text: 'Follow-up' },
         ],
     });
     assert.deepEqual(app.alerts, []);
