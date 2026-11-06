@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
 
     let currentData = null;
+    let activeReader = null;
     let currentMonthIndex = 0;
     let monthsData = [];
     let allParticipants = new Set();
@@ -190,7 +191,11 @@ document.addEventListener('DOMContentLoaded', () => {
         currentData = null;
 
         const reader = new FileReader();
+        activeReader = reader;
         reader.onload = (e) => {
+            if (activeReader !== reader) {
+                return;
+            }
             try {
                 const rawContent = e.target?.result;
                 const data = JSON.parse(rawContent);
@@ -212,12 +217,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 statsContainer.style.display = 'none';
                 resetSelectedFileName();
             } finally {
+                activeReader = null;
                 hideLoadingIndicator();
                 clearFileInput();
             }
         };
 
         reader.onerror = () => {
+            if (activeReader !== reader) {
+                return;
+            }
+            activeReader = null;
             console.error('Ошибка чтения файла');
             alert('Не удалось прочитать файл.');
             statsContainer.style.display = 'none';
@@ -229,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             reader.readAsText(file);
         } catch (fileError) {
+            activeReader = null;
             console.error('Не удалось прочитать файл:', fileError);
             alert('Произошла ошибка при чтении файла.');
             statsContainer.style.display = 'none';
