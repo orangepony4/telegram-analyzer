@@ -178,11 +178,17 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onload = (e) => {
             try {
                 const rawContent = e.target?.result;
-                currentData = JSON.parse(rawContent);
-                if (Array.isArray(currentData?.messages)) {
-                    currentData.messages = normalizeMessagesOrder(currentData.messages);
+                const data = JSON.parse(rawContent);
+                if (!Array.isArray(data?.messages) || data.messages.some(
+                    message => !message || typeof message !== 'object' || Array.isArray(message)
+                )) {
+                    alert('Файл JSON не содержит корректных данных чата. Выберите экспорт одного чата из Telegram Desktop.');
+                    resetSelectedFileName();
+                    return;
                 }
-                analyzeChat(currentData);
+                data.messages = normalizeMessagesOrder(data.messages);
+                analyzeChat(data);
+                currentData = data;
                 statsContainer.style.display = 'block';
                 animateCards();
             } catch (error) {
@@ -464,12 +470,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function analyzeChat(data) {
-        if (!data || !data.messages || !Array.isArray(data.messages)) {
-            console.error('Некорректные данные чата:', data);
-            alert('Файл JSON не содержит корректных данных чата.');
-            return;
-        }
-
         const messages = data.messages;
         allParticipants = new Set(messages.map(m => m.from).filter(name => name));
 
