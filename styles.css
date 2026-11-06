@@ -464,6 +464,10 @@ h1, h2, h3 {
     padding: 1.75rem;
 }
 
+.charts-unavailable .charts-grid {
+    display: none;
+}
+
 .charts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(540px, 1fr));

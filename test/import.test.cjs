@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
 
-function createAnalyzer() {
+function createAnalyzer({ chartsAvailable = true } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
@@ -71,7 +71,7 @@ function createAnalyzer() {
         },
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
         localStorage: { getItem: () => null },
-        Chart,
+        Chart: chartsAvailable ? Chart : undefined,
         FileReader: class {
             readAsText() { readers.push(this); }
         },
@@ -101,6 +101,20 @@ test('rejects unrelated JSON and malformed message entries', () => {
         assert.equal(app.element('jsonFile').value, '');
     }
     assert.equal(app.alerts.length, 2);
+});
+
+test('shows text statistics when the chart library is unavailable', () => {
+    const app = createAnalyzer({ chartsAvailable: false });
+    app.selectFile('chat.json').complete({
+        messages: [{ id: 1, from: 'Alice', date: '2026-11-01T00:00:00', text: 'Hello there' }],
+    });
+    assert.deepEqual(app.alerts, []);
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.equal(app.element('.stats-container').classList.contains('charts-unavailable'), true);
+    assert.equal(app.element('chartsUnavailableNotice').hidden, false);
+    assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
+    assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
+    assert.equal(app.charts.size, 0);
 });
 
 test('keeps the last upload and disables monthly statistics for an empty export', () => {

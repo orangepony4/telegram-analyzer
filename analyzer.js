@@ -54,6 +54,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderedCharts = new Map();
 
     initializeTheme();
+    if (typeof Chart === 'undefined') {
+        statsContainer.classList.add('charts-unavailable');
+        document.getElementById('chartsUnavailableNotice').hidden = false;
+    }
 
     // Обработчики вкладок
     document.querySelectorAll('.tab-btn').forEach(button => {
@@ -800,6 +804,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function createChart(canvasId, config) {
+        if (typeof Chart === 'undefined') {
+            return;
+        }
         const canvas = document.getElementById(canvasId);
         if (!canvas) {
             console.warn(`Элемент canvas с идентификатором ${canvasId} не найден.`);
