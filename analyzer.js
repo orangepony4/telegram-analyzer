@@ -509,19 +509,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!messagesByMonth[monthKey]) {
                 messagesByMonth[monthKey] = {
                     messages: [],
-                    participants: {},
-                    messageTypes: {},
+                    participants: Object.create(null),
+                    messageTypes: Object.create(null),
                     timeOfDay: new Array(24).fill(0),
-                    responseTimes: {},
-                    wordCounts: {},
-                    mediaTypesStats: {},
+                    responseTimes: Object.create(null),
+                    wordCounts: Object.create(null),
+                    mediaTypesStats: Object.create(null),
                     dayOfWeekActivity: new Array(7).fill(0)
                 };
                 allParticipants.forEach(p => {
                     messagesByMonth[monthKey].participants[p] = [];
-                    messagesByMonth[monthKey].responseTimes[p] = {};
+                    messagesByMonth[monthKey].responseTimes[p] = Object.create(null);
                     messagesByMonth[monthKey].wordCounts[p] = 0;
-                    messagesByMonth[monthKey].mediaTypesStats[p] = {};
+                    messagesByMonth[monthKey].mediaTypesStats[p] = Object.create(null);
                     allParticipants.forEach(recipient => {
                         if (recipient !== p) {
                             messagesByMonth[monthKey].responseTimes[p][recipient] = [];
@@ -585,12 +585,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function calculateAllTimeStats(messages) {
         const timeOfDay = new Array(24).fill(0);
-        const messageTypes = {};
-        const responseTimes = {};
+        const messageTypes = Object.create(null);
+        const responseTimes = Object.create(null);
         const dayOfWeekActivity = new Array(7).fill(0);
 
         allParticipants.forEach(p => {
-            responseTimes[p] = {};
+            responseTimes[p] = Object.create(null);
             allParticipants.forEach(recipient => {
                 if (recipient !== p) {
                     responseTimes[p][recipient] = [];
@@ -669,9 +669,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function calculateAverageResponseDelay(messagesByMonth) {
-        const avgDelayStats = {};
+        const avgDelayStats = Object.create(null);
         allParticipants.forEach(responder => {
-            avgDelayStats[responder] = {};
+            avgDelayStats[responder] = Object.create(null);
             allParticipants.forEach(initiator => {
                 if (responder !== initiator) {
                     avgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
@@ -700,9 +700,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Calculate averages in minutes
-        const finalAvgDelays = {};
+        const finalAvgDelays = Object.create(null);
         for (const responder in avgDelayStats) {
-            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = {};
+            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = Object.create(null);
             for (const initiator in avgDelayStats[responder]) {
                 const stats = avgDelayStats[responder][initiator];
                 if (stats.count > 0) {
@@ -724,7 +724,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateTotalWordCounts(messages) {
-        const wordCounts = {};
+        const wordCounts = Object.create(null);
         allParticipants.forEach(p => wordCounts[p] = 0);
         messages.forEach(msg => {
             if (msg.from) {
@@ -742,8 +742,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateMediaTypeUsage(messages) {
-        const mediaTypeUsage = {};
-        allParticipants.forEach(p => mediaTypeUsage[p] = {});
+        const mediaTypeUsage = Object.create(null);
+        allParticipants.forEach(p => mediaTypeUsage[p] = Object.create(null));
         messages.forEach(msg => {
             if (msg.from && msg.media_type && msg.media_type !== 'text') {
                 mediaTypeUsage[msg.from][msg.media_type] = (mediaTypeUsage[msg.from][msg.media_type] || 0) + 1;
@@ -790,12 +790,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function calculateThresholdExceededMessages(messages, thresholdSeconds) { // Renamed from calculateIgnoredMessages
-        const thresholdMessages = {}; // Renamed variable
+        const thresholdMessages = Object.create(null); // Renamed variable
         allParticipants.forEach(sender => {
             if (!sender) {
                 return;
             }
-            thresholdMessages[sender] = {};
+            thresholdMessages[sender] = Object.create(null);
             allParticipants.forEach(recipient => {
                 if (sender !== recipient && recipient) {
                     thresholdMessages[sender][recipient] = 0;
@@ -820,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const recipient = currentMsg.from;
 
             if (!thresholdMessages[sender]) {
-                thresholdMessages[sender] = {};
+                thresholdMessages[sender] = Object.create(null);
             }
 
             if (!thresholdMessages[sender][recipient]) {
@@ -890,10 +890,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return {};
         }
         // Reuse the main calculation logic but only for this month's messages
-        const monthAvgDelayStats = {};
+        const monthAvgDelayStats = Object.create(null);
         const participants = new Set(monthData.data.messages.map(m => m.from).filter(Boolean));
         participants.forEach(responder => {
-            monthAvgDelayStats[responder] = {};
+            monthAvgDelayStats[responder] = Object.create(null);
             participants.forEach(initiator => {
                 if (responder !== initiator) {
                     monthAvgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
@@ -917,9 +917,9 @@ document.addEventListener('DOMContentLoaded', () => {
          }
 
          // Calculate averages in minutes
-         const finalAvgDelays = {};
+         const finalAvgDelays = Object.create(null);
         for (const responder in monthAvgDelayStats) {
-            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = {};
+            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = Object.create(null);
             for (const initiator in monthAvgDelayStats[responder]) {
                 const stats = monthAvgDelayStats[responder][initiator];
                 if (stats.count > 0) {
@@ -1056,14 +1056,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // График времени ответа за месяц
-        const avgMonthlyResponseTimes = {};
+        const avgMonthlyResponseTimes = Object.create(null);
         for (const sender in data.responseTimes) {
             for (const recipient in data.responseTimes[sender]) {
                 const times = data.responseTimes[sender][recipient];
                 if (times.length > 0) {
                     const avgTime = times.reduce((sum, t) => sum + t, 0) / times.length / 60;
                     if (!avgMonthlyResponseTimes[sender]) {
-                        avgMonthlyResponseTimes[sender] = {};
+                        avgMonthlyResponseTimes[sender] = Object.create(null);
                     }
                     avgMonthlyResponseTimes[sender][recipient] = avgTime;
                 }
@@ -1111,7 +1111,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createResponseTimeChart(responseTimes) {
-        const avgTimes = {};
+        const avgTimes = Object.create(null);
         // This chart might need adjustment based on the new avgDelayStats structure
         // For now, let's keep the old logic for the *overall* response time chart,
         // as it used a different structure (responseTimes[sender][recipient] = [times])
@@ -1122,7 +1122,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (times.length > 0) {
                     const avgTime = times.reduce((sum, t) => sum + t, 0) / times.length / 60;
                     if (!avgTimes[sender]) {
-                        avgTimes[sender] = {};
+                        avgTimes[sender] = Object.create(null);
                     }
                     avgTimes[sender][recipient] = avgTime;
                 }
