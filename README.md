@@ -31,7 +31,7 @@
 
 ### 2. Откройте Telegram Analyzer
 
-- **Без установки.** Скачайте [офлайн-версию](https://github.com/orangepony4/telegram-analyzer/releases/download/v1.0.0/telegram-analyzer-1.0.0-offline.zip), распакуйте архив и откройте `index.html` в браузере.
+- **Без установки.** Скачайте ZIP из [последнего релиза](https://github.com/orangepony4/telegram-analyzer/releases/latest), распакуйте архив и откройте `index.html` в браузере.
 - **Через локальный сервер.** Если у вас установлены Node.js и npm, выполните команды из папки проекта:
 
   ```sh

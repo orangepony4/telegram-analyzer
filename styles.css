@@ -1047,6 +1047,7 @@ button.upload-button {
 }
 
 .account-chat-status:empty { margin: 0; }
+.theme-muted-light .account-chat-status { color: var(--text-color); }
 
 #jsonFile:focus-visible + .drop-zone-content .upload-button,
 .account-chat-field select:focus-visible,
