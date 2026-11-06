@@ -281,6 +281,25 @@ test('keeps keyboard focus on an enabled month control at both ends', async () =
     assert.match(app.element('currentMonth').textContent, /март/);
 });
 
+test('preserves daily activity counts across month navigation', async () => {
+    const app = createAnalyzer();
+    await app.selectDemo().complete();
+    const daysWithMessages = () => {
+        const { labels, datasets } = app.charts.get('dailyActivityChart').data;
+        return Array.from(labels).flatMap((day, index) => {
+            const count = datasets[0].data[index];
+            return count ? [[day, count]] : [];
+        });
+    };
+    assert.deepEqual(daysWithMessages(), [[8, 4]]);
+    app.element('prevMonth').click();
+    assert.deepEqual(daysWithMessages(), [[14, 4]]);
+    app.element('prevMonth').click();
+    assert.deepEqual(daysWithMessages(), [[10, 6]]);
+    app.element('nextMonth').click();
+    assert.deepEqual(daysWithMessages(), [[14, 4]]);
+});
+
 test('exports participant totals with quoted, formula-safe names', async () => {
     const app = createAnalyzer();
     const from = '=1+1, "quoted"';

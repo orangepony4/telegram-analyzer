@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const ALTERNATIVE_THEME_KEY = 'muted-light';
     const DEFAULT_THEME_CLASS = 'theme-default';
     const ALTERNATIVE_THEME_CLASS = 'theme-muted-light';
-    const messageTiming = Symbol('messageTiming');
     const exportDatePattern = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/i;
 
     if (themeToggleBtn) {
@@ -217,7 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     }
 
-    function readMessageTiming({ date, date_unixtime: unix }) {
+    function readMessageTiming(message) {
+        const { date, date_unixtime: unix } = message;
         const seconds = typeof unix === 'string' && unix === unix.trim() && /^-?\d+$/.test(unix)
             ? Number(unix)
             : unix;
@@ -253,45 +253,39 @@ document.addEventListener('DOMContentLoaded', () => {
         if (calendar) {
             const year = calendar.getUTCFullYear();
             if (Number.isNaN(year) || year < 0 || year > 9999) {
-                return { time: NaN, calendar: null, hasWallClock: false };
+                return { message, time: Infinity, calendar: null, hasWallClock: false };
             }
         }
-        return { time, calendar, hasWallClock: wall !== null };
+        return { message, time: Number.isFinite(time) ? time : Infinity, calendar, hasWallClock: wall !== null };
     }
 
-    function normalizeMessagesOrder(messages) {
+    function orderMessageTimings(messages) {
         let useCivilTime = false;
-        for (const message of messages) {
+        const timings = messages.map(message => {
             const timing = readMessageTiming(message);
-            message[messageTiming] = timing;
-            const isParticipant = message.type !== 'service' && (message.from || getSenderId(message) !== null);
-            if (isParticipant && timing.hasWallClock && !Number.isFinite(timing.time)) {
+            if (!useCivilTime && timing.hasWallClock && !Number.isFinite(timing.time)
+                && message.type !== 'service' && (message.from || getSenderId(message) !== null)) {
                 // Legacy messages share one civil timeline to avoid mixing timezone assumptions.
                 useCivilTime = true;
             }
-        }
+            return timing;
+        });
 
-        const datedMessages = [];
-        const undatedMessages = [];
-        for (const message of messages) {
-            const timing = message[messageTiming];
-            if (useCivilTime) {
-                timing.time = timing.hasWallClock ? timing.calendar.getTime() : NaN;
-            }
-            if (!Number.isFinite(timing.time)) {
-                undatedMessages.push(message);
-            } else {
-                datedMessages.push(message);
+        if (useCivilTime) {
+            for (const timing of timings) {
+                timing.time = timing.hasWallClock ? timing.calendar.getTime() : Infinity;
             }
         }
-        datedMessages.sort((a, b) => {
-            const difference = a[messageTiming].time - b[messageTiming].time;
+        timings.sort((a, b) => {
+            const difference = a.time - b.time;
             if (difference) return difference;
-            const firstId = typeof a.id === 'number' ? a.id : 0;
-            const secondId = typeof b.id === 'number' ? b.id : 0;
+            // Undated rows sort last and preserve their input order.
+            if (Number.isNaN(difference)) return 0;
+            const firstId = typeof a.message.id === 'number' ? a.message.id : 0;
+            const secondId = typeof b.message.id === 'number' ? b.message.id : 0;
             return firstId - secondId;
         });
-        return datedMessages.concat(undatedMessages);
+        return timings;
     }
 
     function getSenderId({ from_id: id }) {
@@ -300,13 +294,13 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number.isSafeInteger(id) && id > 0 ? `user${id}` : null;
     }
 
-    function normalizeSenderNames(messages) {
+    function normalizeSenderNames(timings) {
         const senders = new Map();
         const idsByName = new Map();
         const actualNames = new Set();
         const nameOnly = new Set();
 
-        for (const message of messages) {
+        for (const { message, time } of timings) {
             const id = getSenderId(message);
             const name = typeof message.from === 'string' && message.from.trim() ? message.from : null;
             if (name) actualNames.add(name);
@@ -326,7 +320,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (knownId !== id) idsByName.set(name, knownId === undefined ? id : null);
 
             if (sender.name !== name) {
-                const dated = Number.isFinite(message[messageTiming].time);
+                const dated = Number.isFinite(time);
                 if (dated || !sender.dated) {
                     sender.name = name;
                     sender.dated = dated;
@@ -353,7 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Existing statistics use from as their participant key and display label.
-        for (const message of messages) {
+        for (const { message } of timings) {
             const id = getSenderId(message) ?? idsByName.get(message.from);
             if (id) message.from = senders.get(id).label;
         }
@@ -411,9 +405,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     resetSelectedFileName();
                     return;
                 }
-                data.messages = normalizeMessagesOrder(data.messages);
-                normalizeSenderNames(data.messages);
-                analyzeChat(data);
+                const timings = orderMessageTimings(data.messages);
+                normalizeSenderNames(timings);
+                analyzeChat(timings);
                 statsContainer.style.display = 'block';
                 animateCards();
                 status = 'Анализ завершён. Статистика доступна ниже.';
@@ -695,16 +689,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function analyzeChat(data) {
-        const messages = data.messages;
+    function analyzeChat(timings) {
+        const messages = timings.map(timing => timing.message);
         allParticipants = new Set(messages.map(m => m.from).filter(name => name));
 
         // Подготовка данных по месяцам
         const messagesByMonth = {};
         const responseTimes = Object.create(null);
         let previousMessage = null;
-        messages.forEach(msg => {
-            const { calendar, time } = msg[messageTiming];
+        timings.forEach(({ message: msg, calendar, time }) => {
             if (!msg.from || !calendar) return;
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
             const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -718,7 +711,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 responseTimes: Object.create(null),
                 wordCounts: Object.create(null),
                 mediaTypesStats: Object.create(null),
-                dayOfWeekActivity: new Array(7).fill(0)
+                dayOfWeekActivity: new Array(7).fill(0),
+                dailyActivity: new Array(31).fill(0)
             };
 
             month.messages.push(msg);
@@ -733,6 +727,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             month.timeOfDay[calendar.getUTCHours()]++;
             month.dayOfWeekActivity[calendar.getUTCDay()]++;
+            month.dailyActivity[calendar.getUTCDate() - 1]++;
 
             const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
             month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words.length;
@@ -762,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
         displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
 
         // Создаем графики общей статистики
-        const allTimeData = calculateAllTimeStats(messages);
+        const allTimeData = calculateAllTimeStats(timings);
         createMonthlyChart(monthsData);
         createResponseTimeChart(responseTimes);
         createTimeOfDayChart(allTimeData.timeOfDay);
@@ -787,13 +782,12 @@ document.addEventListener('DOMContentLoaded', () => {
         (responses[responder] ??= []).push(seconds);
     }
 
-    function calculateAllTimeStats(messages) {
+    function calculateAllTimeStats(timings) {
         const timeOfDay = new Array(24).fill(0);
         const messageTypes = Object.create(null);
         const dayOfWeekActivity = new Array(7).fill(0);
 
-        messages.forEach(msg => {
-            const { calendar } = msg[messageTiming];
+        timings.forEach(({ message: msg, calendar }) => {
             if (calendar) {
                 timeOfDay[calendar.getUTCHours()]++;
                 dayOfWeekActivity[calendar.getUTCDay()]++;
@@ -1039,23 +1033,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function createMonthlyCharts(monthData) {
         const { data } = monthData;
 
-        // График активности по дням
-        const dailyActivity = {};
-        data.messages.forEach(msg => {
-            const day = msg[messageTiming].calendar.getUTCDate();
-            dailyActivity[day] = (dailyActivity[day] || 0) + 1;
-        });
-
-        const days = Array.from({ length: 31 }, (_, i) => i + 1);
-        const dailyData = days.map(day => dailyActivity[day] || 0);
-
         createChart('dailyActivityChart', {
             type: 'bar',
             data: {
-                labels: days,
+                labels: Array.from({ length: 31 }, (_, index) => index + 1),
                 datasets: [{
                     label: 'Сообщений',
-                    data: dailyData,
+                    data: data.dailyActivity.slice(),
                     backgroundColor: getRandomColor(0.7),
                     borderColor: getRandomColor(),
                     borderWidth: 2
