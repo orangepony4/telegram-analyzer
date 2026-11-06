@@ -11,6 +11,8 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
     const charts = new Map();
     const readers = [];
     const alerts = [];
+    const downloads = [];
+    let downloadedBlob;
 
     function element(id) {
         if (!elements.has(id)) {
@@ -64,7 +66,10 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
                 if (selector === '.tab-content') return [element('all'), element('monthly')];
                 return [];
             },
-            createElement() {
+            createElement(tag) {
+                if (tag === 'a') {
+                    return { click() { downloads.push({ name: this.download, blob: downloadedBlob }); } };
+                }
                 return { get innerHTML() { return this.textContent; } };
             },
             body: element('body'),
@@ -72,6 +77,15 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
         localStorage: { getItem: () => null },
         Chart: chartsAvailable ? Chart : undefined,
+        Blob,
+        URL: {
+            createObjectURL(blob) {
+                downloadedBlob = blob;
+                return 'blob:participant-summary';
+            },
+            revokeObjectURL() {},
+        },
+        setTimeout(callback) { callback(); },
         FileReader: class {
             readAsText() { readers.push(this); }
         },
@@ -88,7 +102,7 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         };
     }
 
-    return { element, charts, alerts, monthlyTab, selectFile };
+    return { element, charts, alerts, downloads, monthlyTab, selectFile };
 }
 
 test('rejects unrelated JSON and malformed message entries', () => {
@@ -136,6 +150,29 @@ test('keeps the last upload and disables monthly statistics for an empty export'
 
     app.selectFile('restored.json').complete({ messages });
     assert.equal(app.monthlyTab.disabled, false);
+});
+
+test('exports participant totals with quoted, formula-safe names', async () => {
+    const app = createAnalyzer();
+    const from = '=1+1, "quoted"';
+    const date = '2026-11-01T00:00:00';
+    app.selectFile('chat.json').complete({
+        messages: [
+            { id: 1, from, date, text: 'Привет' },
+            { id: 2, from, date, text: 'Hi' },
+        ],
+    });
+    const button = app.element('exportParticipants');
+    assert.equal(button.disabled, false);
+    button.click();
+    const [{ name, blob }] = app.downloads;
+    assert.equal(name, 'telegram-analyzer-participants.csv');
+    assert.equal(blob.type, 'text/csv;charset=utf-8');
+    assert.equal(await blob.text(),
+        `Участник,Сообщения,Средняя длина сообщения\r\n"'=1+1, ""quoted""",2,4.0\r\n`);
+
+    app.selectFile('empty.json').complete({ messages: [] });
+    assert.equal(button.disabled, true);
 });
 
 test('counts cross-month replies once and skips service events', () => {
