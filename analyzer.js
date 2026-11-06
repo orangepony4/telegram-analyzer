@@ -842,25 +842,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!monthsData.length) return;
 
         const monthData = monthsData[currentMonthIndex];
-        const monthDate = new Date(monthData.month + '-01');
-        const monthName = monthDate.toLocaleString('ru', { month: 'long', year: 'numeric' });
+        const monthName = new Date(monthData.month + '-01').toLocaleString('ru', {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC'
+        });
         currentMonthDisplay.textContent = monthName;
 
-        displayMonthlyStats(monthData);
+        displayMonthlyStats(monthData, monthName);
         createMonthlyCharts(monthData);
     }
 
-    function displayMonthlyStats(monthData) {
-        const { data, month } = monthData;
+    function displayMonthlyStats(monthData, monthName) {
+        const { data } = monthData;
         const monthlyMessageCountElement = document.getElementById('monthlyMessageCount');
         const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
         const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
-        const monthDate = new Date(month + '-01');
-        const monthName = monthDate.toLocaleString('ru', { month: 'long', year: 'numeric' });
-
-
         monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
 
         // Use helper functions for monthly stats display
