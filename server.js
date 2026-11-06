@@ -9,6 +9,9 @@ const publicFiles = {
     '/index.html': 'index.html',
     '/styles.css': 'styles.css',
     '/analyzer.js': 'analyzer.js',
+    '/vendor/chart.umd.min.js': 'vendor/chart.umd.min.js',
+    '/vendor/chartjs-LICENSE.md': 'vendor/chartjs-LICENSE.md',
+    '/vendor/kurkle-color-LICENSE.md': 'vendor/kurkle-color-LICENSE.md',
 };
 
 for (const [route, file] of Object.entries(publicFiles)) {

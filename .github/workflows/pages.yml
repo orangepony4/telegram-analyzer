@@ -35,11 +35,12 @@ jobs:
         shell: bash
         run: |
           stage="$RUNNER_TEMP/telegram-analyzer-pages"
-          mkdir "$stage"
-          for file in index.html analyzer.js styles.css; do
+          mkdir -p "$stage/vendor"
+          test ! -L vendor
+          for file in index.html analyzer.js styles.css vendor/chart.umd.min.js vendor/chartjs-LICENSE.md vendor/kurkle-color-LICENSE.md; do
             test -f "$file"
             test ! -L "$file"
-            cp -- "$file" "$stage/"
+            cp -- "$file" "$stage/$file"
           done
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
