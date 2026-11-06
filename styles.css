@@ -777,7 +777,7 @@ h1, h2, h3 {
     margin: 0.55rem 0;
 }
 
-.drop-zone .upload-button {
+.upload-button {
     background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
     color: #fff;
     padding: 0.85rem 1.85rem;
@@ -792,9 +792,20 @@ h1, h2, h3 {
     box-shadow: 0 12px 25px rgba(108, 92, 231, 0.35);
 }
 
-.drop-zone .upload-button:hover {
+.upload-button:hover:not(:disabled) {
     transform: translateY(-2px) scale(1.02);
     box-shadow: 0 16px 30px rgba(108, 92, 231, 0.45);
+}
+
+button.upload-button {
+    border: 0;
+    font: inherit;
+    font-weight: 600;
+}
+
+.upload-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .drop-zone .file-name {

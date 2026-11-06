@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentMonthDisplay = document.getElementById('currentMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
+    const exportParticipantsButton = document.getElementById('exportParticipants');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const ignoredThresholdInput = document.getElementById('ignoredThreshold');
@@ -41,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
 
     let overallResponseTimes = null;
+    let overallParticipantTotals = new Map();
     let activeReader = null;
     let currentMonthIndex = 0;
     let monthsData = [];
@@ -105,6 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (fileInput) {
         fileInput.addEventListener('change', handleFileSelect);
     }
+
+    exportParticipantsButton.addEventListener('click', downloadParticipantSummary);
 
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -191,6 +195,8 @@ document.addEventListener('DOMContentLoaded', () => {
         statsContainer.style.display = 'none';
         showLoadingIndicator();
         overallResponseTimes = null;
+        overallParticipantTotals = new Map();
+        exportParticipantsButton.disabled = true;
 
         const reader = new FileReader();
         activeReader = reader;
@@ -553,7 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([month, data]) => ({ month, data }));
 
         // Показываем общую статистику
-        displayGeneralStats(messages, allParticipants, responseTimes);
+        const participantTotals = getParticipantTotals(messages);
+        displayGeneralStats(messages, participantTotals, responseTimes);
         displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
         displayWordCountStats(calculateTotalWordCounts(messages));
         displayMediaTypeStats(calculateMediaTypeUsage(messages));
@@ -575,6 +582,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         updateMonthlyStats();
         overallResponseTimes = responseTimes;
+        overallParticipantTotals = participantTotals;
+        exportParticipantsButton.disabled = participantTotals.size === 0;
     }
 
     function recordResponse(responseTimes, sender, responder, seconds) {
@@ -601,25 +610,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return { timeOfDay, messageTypes, dayOfWeekActivity };
     }
 
-    function displayGeneralStats(messages, participants, responseTimes) {
+    function displayGeneralStats(messages, participantTotals, responseTimes) {
         const messageCountElement = document.getElementById('messageCount');
         const participantStatsElement = document.getElementById('participantStats');
 
         // Calculate average response time separately as it wasn't refactored into generateParticipantStatsHTML
         let avgResponseTimeHTML = '<h3><i class="fas fa-calculator"></i> Среднее время ответа по участникам:</h3><ul>';
-        participants.forEach(participant => {
+        for (const participant of participantTotals.keys()) {
              if (participant) {
                  const sanitizedParticipant = sanitizeHTML(participant);
                  const avgTime = calculateAverageResponseTimeForParticipant(responseTimes, participant);
                  avgResponseTimeHTML += `<li><strong>${sanitizedParticipant}</strong>: ${avgTime}</li>`;
              }
-        });
+        }
         avgResponseTimeHTML += '</ul>';
 
 
         messageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений: ${messages.length}</h3>`;
         // Combine participant stats and average response time
-        participantStatsElement.innerHTML = generateParticipantStatsHTML(messages, participants) + avgResponseTimeHTML;
+        participantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals) + avgResponseTimeHTML;
     }
 
     function calculateAverageResponseTimeForParticipant(responseTimes, participant) {
@@ -756,7 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
 
         // Use helper functions for monthly stats display
-        monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(data.messages, Object.keys(data.participants).filter(p => p));
+        monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(getParticipantTotals(data.messages));
 
         monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, '<i class="fas fa-font"></i> Количество слов:');
 
@@ -1044,7 +1053,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions for HTML Generation ---
 
-    function generateParticipantStatsHTML(messages, participants) {
+    function getParticipantTotals(messages) {
         const totalsByParticipant = new Map();
         for (const message of messages) {
             if (!message.from) continue;
@@ -1056,15 +1065,14 @@ document.addEventListener('DOMContentLoaded', () => {
             totals.messageCount++;
             totals.textLength += getMessageText(message.text).length;
         }
+        return totalsByParticipant;
+    }
 
+    function generateParticipantStatsHTML(totalsByParticipant) {
         let statsHTML = '<h3><i class="fas fa-users"></i> Статистика по участникам:</h3><ul>';
-        participants.forEach(participant => {
-            const sanitizedParticipant = sanitizeHTML(participant || 'Неизвестно'); // Sanitize
-            const { messageCount, textLength } = totalsByParticipant.get(participant) ?? {
-                messageCount: 0,
-                textLength: 0,
-            };
-            const avgLength = messageCount ? textLength / messageCount : 0;
+        for (const [participant, { messageCount, textLength }] of totalsByParticipant) {
+            const sanitizedParticipant = sanitizeHTML(participant);
+            const avgLength = textLength / messageCount;
 
             statsHTML += `
                 <li>
@@ -1075,9 +1083,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     </ul>
                 </li>
             `;
-        });
+        }
         statsHTML += '</ul>';
         return statsHTML;
+    }
+
+    function downloadParticipantSummary() {
+        const rows = ['Участник,Сообщения,Средняя длина сообщения'];
+        for (const [participant, { messageCount, textLength }] of overallParticipantTotals) {
+            const name = String(participant);
+            // Prevent spreadsheet programs from treating an imported name as a formula.
+            const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
+            rows.push(`"${safeName.replaceAll('"', '""')}",${messageCount},${(textLength / messageCount).toFixed(1)}`);
+        }
+        const blob = new Blob(['\uFEFF', rows.join('\r\n'), '\r\n'], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'telegram-analyzer-participants.csv';
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
     function generateAverageResponseDelayHTML(avgDelayStats, title) { // Renamed from generateIgnoringStatsHTML
