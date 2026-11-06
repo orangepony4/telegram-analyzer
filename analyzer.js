@@ -1044,13 +1044,26 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Helper Functions for HTML Generation ---
 
     function generateParticipantStatsHTML(messages, participants) {
+        const totalsByParticipant = new Map();
+        for (const message of messages) {
+            if (!message.from) continue;
+            let totals = totalsByParticipant.get(message.from);
+            if (!totals) {
+                totals = { messageCount: 0, textLength: 0 };
+                totalsByParticipant.set(message.from, totals);
+            }
+            totals.messageCount++;
+            totals.textLength += getMessageText(message.text).length;
+        }
+
         let statsHTML = '<h3><i class="fas fa-users"></i> Статистика по участникам:</h3><ul>';
         participants.forEach(participant => {
             const sanitizedParticipant = sanitizeHTML(participant || 'Неизвестно'); // Sanitize
-            const participantMessages = messages.filter(m => m.from === participant);
-            const messageCount = participantMessages.length;
-            const avgLength = participantMessages
-                .reduce((sum, message) => sum + getMessageText(message.text).length, 0) / (messageCount || 1);
+            const { messageCount, textLength } = totalsByParticipant.get(participant) ?? {
+                messageCount: 0,
+                textLength: 0,
+            };
+            const avgLength = messageCount ? textLength / messageCount : 0;
 
             statsHTML += `
                 <li>
