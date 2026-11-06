@@ -4,6 +4,7 @@
   "description": "Анализатор чатов Telegram с визуализацией",
   "main": "server.js",
   "scripts": {
+    "test": "node --test",
     "start": "node server.js",
     "dev": "nodemon server.js --watch . --ext js,html,css",
     "build:css": "node ./node_modules/tailwindcss/dist/cli.js -i ./src/input.css -o ./dist/output.css --watch"
