@@ -3,13 +3,19 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000; // Порт вынесен в переменную для удобства
 
-// Статические файлы
-app.use(express.static(path.join(__dirname)));
+// Serve only the files used by the web interface. Chat exports stay local.
+const publicFiles = {
+    '/': 'index.html',
+    '/index.html': 'index.html',
+    '/styles.css': 'styles.css',
+    '/analyzer.js': 'analyzer.js',
+};
 
-// Маршрут для главной страницы
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
+for (const [route, file] of Object.entries(publicFiles)) {
+    app.get(route, (req, res) => {
+        res.sendFile(path.join(__dirname, file));
+    });
+}
 
 // Запуск сервера
 app.listen(PORT, () => {
