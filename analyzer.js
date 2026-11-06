@@ -157,6 +157,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function getMessageText(text) {
+        if (typeof text === 'string') {
+            return text;
+        }
+        if (!Array.isArray(text)) {
+            return '';
+        }
+        return text.map(part => {
+            if (typeof part === 'string') {
+                return part;
+            }
+            return typeof part?.text === 'string' ? part.text : '';
+        }).join('');
+    }
+
     function processSelectedFile(file) {
         if (!file) {
             return;
@@ -516,10 +531,8 @@ document.addEventListener('DOMContentLoaded', () => {
             messagesByMonth[monthKey].timeOfDay[date.getHours()]++;
             messagesByMonth[monthKey].dayOfWeekActivity[date.getDay()]++;
 
-            if (msg.text && typeof msg.text === 'string') {
-                const words = msg.text.split(/\s+/).filter(word => word.length > 0);
-                messagesByMonth[monthKey].wordCounts[msg.from] += words.length;
-            }
+            const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
+            messagesByMonth[monthKey].wordCounts[msg.from] += words.length;
 
             // Расчет времени ответа
             if (index > 0) {
@@ -703,8 +716,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const wordCounts = {};
         allParticipants.forEach(p => wordCounts[p] = 0);
         messages.forEach(msg => {
-            if (msg.from && msg.text && typeof msg.text === 'string') {
-                const words = msg.text.split(/\s+/).filter(word => word.length > 0);
+            if (msg.from) {
+                const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
                 wordCounts[msg.from] += words.length;
             }
         });
@@ -1184,8 +1197,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const sanitizedParticipant = sanitizeHTML(participant || 'Неизвестно'); // Sanitize
             const participantMessages = messages.filter(m => m.from === participant);
             const messageCount = participantMessages.length;
-            const avgLength = participantMessages.filter(m => m.text && typeof m.text === 'string')
-                .reduce((sum, m) => sum + m.text.length, 0) / (messageCount || 1);
+            const avgLength = participantMessages
+                .reduce((sum, message) => sum + getMessageText(message.text).length, 0) / (messageCount || 1);
 
             statsHTML += `
                 <li>
