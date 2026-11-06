@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
+    const demoButton = document.getElementById('loadDemoChat');
     const statsContainer = document.querySelector('.stats-container');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
@@ -108,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput.addEventListener('change', handleFileSelect);
     }
 
+    demoButton?.addEventListener('click', loadDemoChat);
     exportParticipantsButton.addEventListener('click', downloadParticipantSummary);
 
     if (dropZone) {
@@ -139,6 +141,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         processSelectedFile(file);
+    }
+
+    function loadDemoChat() {
+        const people = ['Ника', 'Лев', 'Мира'];
+        const rows = [
+            ['2025-01-10T09:30:00', 0, 'Как будет выглядеть маяк на нашей карте?'],
+            ['2025-01-10T09:42:00', 1, 'Предлагаю белую башню с красной крышей.'],
+            ['2025-01-10T10:05:00', 2, 'Вот черновой эскиз башни.', 'photo'],
+            ['2025-01-10T10:09:00', 0, 'Оставим крупные окна. Так свет будет заметнее.'],
+            ['2025-01-10T11:30:00', 1, 'Записал звуки волн для берега.', 'voice_message'],
+            ['2025-01-10T11:35:00', 0, 'Возьмём этот звук для вечерней сцены.'],
+            ['2025-02-14T13:10:00', 0, 'Проверим карту. Откуда лучше начинать прогулку?'],
+            ['2025-02-14T13:12:00', 2, ['Я бы начала с ', { type: 'bold', text: 'берега' }, '.']],
+            ['2025-02-14T13:25:00', 1, 'Снял короткое видео маршрута.', 'video_file'],
+            ['2025-02-14T13:31:00', 2, 'Добавлю указатель возле причала.'],
+            ['2025-03-08T16:00:00', 2, 'Готов итоговый экран. Вот снимок.', 'photo'],
+            ['2025-03-08T16:18:00', 0, 'Проверю кнопки на маленьком экране.'],
+            ['2025-03-08T16:24:00', 1, 'Записал видео с финальной прогулкой.', 'video_file'],
+            ['2025-03-08T16:27:00', 0, 'Всё работает. Маяк виден с самого причала!'],
+        ];
+        const messages = rows.map(([date, person, text, mediaType], index) => ({
+            id: index + 1, type: 'message', date, from: people[person],
+            from_id: `user${person + 1}`, text, media_type: mediaType,
+        }));
+        const json = JSON.stringify({ name: 'Демонстрационный чат', messages });
+        processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }));
     }
 
     // Helper function to sanitize HTML and prevent XSS

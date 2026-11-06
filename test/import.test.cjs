@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { File } = require('node:buffer');
 const fs = require('node:fs');
 const path = require('node:path');
 const { test } = require('node:test');
@@ -78,6 +79,7 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         localStorage: { getItem: () => null },
         Chart: chartsAvailable ? Chart : undefined,
         Blob,
+        File,
         URL: {
             createObjectURL(blob) {
                 downloadedBlob = blob;
@@ -87,7 +89,10 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         },
         setTimeout(callback) { callback(); },
         FileReader: class {
-            readAsText() { readers.push(this); }
+            readAsText(file) {
+                this.file = file;
+                readers.push(this);
+            }
         },
         alert: message => alerts.push(message),
         console,
@@ -102,7 +107,18 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         };
     }
 
-    return { element, charts, alerts, downloads, monthlyTab, selectFile };
+    function selectDemo() {
+        element('loadDemoChat').click();
+        const reader = readers.at(-1);
+        return {
+            file: reader.file,
+            async complete() {
+                reader.onload({ target: { result: await reader.file.text() } });
+            },
+        };
+    }
+
+    return { element, charts, alerts, downloads, monthlyTab, selectFile, selectDemo };
 }
 
 test('rejects unrelated JSON and malformed message entries', () => {
@@ -150,6 +166,41 @@ test('keeps the last upload and disables monthly statistics for an empty export'
 
     app.selectFile('restored.json').complete({ messages });
     assert.equal(app.monthlyTab.disabled, false);
+});
+
+test('loads the fictional demo through normal file import and keeps the newest selection', async () => {
+    const app = createAnalyzer();
+    const oldUpload = app.selectFile('old.json');
+    const demo = app.selectDemo();
+    assert.ok(demo.file instanceof File);
+    assert.equal(demo.file.name, 'demo-chat.json');
+    assert.equal(demo.file.type, 'application/json');
+    assert.equal(app.element('loadingIndicator').style.display, 'flex');
+    await demo.complete();
+    oldUpload.complete({ messages: [] });
+
+    assert.equal(app.element('dropFileName').textContent, 'demo-chat.json');
+    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 14/);
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-01,2025-02,2025-03');
+    assert.ok(app.charts.get('responseTimeChart').data.labels.length > 0);
+    assert.match(app.element('mediaTypeStats').innerHTML, /photo: 2/);
+    assert.match(app.element('thresholdExceededMessagesStats').innerHTML, /Лев<\/strong>: 1/);
+
+    app.element('exportParticipants').click();
+    const csv = await app.downloads[0].blob.text();
+    for (const [name, count] of [['Ника', 6], ['Лев', 4], ['Мира', 4]]) {
+        assert.ok(csv.includes(`"${name}",${count},`));
+    }
+
+    const repeatedDemo = app.selectDemo();
+    assert.notEqual(repeatedDemo.file, demo.file);
+    assert.equal(await repeatedDemo.file.text(), await demo.file.text());
+    app.selectFile('new.json').complete({ messages: [{ id: 1, from: 'Другой участник', text: 'Привет' }] });
+    await repeatedDemo.complete();
+    assert.equal(app.element('dropFileName').textContent, 'new.json');
+    assert.match(app.element('participantStats').innerHTML, /Другой участник/);
+    assert.doesNotMatch(app.element('participantStats').innerHTML, /Ника|Лев|Мира/);
+    assert.deepEqual(app.alerts, []);
 });
 
 test('exports participant totals with quoted, formula-safe names', async () => {
