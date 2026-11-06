@@ -17,7 +17,7 @@
         <header class="header">
             <div class="header-left">
                 <div class="logo-pill">
-                    <i class="fab fa-telegram"></i>
+                    <i class="fab fa-telegram" aria-hidden="true"></i>
                 </div>
                 <div class="header-text">
                     <h1>Telegram Analyzer</h1>
@@ -26,24 +26,24 @@
             </div>
             <div class="header-right">
                 <div class="header-highlights">
-                    <span class="highlight-pill"><i class="fas fa-shield-alt"></i> Данные остаются у вас</span>
-                    <span class="highlight-pill"><i class="fas fa-bolt"></i> Анализ в браузере</span>
+                    <span class="highlight-pill"><i class="fas fa-shield-alt" aria-hidden="true"></i> Данные остаются у вас</span>
+                    <span class="highlight-pill"><i class="fas fa-bolt" aria-hidden="true"></i> Анализ в браузере</span>
                 </div>
                 <button id="themeToggleBtn" title="Переключить тему" class="theme-toggle-button">
                     <span class="sr-only">Переключить тему</span>
-                    <i class="fas fa-sun"></i>
+                    <i class="fas fa-sun" aria-hidden="true"></i>
                 </button>
             </div>
         </header>
 
         <main class="page-main">
             <section class="upload-card">
-                <h2><i class="fas fa-cloud-upload-alt"></i> Загрузите экспорт чата</h2>
+                <h2><i class="fas fa-cloud-upload-alt" aria-hidden="true"></i> Загрузите экспорт чата</h2>
                 <p class="lead">Перетащите JSON-файл экспорта Telegram или выберите его вручную — данные не покидают ваш браузер.</p>
                 <div id="dropZone" class="drop-zone">
-                     <input type="file" id="jsonFile" accept=".json" style="display: none;">
+                     <input type="file" id="jsonFile" accept=".json" class="sr-only" aria-describedby="dropFileName">
                      <div class="drop-zone-content">
-                        <i class="fas fa-file-upload drop-icon"></i>
+                        <i class="fas fa-file-upload drop-icon" aria-hidden="true"></i>
                         <p>Перетащите JSON-файл сюда</p>
                         <p class="separator">или</p>
                         <label for="jsonFile" class="upload-button">
@@ -58,16 +58,17 @@
                     </button>
                     <p id="demoImportHint">Вымышленная переписка за три месяца.</p>
                 </div>
-                <div id="loadingIndicator" class="loading-indicator">
-                    <i class="fas fa-spinner fa-spin"></i>
+                <div id="loadingIndicator" class="loading-indicator" aria-hidden="true">
+                    <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                     <span>Загрузка и анализ данных...</span>
                 </div>
+                <p id="importStatus" class="sr-only" role="status"></p>
             </section>
 
             <section class="stats-section stats-container">
                 <div class="stats-heading">
                     <div>
-                        <h2><i class="fas fa-chart-line"></i> Панель аналитики</h2>
+                        <h2><i class="fas fa-chart-line" aria-hidden="true"></i> Панель аналитики</h2>
                         <p>После загрузки экспорта исследуйте ключевые метрики, переключайте вкладки и отслеживайте динамику общения помесячно.</p>
                     </div>
                     <button type="button" id="exportParticipants" class="upload-button" disabled>
@@ -78,20 +79,22 @@
                 Графики недоступны. Чтобы загрузить их, проверьте подключение к интернету и обновите страницу.
             </p>
             <!-- Tabs -->
-            <div class="tabs">
-                <button class="tab-btn active" data-tab="all">
-                    <i class="fas fa-globe"></i> Общая статистика
+            <div class="tabs" role="tablist" aria-label="Разделы статистики">
+                <button type="button" id="allStatsTab" class="tab-btn active" data-tab="all"
+                        role="tab" aria-controls="all" aria-selected="true" tabindex="0">
+                    <i class="fas fa-globe" aria-hidden="true"></i> Общая статистика
                 </button>
-                <button class="tab-btn" data-tab="monthly">
-                    <i class="fas fa-calendar-alt"></i> По месяцам
+                <button type="button" id="monthlyStatsTab" class="tab-btn" data-tab="monthly"
+                        role="tab" aria-controls="monthly" aria-selected="false" tabindex="-1">
+                    <i class="fas fa-calendar-alt" aria-hidden="true"></i> По месяцам
                 </button>
             </div>
 
             <!-- All Time Stats -->
-            <div class="tab-content active" id="all">
+            <div class="tab-content active" id="all" role="tabpanel" aria-labelledby="allStatsTab" tabindex="0">
                 <div class="general-stats card">
                     <div class="card-header">
-                        <i class="fas fa-chart-bar"></i>
+                        <i class="fas fa-chart-bar" aria-hidden="true"></i>
                         <h2>Общая статистика</h2>
                     </div>
                     <div class="card-content">
@@ -101,7 +104,7 @@
                         <div id="wordCountStats" class="stat-box"></div>
                         <div id="mediaTypeStats" class="stat-box"></div>
                         <div class="stat-box threshold-control">
-                            <h3><i class="fas fa-eye-slash"></i> Настройка порога для сообщений с долгим ответом (в минутах):</h3>
+                            <h3><i class="fas fa-eye-slash" aria-hidden="true"></i> <label for="ignoredThreshold">Настройка порога для сообщений с долгим ответом (в минутах):</label></h3>
                             <input type="number" id="ignoredThreshold" value="60" min="1">
                         </div>
                         <div id="thresholdExceededMessagesStats" class="stat-box"></div>
@@ -111,35 +114,35 @@
                 <div class="charts-grid">
                     <div class="chart-container card">
                         <div class="card-header">
-                            <i class="fas fa-calendar-alt"></i>
+                            <i class="fas fa-calendar-alt" aria-hidden="true"></i>
                             <h3>Сообщения по месяцам</h3>
                         </div>
                         <canvas id="monthlyChart"></canvas>
                     </div>
                     <div class="chart-container card">
                         <div class="card-header">
-                            <i class="fas fa-clock"></i>
+                            <i class="fas fa-clock" aria-hidden="true"></i>
                             <h3>Время ответа</h3>
                         </div>
                         <canvas id="responseTimeChart"></canvas>
                     </div>
                     <div class="chart-container card">
                         <div class="card-header">
-                            <i class="fas fa-sun"></i>
+                            <i class="fas fa-sun" aria-hidden="true"></i>
                             <h3>Активность по времени суток</h3>
                         </div>
                         <canvas id="timeOfDayChart"></canvas>
                     </div>
                     <div class="chart-container card">
                         <div class="card-header">
-                            <i class="fas fa-chart-pie"></i>
+                            <i class="fas fa-chart-pie" aria-hidden="true"></i>
                             <h3>Типы сообщений</h3>
                         </div>
                         <canvas id="messageTypesChart"></canvas>
                     </div>
                      <div class="chart-container card">
                         <div class="card-header">
-                            <i class="fas fa-calendar-week"></i>
+                            <i class="fas fa-calendar-week" aria-hidden="true"></i>
                             <h3>Активность по дням недели</h3>
                         </div>
                         <canvas id="dayOfWeekChart"></canvas>
@@ -148,21 +151,21 @@
             </div>
 
             <!-- Monthly Stats -->
-            <div class="tab-content" id="monthly">
+            <div class="tab-content" id="monthly" role="tabpanel" aria-labelledby="monthlyStatsTab" tabindex="0">
                 <div class="month-selector">
-                    <button class="nav-btn" id="prevMonth">
-                        <i class="fas fa-chevron-left"></i>
+                    <button type="button" class="nav-btn" id="prevMonth" aria-label="Предыдущий месяц">
+                        <i class="fas fa-chevron-left" aria-hidden="true"></i>
                     </button>
-                    <h2 id="currentMonth">Выберите месяц</h2>
-                    <button class="nav-btn" id="nextMonth">
-                        <i class="fas fa-chevron-right"></i>
+                    <h2 id="currentMonth" aria-live="polite" aria-atomic="true">Выберите месяц</h2>
+                    <button type="button" class="nav-btn" id="nextMonth" aria-label="Следующий месяц">
+                        <i class="fas fa-chevron-right" aria-hidden="true"></i>
                     </button>
                 </div>
 
                 <div class="monthly-stats-grid">
                     <div class="card">
                         <div class="card-header">
-                            <i class="fas fa-chart-bar"></i>
+                            <i class="fas fa-chart-bar" aria-hidden="true"></i>
                             <h3>Статистика за месяц</h3>
                         </div>
                         <div class="card-content">
@@ -178,35 +181,35 @@
                     <div class="charts-grid">
                         <div class="chart-container card">
                             <div class="card-header">
-                                <i class="fas fa-clock"></i>
+                                <i class="fas fa-clock" aria-hidden="true"></i>
                                 <h3>Активность по дням</h3>
                             </div>
                             <canvas id="dailyActivityChart"></canvas>
                         </div>
                         <div class="chart-container card">
                             <div class="card-header">
-                                <i class="fas fa-sun"></i>
+                                <i class="fas fa-sun" aria-hidden="true"></i>
                                 <h3>Время суток (за месяц)</h3>
                             </div>
                             <canvas id="monthlyTimeOfDayChart"></canvas>
                         </div>
                         <div class="chart-container card">
                             <div class="card-header">
-                                <i class="fas fa-comments"></i>
+                                <i class="fas fa-comments" aria-hidden="true"></i>
                                 <h3>Типы сообщений за месяц</h3>
                             </div>
                             <canvas id="monthlyMessageTypesChart"></canvas>
                         </div>
                         <div class="chart-container card">
                             <div class="card-header">
-                                <i class="fas fa-clock"></i>
+                                <i class="fas fa-clock" aria-hidden="true"></i>
                                 <h3>Время ответа за месяц</h3>
                             </div>
                             <canvas id="monthlyResponseTimeChart"></canvas>
                         </div>
                          <div class="chart-container card">
                             <div class="card-header">
-                                <i class="fas fa-calendar-week"></i>
+                                <i class="fas fa-calendar-week" aria-hidden="true"></i>
                                 <h3>Активность по дням недели (месяц)</h3>
                             </div>
                             <canvas id="monthlyDayOfWeekChart"></canvas>

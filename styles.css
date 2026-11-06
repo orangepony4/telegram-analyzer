@@ -850,6 +850,16 @@ button.upload-button {
     outline-offset: 3px;
 }
 
+#jsonFile:focus-visible + .drop-zone-content .upload-button,
+.tab-btn:focus-visible,
+.tab-content:focus-visible,
+.nav-btn:focus-visible,
+.upload-button:focus-visible,
+.theme-toggle-button:focus-visible {
+    outline: 2px solid var(--text-color);
+    outline-offset: 3px;
+}
+
 /* Стиль при перетаскивании файла */
 .drop-zone.dragover {
     background-color: var(--dropzone-dragover-bg-color);

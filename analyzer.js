@@ -5,6 +5,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentMonthDisplay = document.getElementById('currentMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
+    const statsTabs = [...document.querySelectorAll('.tab-btn')];
     const exportParticipantsButton = document.getElementById('exportParticipants');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
@@ -15,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('dropZone');
     const dropFileNameElement = document.getElementById('dropFileName');
     const loadingIndicator = document.getElementById('loadingIndicator');
+    const importStatus = document.getElementById('importStatus');
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
     const DEFAULT_THEME_KEY = 'default';
     const ALTERNATIVE_THEME_KEY = 'muted-light';
@@ -62,16 +64,49 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('chartsUnavailableNotice').hidden = false;
     }
 
-    // Обработчики вкладок
-    document.querySelectorAll('.tab-btn').forEach(button => {
-        button.addEventListener('click', () => {
-            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-
-            button.classList.add('active');
-            document.getElementById(button.dataset.tab).classList.add('active');
-        });
+    statsTabs.forEach(tab => {
+        tab.addEventListener('click', () => selectStatsTab(tab));
+        tab.addEventListener('keydown', event => handleStatsTabKey(tab, event));
     });
+
+    function selectStatsTab(selected) {
+        if (selected.disabled) return;
+        for (const tab of statsTabs) {
+            const active = tab === selected;
+            tab.classList.toggle('active', active);
+            tab.setAttribute('aria-selected', String(active));
+            tab.tabIndex = active ? 0 : -1;
+            document.getElementById(tab.dataset.tab).classList.toggle('active', active);
+        }
+    }
+
+    function handleStatsTabKey(tab, event) {
+        if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+        const enabled = statsTabs.filter(candidate => !candidate.disabled);
+        const index = enabled.indexOf(tab);
+        let nextIndex;
+        switch (event.key) {
+            case 'ArrowLeft':
+                nextIndex = (index - 1 + enabled.length) % enabled.length;
+                break;
+            case 'ArrowRight':
+                nextIndex = (index + 1) % enabled.length;
+                break;
+            case 'Home':
+                nextIndex = 0;
+                break;
+            case 'End':
+                nextIndex = enabled.length - 1;
+                break;
+            default:
+                return;
+        }
+        event.preventDefault();
+        const next = enabled[nextIndex];
+        selectStatsTab(next);
+        next.focus();
+    }
 
     // Обработчики навигации по месяцам
     prevMonthButton.addEventListener('click', () => {
@@ -297,6 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (activeReader !== reader) {
                 return;
             }
+            let status = '';
             try {
                 const rawContent = e.target?.result;
                 const data = JSON.parse(rawContent);
@@ -312,6 +348,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 analyzeChat(data);
                 statsContainer.style.display = 'block';
                 animateCards();
+                status = 'Анализ завершён. Статистика доступна ниже.';
             } catch (error) {
                 console.error('Ошибка разбора JSON файла:', error);
                 alert('Ошибка обработки файла. Пожалуйста, убедитесь, что файл JSON корректен.');
@@ -319,7 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetSelectedFileName();
             } finally {
                 activeReader = null;
-                hideLoadingIndicator();
+                hideLoadingIndicator(status);
                 clearFileInput();
             }
         };
@@ -406,19 +443,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showLoadingIndicator() {
-        if (!loadingIndicator) {
-            return;
-        }
         loadingIndicator.style.display = 'flex';
-        loadingIndicator.setAttribute('aria-hidden', 'false');
+        importStatus.textContent = 'Загрузка и анализ данных...';
     }
 
-    function hideLoadingIndicator() {
-        if (!loadingIndicator) {
-            return;
-        }
+    function hideLoadingIndicator(status = '') {
         loadingIndicator.style.display = 'none';
-        loadingIndicator.setAttribute('aria-hidden', 'true');
+        importStatus.textContent = status;
     }
 
     function updateSelectedFileName(fileName) {
@@ -672,7 +703,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMonthIndex = monthsData.length - 1;
         monthlyStatsTab.disabled = monthsData.length === 0;
         if (monthlyStatsTab.disabled && monthlyStatsTab.classList.contains('active')) {
-            allStatsTab.click();
+            selectStatsTab(allStatsTab);
         }
         updateMonthlyStats();
         overallResponseTimes = responseTimes;
@@ -709,7 +740,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const participantStatsElement = document.getElementById('participantStats');
 
         // Calculate average response time separately as it wasn't refactored into generateParticipantStatsHTML
-        let avgResponseTimeHTML = '<h3><i class="fas fa-calculator"></i> Среднее время ответа по участникам:</h3><ul>';
+        let avgResponseTimeHTML = '<h3><i class="fas fa-calculator" aria-hidden="true"></i> Среднее время ответа по участникам:</h3><ul>';
         for (const participant of participantTotals.keys()) {
              if (participant) {
                  const sanitizedParticipant = sanitizeHTML(participant);
@@ -720,7 +751,7 @@ document.addEventListener('DOMContentLoaded', () => {
         avgResponseTimeHTML += '</ul>';
 
 
-        messageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений: ${messages.length}</h3>`;
+        messageCountElement.innerHTML = `<h3><i class="fas fa-comments" aria-hidden="true"></i> Всего сообщений: ${messages.length}</h3>`;
         // Combine participant stats and average response time
         participantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals) + avgResponseTimeHTML;
     }
@@ -748,7 +779,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayAverageResponseDelayStats(avgDelayStats) { // Renamed from displayIgnoringStats
-        const title = '<i class="fas fa-hourglass-half"></i> Средняя задержка ответа (в минутах):'; // Updated title
+        const title = '<i class="fas fa-hourglass-half" aria-hidden="true"></i> Средняя задержка ответа (в минутах):'; // Updated title
         averageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(avgDelayStats, title);
     }
 
@@ -766,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayWordCountStats(wordCounts) {
         const wordCountStatsElement = document.getElementById('wordCountStats');
-        const title = '<i class="fas fa-font"></i> Общее количество слов:';
+        const title = '<i class="fas fa-font" aria-hidden="true"></i> Общее количество слов:';
         wordCountStatsElement.innerHTML = generateWordCountHTML(wordCounts, title);
     }
 
@@ -783,7 +814,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayMediaTypeStats(mediaTypeUsage) {
         const mediaTypeStatsElement = document.getElementById('mediaTypeStats');
-        const title = '<i class="fas fa-camera-retro"></i> Использование медиафайлов:';
+        const title = '<i class="fas fa-camera-retro" aria-hidden="true"></i> Использование медиафайлов:';
         mediaTypeStatsElement.innerHTML = generateMediaTypeHTML(mediaTypeUsage, title);
     }
 
@@ -830,7 +861,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayThresholdExceededMessagesStats(thresholdMessages) { // Renamed from displayIgnoredMessagesStats
-        const title = `<i class="fas fa-eye-slash"></i> Количество сообщений с ответом > ${ignoredMessageThreshold / 60} мин:`; // Updated title
+        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> Количество сообщений с ответом > ${ignoredMessageThreshold / 60} мин:`; // Updated title
         thresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
@@ -856,31 +887,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
-        monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
+        monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments" aria-hidden="true"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
 
         // Use helper functions for monthly stats display
         monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(getParticipantTotals(data.messages));
 
-        monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, '<i class="fas fa-font"></i> Количество слов:');
+        monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, '<i class="fas fa-font" aria-hidden="true"></i> Количество слов:');
 
-        monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, '<i class="fas fa-camera-retro"></i> Использование медиафайлов:');
+        monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, '<i class="fas fa-camera-retro" aria-hidden="true"></i> Использование медиафайлов:');
 
         displayMonthlyThresholdStats(monthData);
 
         const monthlyAvgDelayStats = calculateAverageResponseDelay(data.responseTimes);
-        const ignoringTitle = `<i class="fas fa-hourglass-half"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
+        const ignoringTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
         monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, ignoringTitle); // Renamed Element ID & helper
 
 
         createMonthlyDayOfWeekChart(data.dayOfWeekActivity);
 
+        const focusedControl = document.activeElement;
         prevMonthButton.disabled = currentMonthIndex === 0;
         nextMonthButton.disabled = currentMonthIndex === monthsData.length - 1;
+        if (focusedControl === prevMonthButton && prevMonthButton.disabled && !nextMonthButton.disabled) {
+            nextMonthButton.focus();
+        } else if (focusedControl === nextMonthButton && nextMonthButton.disabled && !prevMonthButton.disabled) {
+            prevMonthButton.focus();
+        }
     }
 
     function displayMonthlyThresholdStats(monthData) {
         const thresholdMessages = calculateThresholdExceededMessages(monthData.data.responseTimes, ignoredMessageThreshold);
-        const title = `<i class="fas fa-eye-slash"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`;
+        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`;
         monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
@@ -1163,7 +1200,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateParticipantStatsHTML(totalsByParticipant) {
-        let statsHTML = '<h3><i class="fas fa-users"></i> Статистика по участникам:</h3><ul>';
+        let statsHTML = '<h3><i class="fas fa-users" aria-hidden="true"></i> Статистика по участникам:</h3><ul>';
         for (const [participant, { messageCount, textLength }] of totalsByParticipant) {
             const sanitizedParticipant = sanitizeHTML(participant);
             const avgLength = textLength / messageCount;
@@ -1172,8 +1209,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <li>
                     <strong>${sanitizedParticipant}</strong>:
                     <ul>
-                        <li><i class="fas fa-comment"></i> Сообщений: ${messageCount}</li>
-                        <li><i class="fas fa-text-width"></i> Средняя длина: ${avgLength.toFixed(1)} символов</li>
+                        <li><i class="fas fa-comment" aria-hidden="true"></i> Сообщений: ${messageCount}</li>
+                        <li><i class="fas fa-text-width" aria-hidden="true"></i> Средняя длина: ${avgLength.toFixed(1)} символов</li>
                     </ul>
                 </li>
             `;
@@ -1284,7 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const mediaType in mediaTypeUsage[participant]) {
                     if (Object.hasOwnProperty.call(mediaTypeUsage[participant], mediaType)) {
                         const sanitizedMediaType = sanitizeHTML(mediaType);
-                        mediaTypeHTML += `<li><i class="fas fa-arrow-right"></i> ${sanitizedMediaType}: ${mediaTypeUsage[participant][mediaType]}</li>`;
+                        mediaTypeHTML += `<li><i class="fas fa-arrow-right" aria-hidden="true"></i> ${sanitizedMediaType}: ${mediaTypeUsage[participant][mediaType]}</li>`;
                     }
                 }
                 mediaTypeHTML += '</ul></li>';

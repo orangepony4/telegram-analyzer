@@ -14,21 +14,31 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
     const alerts = [];
     const downloads = [];
     let downloadedBlob;
+    let focusedElement;
 
     function element(id) {
         if (!elements.has(id)) {
             const classes = new Set();
+            const attributes = new Map();
             elements.set(id, {
                 style: {},
                 classList: {
                     add: name => classes.add(name),
                     remove: name => classes.delete(name),
                     contains: name => classes.has(name),
+                    toggle(name, enabled) {
+                        if (enabled) classes.add(name);
+                        else classes.delete(name);
+                    },
                 },
                 getContext: () => id,
-                setAttribute() {},
-                removeAttribute() {},
+                setAttribute: (name, value) => attributes.set(name, value),
+                getAttribute: name => attributes.get(name),
+                removeAttribute: name => attributes.delete(name),
                 querySelector: () => null,
+                focus() {
+                    if (!this.disabled) focusedElement = this;
+                },
                 addEventListener(name, handler) {
                     this[name] = handler;
                 },
@@ -41,6 +51,12 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
     const monthlyTab = element('.tab-btn[data-tab="monthly"]');
     allTab.dataset = { tab: 'all' };
     monthlyTab.dataset = { tab: 'monthly' };
+    allTab.tabIndex = 0;
+    monthlyTab.tabIndex = -1;
+    allTab.setAttribute('aria-selected', 'true');
+    monthlyTab.setAttribute('aria-selected', 'false');
+    allTab.classList.add('active');
+    element('all').classList.add('active');
 
     class Chart {
         static defaults = {};
@@ -62,9 +78,9 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
             addEventListener(event, handler) { handler(); },
             getElementById: element,
             querySelector: element,
+            get activeElement() { return focusedElement; },
             querySelectorAll(selector) {
                 if (selector === '.tab-btn') return [allTab, monthlyTab];
-                if (selector === '.tab-content') return [element('all'), element('monthly')];
                 return [];
             },
             createElement(tag) {
@@ -118,7 +134,10 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         };
     }
 
-    return { element, charts, alerts, downloads, monthlyTab, selectFile, selectDemo };
+    return {
+        element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo,
+        get focusedElement() { return focusedElement; },
+    };
 }
 
 test('rejects unrelated JSON and malformed message entries', () => {
@@ -128,6 +147,7 @@ test('rejects unrelated JSON and malformed message entries', () => {
         assert.match(app.alerts.at(-1), /Telegram Desktop/);
         assert.equal(app.element('.stats-container').style.display, 'none');
         assert.equal(app.element('loadingIndicator').style.display, 'none');
+        assert.equal(app.element('importStatus').textContent, '');
         assert.equal(app.element('jsonFile').value, '');
     }
     assert.equal(app.alerts.length, 2);
@@ -162,6 +182,10 @@ test('keeps the last upload and disables monthly statistics for an empty export'
     app.selectFile('empty.json').complete({ messages: [] });
     assert.equal(app.monthlyTab.disabled, true);
     assert.equal(app.element('monthly').classList.contains('active'), false);
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'false');
+    assert.equal(app.monthlyTab.tabIndex, -1);
+    assert.equal(app.allTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.allTab.tabIndex, 0);
     assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 0/);
 
     app.selectFile('restored.json').complete({ messages });
@@ -176,10 +200,12 @@ test('loads the fictional demo through normal file import and keeps the newest s
     assert.equal(demo.file.name, 'demo-chat.json');
     assert.equal(demo.file.type, 'application/json');
     assert.equal(app.element('loadingIndicator').style.display, 'flex');
+    assert.match(app.element('importStatus').textContent, /Загрузка и анализ/);
     await demo.complete();
     oldUpload.complete({ messages: [] });
 
     assert.equal(app.element('dropFileName').textContent, 'demo-chat.json');
+    assert.match(app.element('importStatus').textContent, /Анализ завершён/);
     assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 14/);
     assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-01,2025-02,2025-03');
     assert.ok(app.charts.get('responseTimeChart').data.labels.length > 0);
@@ -201,6 +227,58 @@ test('loads the fictional demo through normal file import and keeps the newest s
     assert.match(app.element('participantStats').innerHTML, /Другой участник/);
     assert.doesNotMatch(app.element('participantStats').innerHTML, /Ника|Лев|Мира/);
     assert.deepEqual(app.alerts, []);
+});
+
+test('selects one statistics tab at a time and wraps keyboard navigation', async () => {
+    const app = createAnalyzer();
+    await app.selectDemo().complete();
+    const press = (tab, key) => {
+        let prevented = false;
+        tab.keydown({ key, preventDefault() { prevented = true; } });
+        assert.equal(prevented, true);
+    };
+    const checkSelection = (active, inactive) => {
+        assert.equal(app.focusedElement, active);
+        assert.equal(active.getAttribute('aria-selected'), 'true');
+        assert.equal(active.tabIndex, 0);
+        assert.equal(app.element(active.dataset.tab).classList.contains('active'), true);
+        assert.equal(inactive.getAttribute('aria-selected'), 'false');
+        assert.equal(inactive.tabIndex, -1);
+        assert.equal(app.element(inactive.dataset.tab).classList.contains('active'), false);
+    };
+    press(app.allTab, 'ArrowLeft');
+    checkSelection(app.monthlyTab, app.allTab);
+    press(app.monthlyTab, 'ArrowRight');
+    checkSelection(app.allTab, app.monthlyTab);
+    press(app.allTab, 'End');
+    checkSelection(app.monthlyTab, app.allTab);
+    press(app.monthlyTab, 'Home');
+    checkSelection(app.allTab, app.monthlyTab);
+
+    app.selectFile('empty.json').complete({ messages: [] });
+    press(app.allTab, 'ArrowRight');
+    checkSelection(app.allTab, app.monthlyTab);
+});
+
+test('keeps keyboard focus on an enabled month control at both ends', async () => {
+    const app = createAnalyzer();
+    await app.selectDemo().complete();
+    app.monthlyTab.click();
+    const previous = app.element('prevMonth');
+    const next = app.element('nextMonth');
+    previous.focus();
+    previous.click();
+    assert.equal(app.focusedElement, previous);
+    previous.click();
+    assert.equal(previous.disabled, true);
+    assert.equal(app.focusedElement, next);
+    assert.match(app.element('currentMonth').textContent, /январь/);
+    next.click();
+    assert.equal(app.focusedElement, next);
+    next.click();
+    assert.equal(next.disabled, true);
+    assert.equal(app.focusedElement, previous);
+    assert.match(app.element('currentMonth').textContent, /март/);
 });
 
 test('exports participant totals with quoted, formula-safe names', async () => {
