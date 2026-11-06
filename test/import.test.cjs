@@ -377,6 +377,84 @@ test('counts cross-month replies once and skips service events', () => {
     assert.equal(app.charts.get('monthlyResponseTimeChart').data.labels.length, 0);
 });
 
+test('uses Unix time for reply order during a repeated DST hour', () => {
+    const app = createAnalyzer();
+    app.selectFile('fall-back.json').complete({ messages: [
+        { id: 2, from: 'Bob', date: '2025-11-02T01:05:00', date_unixtime: 1762063500, text: 'Reply' },
+        { id: 3, type: 'service', from: 'Service', date: '2025-11-02T01:00:00' },
+        { id: 1, from: 'Alice', date: '2025-11-02T01:55:00', date_unixtime: '1762062900', text: 'Question' },
+        { id: 4, from: 'Undated', date: null, date_unixtime: 'invalid' },
+    ] });
+    assert.deepEqual(app.alerts, []);
+    for (const id of ['responseTimeChart', 'monthlyResponseTimeChart']) {
+        const chart = app.charts.get(id);
+        assert.equal(chart.data.labels.join(), 'Alice -> Bob');
+        assert.equal(chart.data.datasets[0].data.join(), '10');
+    }
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-11');
+});
+
+test('keeps the written calendar hour through a browser DST gap', () => {
+    const app = createAnalyzer();
+    app.selectFile('moscow-clock.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2025-03-09T02:30:00', date_unixtime: '1741476600' },
+    ] });
+    assert.deepEqual(app.alerts, []);
+    for (const id of ['timeOfDayChart', 'monthlyTimeOfDayChart']) {
+        const counts = app.charts.get(id).data.datasets[0].data;
+        assert.equal(counts[2], 1);
+        assert.equal(counts[3], 0);
+    }
+    assert.equal(app.charts.get('dayOfWeekChart').data.datasets[0].data[0], 1);
+    assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[8], 1);
+});
+
+test('groups legacy date-only values at the written midnight', () => {
+    const app = createAnalyzer();
+    app.selectFile('date-only.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2025-11-01' },
+        { id: 2, from: 'Invalid', date: '2025-02-30', date_unixtime: '' },
+        { id: 3, from: 'Missing', date: null, date_unixtime: false },
+    ] });
+    assert.deepEqual(app.alerts, []);
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-11');
+    assert.equal(app.charts.get('timeOfDayChart').data.datasets[0].data[0], 1);
+    assert.equal(app.charts.get('dayOfWeekChart').data.datasets[0].data[6], 1);
+    assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[0], 1);
+});
+
+test('uses explicit ISO offsets for elapsed time when Unix values are absent', () => {
+    const app = createAnalyzer();
+    app.selectFile('explicit-offsets.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2025-03-09T01:55:00-05:00' },
+        { id: 2, from: 'Bob', date: '2025-03-09T03:05:00-04:00' },
+    ] });
+    const reply = app.charts.get('responseTimeChart').data;
+    assert.equal(reply.labels.join(), 'Alice -> Bob');
+    assert.equal(reply.datasets[0].data.join(), '10');
+    const hours = app.charts.get('timeOfDayChart').data.datasets[0].data;
+    assert.equal(hours[1], 1);
+    assert.equal(hours[3], 1);
+});
+
+test('uses one civil timeline for mixed legacy rows and a UTC calendar for Unix-only rows', () => {
+    const app = createAnalyzer();
+    app.selectFile('mixed-clock.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2025-10-31T23:55:00', date_unixtime: '1761944100' },
+        { id: 2, from: 'Bob', date: '2025-11-01T00:05:00', date_unixtime: '1761944700.0' },
+        { id: 3, from: 'Unix only', date_unixtime: '1761964200' },
+    ] });
+    assert.deepEqual(app.alerts, []);
+    const reply = app.charts.get('responseTimeChart').data;
+    assert.equal(reply.labels.join(), 'Alice -> Bob');
+    assert.equal(reply.datasets[0].data.join(), '10');
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-10,2025-11');
+    const hours = app.charts.get('timeOfDayChart').data.datasets[0].data;
+    assert.equal(hours[0], 1);
+    assert.equal(hours[2], 1);
+    assert.equal(hours[23], 1);
+});
+
 test('keeps renamed senders together and separates identical display names', async () => {
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({

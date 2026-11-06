@@ -23,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const ALTERNATIVE_THEME_KEY = 'muted-light';
     const DEFAULT_THEME_CLASS = 'theme-default';
     const ALTERNATIVE_THEME_CLASS = 'theme-muted-light';
+    const messageTiming = Symbol('messageTiming');
+    const exportDatePattern = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/i;
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
@@ -215,20 +217,81 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     }
 
+    function readMessageTiming({ date, date_unixtime: unix }) {
+        const seconds = typeof unix === 'string' && unix === unix.trim() && /^-?\d+$/.test(unix)
+            ? Number(unix)
+            : unix;
+        let time = Number.isSafeInteger(seconds) && Math.abs(seconds) <= 8.64e12
+            ? seconds * 1000
+            : NaN;
+        let wall = null;
+
+        const text = typeof date === 'string' ? date.trim() : '';
+        if (text) {
+            const iso = exportDatePattern.exec(text);
+            if (iso) {
+                const [, day, clock = '00:00:00', zone] = iso;
+                const dateTime = `${day}T${clock}`;
+                // UTC getters read the written calendar fields without applying the browser's timezone.
+                const written = new Date(`${dateTime}Z`);
+                const offsetTime = zone ? Date.parse(dateTime + zone) : NaN;
+                if (written.getUTCDate() === Number(day.slice(-2)) && (!zone || Number.isFinite(offsetTime))) {
+                    wall = written;
+                    if (!Number.isFinite(time)) time = offsetTime;
+                }
+            } else {
+                const legacy = new Date(text);
+                if (Number.isFinite(legacy.getTime())) {
+                    wall = new Date(legacy.getTime() - legacy.getTimezoneOffset() * 60_000);
+                }
+            }
+        } else if (typeof date === 'number' && !Number.isFinite(time)) {
+            time = new Date(date).getTime();
+        }
+
+        const calendar = wall ?? (Number.isFinite(time) ? new Date(time) : null);
+        if (calendar) {
+            const year = calendar.getUTCFullYear();
+            if (Number.isNaN(year) || year < 0 || year > 9999) {
+                return { time: NaN, calendar: null, hasWallClock: false };
+            }
+        }
+        return { time, calendar, hasWallClock: wall !== null };
+    }
+
     function normalizeMessagesOrder(messages) {
+        let useCivilTime = false;
+        for (const message of messages) {
+            const timing = readMessageTiming(message);
+            message[messageTiming] = timing;
+            const isParticipant = message.type !== 'service' && (message.from || getSenderId(message) !== null);
+            if (isParticipant && timing.hasWallClock && !Number.isFinite(timing.time)) {
+                // Legacy messages share one civil timeline to avoid mixing timezone assumptions.
+                useCivilTime = true;
+            }
+        }
+
         const datedMessages = [];
         const undatedMessages = [];
         for (const message of messages) {
-            const time = new Date(message.date).getTime();
-            if (Number.isNaN(time)) {
+            const timing = message[messageTiming];
+            if (useCivilTime) {
+                timing.time = timing.hasWallClock ? timing.calendar.getTime() : NaN;
+            }
+            if (!Number.isFinite(timing.time)) {
                 undatedMessages.push(message);
             } else {
-                const id = typeof message.id === 'number' ? message.id : 0;
-                datedMessages.push({ message, time, id });
+                datedMessages.push(message);
             }
         }
-        datedMessages.sort((a, b) => a.time - b.time || a.id - b.id);
-        return datedMessages.map(entry => entry.message).concat(undatedMessages);
+        datedMessages.sort((a, b) => {
+            const difference = a[messageTiming].time - b[messageTiming].time;
+            if (difference) return difference;
+            const firstId = typeof a.id === 'number' ? a.id : 0;
+            const secondId = typeof b.id === 'number' ? b.id : 0;
+            return firstId - secondId;
+        });
+        return datedMessages.concat(undatedMessages);
     }
 
     function getSenderId({ from_id: id }) {
@@ -263,7 +326,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (knownId !== id) idsByName.set(name, knownId === undefined ? id : null);
 
             if (sender.name !== name) {
-                const dated = Number.isFinite(new Date(message.date).getTime());
+                const dated = Number.isFinite(message[messageTiming].time);
                 if (dated || !sender.dated) {
                     sender.name = name;
                     sender.dated = dated;
@@ -641,9 +704,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const responseTimes = Object.create(null);
         let previousMessage = null;
         messages.forEach(msg => {
-            const date = new Date(msg.date);
-            if (!msg.from || !Number.isFinite(date.getTime())) return;
-            const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+            const { calendar, time } = msg[messageTiming];
+            if (!msg.from || !calendar) return;
+            const year = calendar.getUTCFullYear().toString().padStart(4, '0');
+            const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
+            const monthKey = `${year}-${monthNumber}`;
 
             const month = messagesByMonth[monthKey] ??= {
                 messages: [],
@@ -666,20 +731,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
 
-            month.timeOfDay[date.getHours()]++;
-            month.dayOfWeekActivity[date.getDay()]++;
+            month.timeOfDay[calendar.getUTCHours()]++;
+            month.dayOfWeekActivity[calendar.getUTCDay()]++;
 
             const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
             month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words.length;
 
-            if (msg.type !== 'service') {
+            if (msg.type !== 'service' && Number.isFinite(time)) {
                 if (previousMessage && previousMessage.sender !== msg.from) {
-                    const { sender, date: previousDate } = previousMessage;
-                    const seconds = (date - previousDate) / 1000;
+                    const { sender, time: previousTime } = previousMessage;
+                    const seconds = (time - previousTime) / 1000;
                     recordResponse(responseTimes, sender, msg.from, seconds);
                     recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
-                previousMessage = { sender: msg.from, date };
+                previousMessage = { sender: msg.from, time };
             }
         });
 
@@ -728,10 +793,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const dayOfWeekActivity = new Array(7).fill(0);
 
         messages.forEach(msg => {
-            const date = new Date(msg.date);
-            if (Number.isFinite(date.getTime())) {
-                timeOfDay[date.getHours()]++;
-                dayOfWeekActivity[date.getDay()]++;
+            const { calendar } = msg[messageTiming];
+            if (calendar) {
+                timeOfDay[calendar.getUTCHours()]++;
+                dayOfWeekActivity[calendar.getUTCDay()]++;
             }
 
             const type = msg.media_type || 'text';
@@ -822,16 +887,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaTypeStatsElement = document.getElementById('mediaTypeStats');
         const title = '<i class="fas fa-camera-retro" aria-hidden="true"></i> Использование медиафайлов:';
         mediaTypeStatsElement.innerHTML = generateMediaTypeHTML(mediaTypeUsage, title);
-    }
-
-    function calculateDayOfWeekActivity(messages) {
-        const dayOfWeekActivity = new Array(7).fill(0); // 0: Вс, 1: Пн, ..., 6: Сб
-        messages.forEach(msg => {
-            const date = new Date(msg.date);
-            const dayOfWeek = date.getDay();
-            dayOfWeekActivity[dayOfWeek]++;
-        });
-        return dayOfWeekActivity;
     }
 
     function createDayOfWeekChart(dayOfDayActivity) {
@@ -987,8 +1042,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // График активности по дням
         const dailyActivity = {};
         data.messages.forEach(msg => {
-            const date = new Date(msg.date);
-            const day = date.getDate();
+            const day = msg[messageTiming].calendar.getUTCDate();
             dailyActivity[day] = (dailyActivity[day] || 0) + 1;
         });
 
