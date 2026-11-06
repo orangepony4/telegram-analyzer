@@ -164,6 +164,71 @@ document.addEventListener('DOMContentLoaded', () => {
         return datedMessages.map(entry => entry.message).concat(undatedMessages);
     }
 
+    function getSenderId({ from_id: id }) {
+        if (typeof id === 'string' && id.trim()) return id;
+        // Older Telegram Desktop exports used numeric user IDs.
+        return Number.isSafeInteger(id) && id > 0 ? `user${id}` : null;
+    }
+
+    function normalizeSenderNames(messages) {
+        const senders = new Map();
+        const idsByName = new Map();
+        const actualNames = new Set();
+        const nameOnly = new Set();
+
+        for (const message of messages) {
+            const id = getSenderId(message);
+            const name = typeof message.from === 'string' && message.from.trim() ? message.from : null;
+            if (name) actualNames.add(name);
+            if (!id) {
+                if (name) nameOnly.add(name);
+                continue;
+            }
+
+            let sender = senders.get(id);
+            if (!sender) {
+                sender = { name: null, dated: false };
+                senders.set(id, sender);
+            }
+            if (!name) continue;
+
+            const knownId = idsByName.get(name);
+            if (knownId !== id) idsByName.set(name, knownId === undefined ? id : null);
+
+            if (sender.name !== name) {
+                const dated = Number.isFinite(new Date(message.date).getTime());
+                if (dated || !sender.dated) {
+                    sender.name = name;
+                    sender.dated = dated;
+                }
+            }
+        }
+        if (senders.size === 0) return;
+
+        // Preserve ambiguous name-only records as their own group.
+        const usedLabels = new Set([...nameOnly].filter(name => !idsByName.get(name)));
+        const nextSuffixByName = new Map();
+        for (const sender of senders.values()) {
+            const baseName = sender.name ?? 'Неизвестный участник';
+            let label = baseName;
+            if (usedLabels.has(label) || (!sender.name && actualNames.has(label))) {
+                let suffix = nextSuffixByName.get(baseName) ?? 2;
+                do {
+                    label = `${baseName} (${suffix++})`;
+                } while (usedLabels.has(label) || actualNames.has(label));
+                nextSuffixByName.set(baseName, suffix);
+            }
+            sender.label = label;
+            usedLabels.add(label);
+        }
+
+        // Existing statistics use from as their participant key and display label.
+        for (const message of messages) {
+            const id = getSenderId(message) ?? idsByName.get(message.from);
+            if (id) message.from = senders.get(id).label;
+        }
+    }
+
     function getMessageText(text) {
         if (typeof text === 'string') {
             return text;
@@ -215,6 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
                 data.messages = normalizeMessagesOrder(data.messages);
+                normalizeSenderNames(data.messages);
                 analyzeChat(data);
                 statsContainer.style.display = 'block';
                 animateCards();

@@ -204,3 +204,49 @@ test('counts cross-month replies once and skips service events', () => {
     assert.doesNotMatch(app.element('monthlyWordCountStats').innerHTML, /<strong>Bob<\/strong>/);
     assert.equal(app.charts.get('monthlyResponseTimeChart').data.labels.length, 0);
 });
+
+test('keeps renamed senders together and separates identical display names', async () => {
+    const app = createAnalyzer();
+    app.selectFile('chat.json').complete({
+        messages: [
+            { id: 1, date: '2026-11-01T12:00:00', from: 'Старое имя', from_id: 'user100001', text: 'Question' },
+            { id: 2, date: '2026-11-01T12:10:00', from: 'Лена', from_id: 'user100002', text: 'Reply' },
+            { id: 3, date: '2026-11-01T12:20:00', from: 'Лена', from_id: 'user100001', text: 'Follow-up' },
+            { id: 4, date: '2026-11-01T12:30:00', from: 'Лена (1)', from_id: 'user100003', text: 'Another participant' },
+        ],
+    });
+    assert.deepEqual(app.alerts, []);
+    const summary = app.element('participantStats').innerHTML;
+    assert.doesNotMatch(summary, /Старое имя|user10000[123]/);
+    const chart = app.charts.get('responseTimeChart');
+    assert.equal(chart.data.labels.length, 3);
+    assert.equal(chart.data.datasets[0].data.join(), '10,10,10');
+
+    app.element('exportParticipants').click();
+    const csv = await app.downloads[0].blob.text();
+    assert.doesNotMatch(csv, /Старое имя|user10000[123]/);
+    const [, ...rows] = csv.trim().split('\r\n');
+    const participants = rows.map(row => row.match(/^"([^"]+)",(\d+),/));
+    assert.equal(participants.length, 3);
+    assert.equal(new Set(participants.map(([, name]) => name)).size, 3);
+    assert.deepEqual(participants.map(([, , count]) => Number(count)).sort(), [1, 1, 2]);
+    assert.ok(participants.some(([, name, count]) => name === 'Лена (1)' && count === '1'));
+});
+
+test('matches old numeric sender IDs and keeps the latest dated name', async () => {
+    const app = createAnalyzer();
+    app.selectFile('chat.json').complete({
+        messages: [
+            { id: 4, date: 'invalid', from: 'Недатированное имя', from_id: 'user101', text: 'Unknown date' },
+            { id: 2, date: '2026-11-01T12:10:00', from: 'Новое имя', from_id: 'user101', text: 'New' },
+            { id: 1, date: '2026-11-01T12:00:00', from: 'Старое имя', from_id: 101, text: 'Old' },
+            { id: 3, date: '2026-11-01T12:20:00', from_id: 'user101', text: 'Missing name' },
+        ],
+    });
+    assert.deepEqual(app.alerts, []);
+    const participantStats = app.element('participantStats').innerHTML;
+    assert.match(participantStats, /<strong>Новое имя<\/strong>/);
+    assert.match(participantStats, /Сообщений: 4/);
+    assert.doesNotMatch(participantStats, /Старое имя|Недатированное имя|user101/);
+    assert.equal(app.charts.get('responseTimeChart').data.labels.length, 0);
+});
