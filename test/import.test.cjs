@@ -304,6 +304,49 @@ test('exports participant totals with quoted, formula-safe names', async () => {
     assert.equal(button.disabled, true);
 });
 
+test('exports the selected month and keeps the whole-chat CSV unchanged', async () => {
+    const app = createAnalyzer({ chartsAvailable: false });
+    const monthlyExport = app.element('exportMonthlyParticipants');
+    monthlyExport.click();
+    assert.equal(app.downloads.length, 0);
+
+    const formulaName = '=1+1, "quoted"';
+    app.selectFile('chat.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-10-15T12:00:00', text: 'A' },
+        { id: 2, from: 'Alice', date: '2026-10-15T12:01:00', text: 'B' },
+        { id: 3, from: 'Bob', date: '2026-10-15T12:02:00', text: 'C' },
+        { id: 4, from: 'Alice', date: '2026-11-15T12:00:00', text: 'D' },
+        { id: 5, from: formulaName, date: '2026-11-15T12:01:00', text: 'E' },
+    ] });
+    app.monthlyTab.click();
+    assert.equal(monthlyExport.disabled, false);
+
+    monthlyExport.click();
+    app.element('prevMonth').click();
+    monthlyExport.click();
+    app.element('nextMonth').click();
+    monthlyExport.click();
+    app.element('exportParticipants').click();
+
+    const header = 'Участник,Сообщения,Средняя длина сообщения\r\n';
+    const formulaRow = `"'=1+1, ""quoted""",1,1.0\r\n`;
+    const reports = await Promise.all(app.downloads.map(async ({ name, blob }) => [name, await blob.text()]));
+    assert.deepEqual(reports, [
+        ['telegram-analyzer-2026-11-participants.csv', header + '"Alice",1,1.0\r\n' + formulaRow],
+        ['telegram-analyzer-2026-10-participants.csv', header + '"Alice",2,1.0\r\n"Bob",1,1.0\r\n'],
+        ['telegram-analyzer-2026-11-participants.csv', header + '"Alice",1,1.0\r\n' + formulaRow],
+        ['telegram-analyzer-participants.csv', header + '"Alice",3,1.0\r\n"Bob",1,1.0\r\n' + formulaRow],
+    ]);
+
+    const emptyUpload = app.selectFile('empty.json');
+    assert.equal(monthlyExport.disabled, true);
+    monthlyExport.click();
+    emptyUpload.complete({ messages: [] });
+    assert.equal(monthlyExport.disabled, true);
+    monthlyExport.click();
+    assert.equal(app.downloads.length, 4);
+});
+
 test('counts cross-month replies once and skips service events', () => {
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({

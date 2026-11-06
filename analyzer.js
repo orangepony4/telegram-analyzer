@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
     const exportParticipantsButton = document.getElementById('exportParticipants');
+    const exportMonthlyParticipantsButton = document.getElementById('exportMonthlyParticipants');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const ignoredThresholdInput = document.getElementById('ignoredThreshold');
@@ -145,7 +146,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     demoButton?.addEventListener('click', loadDemoChat);
-    exportParticipantsButton.addEventListener('click', downloadParticipantSummary);
+    exportParticipantsButton.addEventListener('click', () => {
+        downloadParticipantSummary(overallParticipantTotals, 'telegram-analyzer-participants.csv');
+    });
+    exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
 
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -325,6 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
         overallResponseTimes = null;
         overallParticipantTotals = new Map();
         exportParticipantsButton.disabled = true;
+        exportMonthlyParticipantsButton.disabled = true;
 
         const reader = new FileReader();
         activeReader = reader;
@@ -709,6 +714,7 @@ document.addEventListener('DOMContentLoaded', () => {
         overallResponseTimes = responseTimes;
         overallParticipantTotals = participantTotals;
         exportParticipantsButton.disabled = participantTotals.size === 0;
+        exportMonthlyParticipantsButton.disabled = monthsData.length === 0;
     }
 
     function recordResponse(responseTimes, sender, responder, seconds) {
@@ -1219,9 +1225,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return statsHTML;
     }
 
-    function downloadParticipantSummary() {
+    function downloadMonthlyParticipantSummary() {
+        const monthData = monthsData[currentMonthIndex];
+        if (exportMonthlyParticipantsButton.disabled || !monthData) return;
+        downloadParticipantSummary(
+            getParticipantTotals(monthData.data.messages),
+            `telegram-analyzer-${monthData.month}-participants.csv`
+        );
+    }
+
+    function downloadParticipantSummary(participantTotals, filename) {
+        if (participantTotals.size === 0) return;
         const rows = ['Участник,Сообщения,Средняя длина сообщения'];
-        for (const [participant, { messageCount, textLength }] of overallParticipantTotals) {
+        for (const [participant, { messageCount, textLength }] of participantTotals) {
             const name = String(participant);
             // Prevent spreadsheet programs from treating an imported name as a formula.
             const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
@@ -1231,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'telegram-analyzer-participants.csv';
+        link.download = filename;
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }

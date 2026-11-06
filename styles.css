@@ -808,6 +808,11 @@ button.upload-button {
     cursor: not-allowed;
 }
 
+.monthly-export {
+    max-width: 100%;
+    margin-bottom: 1.1rem;
+}
+
 .drop-zone .file-name {
     margin-top: 1rem;
     font-size: 0.9rem;
