@@ -63,6 +63,18 @@
                     </button>
                     <p id="demoImportHint">Вымышленная переписка за три месяца.</p>
                 </div>
+                <div class="account-chat-chooser" id="accountChatChooser" hidden>
+                    <div class="account-chat-controls">
+                        <div class="account-chat-field">
+                            <label for="accountChatSelect">Чат из экспорта аккаунта</label>
+                            <select id="accountChatSelect" aria-describedby="accountChatStatus">
+                                <option value="" disabled selected>Выберите чат</option>
+                            </select>
+                        </div>
+                        <button type="button" id="analyzeAccountChat" class="demo-button" disabled>Показать статистику</button>
+                    </div>
+                    <p id="accountChatStatus" class="account-chat-status" role="status"></p>
+                </div>
                 <div id="loadingIndicator" class="loading-indicator" aria-hidden="true">
                     <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
                     <span>Загрузка и анализ данных...</span>

@@ -22,6 +22,14 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
             const attributes = new Map();
             elements.set(id, {
                 style: {},
+                children: [],
+                append(...children) {
+                    this.children.push(...children);
+                },
+                replaceChildren(...children) {
+                    this.children = children;
+                    this.value = children[0]?.value ?? '';
+                },
                 classList: {
                     add: name => classes.add(name),
                     remove: name => classes.delete(name),
@@ -57,6 +65,8 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
     monthlyTab.setAttribute('aria-selected', 'false');
     allTab.classList.add('active');
     element('all').classList.add('active');
+    element('accountChatChooser').hidden = true;
+    element('analyzeAccountChat').disabled = true;
 
     class Chart {
         static defaults = {};
@@ -151,6 +161,152 @@ test('rejects unrelated JSON and malformed message entries', () => {
         assert.equal(app.element('jsonFile').value, '');
     }
     assert.equal(app.alerts.length, 2);
+});
+
+function accountFixture() {
+    const hostileName = '<img src=x onerror=probe()>';
+    return {
+        hostileName,
+        data: {
+            chats: { list: [
+                null,
+                { name: 'Shared title', type: 'personal_chat', id: 101, messages: [
+                    { id: 1, from: 'Alpha', date: '2025-01-10T12:00:00', text: 'First' },
+                    { id: 2, from: 'Alpha', date: '2025-02-10T12:00:00', text: 'Second' },
+                ] },
+                { name: 'Bad row', type: 'personal_chat', id: 102, messages: [null] },
+                { name: hostileName, type: 'private_group', id: 103, messages: [] },
+                { name: 'Missing messages', type: 'personal_chat', id: 104 },
+            ] },
+            left_chats: { list: [
+                { name: 'Shared title', type: 'private_group', id: 201, messages: [
+                    { id: 1, from: 'Beta', date: '2025-03-10T12:00:00', text: 'Third' },
+                    { id: 2, from: 'Gamma', date: '2025-04-10T12:00:00', text: 'Fourth' },
+                ] },
+                { type: 'private_group', id: 202, messages: [] },
+            ] },
+        },
+    };
+}
+
+function chooseAccountChat(app, value) {
+    const select = app.element('accountChatSelect');
+    select.value = value;
+    select.change({ target: select });
+}
+
+test('lists valid account chats safely and waits for an explicit analysis', () => {
+    const app = createAnalyzer();
+    const chooser = app.element('accountChatChooser');
+    const select = app.element('accountChatSelect');
+    const analyze = app.element('analyzeAccountChat');
+    assert.equal(chooser.hidden, true);
+
+    const { data, hostileName } = accountFixture();
+    app.selectFile('account.json').complete(data);
+    assert.equal(chooser.hidden, false);
+    assert.equal(select.value, '');
+    assert.equal(analyze.disabled, true);
+    assert.deepEqual(select.children.map(option => option.value), ['', '0', '1', '2', '3']);
+    const labels = select.children.slice(1).map(option => option.textContent);
+    assert.match(labels[0], /^1\b.*Shared title/);
+    assert.match(labels[1], /^2\b/);
+    assert.ok(labels[1].includes(hostileName));
+    assert.match(labels[2], /^3\b.*Shared title/);
+    assert.match(labels[3], /^4\b/);
+    assert.doesNotMatch(labels.join(' '), /Bad row|Missing messages/);
+    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(app.element('exportParticipants').disabled, true);
+    assert.equal(app.element('exportMonthlyParticipants').disabled, true);
+    analyze.click();
+    assert.equal(app.charts.size, 0);
+
+    chooseAccountChat(app, '0');
+    assert.equal(analyze.disabled, false);
+    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(app.charts.size, 0);
+    analyze.click();
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 2/);
+    assert.match(app.element('participantStats').innerHTML, /Alpha/);
+    assert.match(app.element('accountChatStatus').textContent, /Shared title/);
+    assert.deepEqual(app.alerts, []);
+});
+
+test('resets the month and both CSV exports when switching account chats', async () => {
+    const app = createAnalyzer();
+    app.selectFile('account.json').complete(accountFixture().data);
+    const analyze = app.element('analyzeAccountChat');
+    chooseAccountChat(app, '0');
+    analyze.click();
+    assert.match(app.element('currentMonth').textContent, /февраль/);
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    app.element('exportMonthlyParticipants').click();
+
+    chooseAccountChat(app, '2');
+    analyze.click();
+    assert.match(app.element('currentMonth').textContent, /апрель/);
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-03,2025-04');
+    assert.doesNotMatch(app.element('participantStats').innerHTML, /Alpha/);
+    app.element('exportMonthlyParticipants').click();
+    app.element('exportParticipants').click();
+
+    const reports = await Promise.all(app.downloads.map(async ({ name, blob }) => [name, await blob.text()]));
+    assert.equal(reports.length, 3);
+    assert.equal(reports[0][0], 'telegram-analyzer-2025-01-participants.csv');
+    assert.match(reports[0][1], /"Alpha",1,/);
+    assert.equal(reports[1][0], 'telegram-analyzer-2025-04-participants.csv');
+    assert.match(reports[1][1], /"Gamma",1,/);
+    assert.doesNotMatch(reports[1][1], /Alpha|Beta/);
+    assert.equal(reports[2][0], 'telegram-analyzer-participants.csv');
+    assert.match(reports[2][1], /"Beta",1,/);
+    assert.match(reports[2][1], /"Gamma",1,/);
+    assert.doesNotMatch(reports[2][1], /Alpha/);
+
+    chooseAccountChat(app, '3');
+    analyze.click();
+    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 0/);
+    assert.equal(app.monthlyTab.disabled, true);
+    assert.equal(app.element('exportParticipants').disabled, true);
+    assert.equal(app.element('exportMonthlyParticipants').disabled, true);
+});
+
+test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
+    const app = createAnalyzer();
+    const { data } = accountFixture();
+    const chooser = app.element('accountChatChooser');
+    app.selectFile('left-only.json').complete({
+        chats: { list: 'malformed' },
+        left_chats: { list: [data.left_chats.list[0]] },
+    });
+    assert.equal(chooser.hidden, false);
+    assert.deepEqual(app.element('accountChatSelect').children.map(option => option.value), ['', '0']);
+
+    const stale = app.selectFile('stale-account.json');
+    app.selectFile('single.json').complete({
+        messages: [{ id: 1, from: 'Single user', date: '2025-08-01T12:00:00', text: 'Current' }],
+    });
+    stale.complete(data);
+    stale.fail();
+    assert.equal(chooser.hidden, true);
+    assert.match(app.element('participantStats').innerHTML, /Single user/);
+    assert.deepEqual(app.alerts, []);
+
+    app.selectFile('account.json').complete(data);
+    assert.equal(chooser.hidden, false);
+    const demo = app.selectDemo();
+    assert.equal(chooser.hidden, true);
+    await demo.complete();
+    assert.equal(chooser.hidden, true);
+    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 14/);
+
+    app.selectFile('malformed-account.json').complete({
+        chats: { list: [null, { messages: [null] }] }, left_chats: { list: false },
+    });
+    assert.equal(chooser.hidden, true);
+    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(app.alerts.length, 1);
 });
 
 test('shows text statistics when the chart library is unavailable', () => {

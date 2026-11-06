@@ -1,6 +1,10 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
     const demoButton = document.getElementById('loadDemoChat');
+    const accountChatChooser = document.getElementById('accountChatChooser');
+    const accountChatSelect = document.getElementById('accountChatSelect');
+    const analyzeAccountChatButton = document.getElementById('analyzeAccountChat');
+    const accountChatStatus = document.getElementById('accountChatStatus');
     const statsContainer = document.querySelector('.stats-container');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
@@ -49,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let overallResponseTimes = null;
     let overallParticipantTotals = new Map();
     let activeReader = null;
+    let accountChats = [];
     let currentMonthIndex = 0;
     let monthsData = [];
     let allParticipants = new Set();
@@ -147,6 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     demoButton?.addEventListener('click', loadDemoChat);
+    accountChatSelect.addEventListener('change', () => {
+        analyzeAccountChatButton.disabled = selectedAccountChat() === undefined;
+    });
+    analyzeAccountChatButton.addEventListener('click', analyzeAccountChat);
     exportParticipantsButton.addEventListener('click', () => {
         downloadParticipantSummary(overallParticipantTotals, 'telegram-analyzer-participants.csv');
     });
@@ -368,6 +377,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
+    function validMessages(messages) {
+        return Array.isArray(messages) && messages.every(message =>
+            message && typeof message === 'object' && !Array.isArray(message));
+    }
+
+    function accountChatName(chat) {
+        if (typeof chat.name === 'string' && chat.name.trim()) return chat.name.trim();
+        switch (chat.type) {
+            case 'saved_messages': return 'Избранное';
+            case 'replies': return 'Ответы';
+            case 'verification_codes': return 'Коды подтверждения';
+            default: return 'Чат без названия';
+        }
+    }
+
+    function findAccountChats(data) {
+        const chats = [];
+        const groups = [data?.chats?.list, data?.left_chats?.list];
+        groups.forEach((list, groupIndex) => {
+            if (!Array.isArray(list)) return;
+            for (const chat of list) {
+                if (!validMessages(chat?.messages)) continue;
+                const prefix = groupIndex === 1 ? ' · Покинутый чат' : '';
+                const label = `${chats.length + 1}. ${accountChatName(chat)}${prefix} · ${chat.messages.length} сообщ.`;
+                chats.push({ label, messages: chat.messages });
+            }
+        });
+        return chats;
+    }
+
+    function resetAccountChooser() {
+        accountChats = [];
+        accountChatChooser.hidden = true;
+        accountChatSelect.replaceChildren();
+        analyzeAccountChatButton.disabled = true;
+        accountChatStatus.textContent = '';
+    }
+
+    function showAccountChooser(chats) {
+        accountChats = chats;
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = 'Выберите чат';
+        accountChatSelect.append(placeholder);
+        accountChats.forEach((chat, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = chat.label;
+            accountChatSelect.append(option);
+        });
+        accountChatSelect.value = '';
+        accountChatChooser.hidden = false;
+        accountChatStatus.textContent = 'Выберите чат, чтобы увидеть его статистику.';
+    }
+
+    function selectedAccountChat() {
+        const value = accountChatSelect.value;
+        return value === '' ? undefined : accountChats[Number(value)];
+    }
+
+    function renderMessages(messages, preserveNames = false) {
+        const timings = orderMessageTimings(messages);
+        if (preserveNames) {
+            // Keep original names and sender IDs for later selection of this chat.
+            for (const timing of timings) timing.message = { ...timing.message };
+        }
+        normalizeSenderNames(timings);
+        analyzeChat(timings);
+        statsContainer.style.display = 'block';
+        animateCards();
+    }
+
+    function analyzeAccountChat() {
+        const chat = selectedAccountChat();
+        if (!chat) return;
+        selectStatsTab(allStatsTab);
+        try {
+            renderMessages(chat.messages, true);
+            accountChatStatus.textContent = `Статистика открыта для чата ${chat.label}`;
+        } catch (error) {
+            console.error('Ошибка анализа выбранного чата:', error);
+            clearReport();
+            accountChatStatus.textContent = 'Не удалось проанализировать этот чат. Выберите другой.';
+        }
+    }
+
+    function clearReport() {
+        statsContainer.style.display = 'none';
+        overallResponseTimes = null;
+        overallParticipantTotals = new Map();
+        monthsData = [];
+        currentMonthIndex = -1;
+        allParticipants = new Set();
+        exportParticipantsButton.disabled = true;
+        exportMonthlyParticipantsButton.disabled = true;
+    }
+
     function processSelectedFile(file) {
         if (!file) {
             return;
@@ -381,12 +487,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         updateSelectedFileName(file.name);
-        statsContainer.style.display = 'none';
+        resetAccountChooser();
+        clearReport();
         showLoadingIndicator();
-        overallResponseTimes = null;
-        overallParticipantTotals = new Map();
-        exportParticipantsButton.disabled = true;
-        exportMonthlyParticipantsButton.disabled = true;
 
         const reader = new FileReader();
         activeReader = reader;
@@ -398,19 +501,19 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const rawContent = e.target?.result;
                 const data = JSON.parse(rawContent);
-                if (!Array.isArray(data?.messages) || data.messages.some(
-                    message => !message || typeof message !== 'object' || Array.isArray(message)
-                )) {
-                    alert('Файл JSON не содержит корректных данных чата. Выберите экспорт одного чата из Telegram Desktop.');
-                    resetSelectedFileName();
+                if (validMessages(data?.messages)) {
+                    renderMessages(data.messages);
+                    status = 'Анализ завершён. Статистика доступна ниже.';
                     return;
                 }
-                const timings = orderMessageTimings(data.messages);
-                normalizeSenderNames(timings);
-                analyzeChat(timings);
-                statsContainer.style.display = 'block';
-                animateCards();
-                status = 'Анализ завершён. Статистика доступна ниже.';
+                const chats = findAccountChats(data);
+                if (chats.length) {
+                    showAccountChooser(chats);
+                    status = 'Экспорт аккаунта загружен. Выберите чат для анализа.';
+                    return;
+                }
+                alert('Файл JSON не содержит корректных данных чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
+                resetSelectedFileName();
             } catch (error) {
                 console.error('Ошибка разбора JSON файла:', error);
                 alert('Ошибка обработки файла. Пожалуйста, убедитесь, что файл JSON корректен.');
