@@ -81,9 +81,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Обработчик изменения порога игнорирования
     ignoredThresholdInput.addEventListener('change', (e) => {
-        ignoredMessageThreshold = parseInt(e.target.value) * 60; // Переводим минуты в секунды
+        const minutes = e.target.valueAsNumber;
+        if (!Number.isSafeInteger(minutes) || minutes < 1) {
+            e.target.value = ignoredMessageThreshold / 60;
+            return;
+        }
+        ignoredMessageThreshold = minutes * 60;
         if (currentData) {
-            analyzeChat(currentData); // Переанализируем данные с новым порогом
+            displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(currentData.messages, ignoredMessageThreshold));
+            const monthData = monthsData[currentMonthIndex];
+            if (monthData) {
+                displayMonthlyThresholdStats(monthData);
+            }
         }
     });
 
@@ -859,7 +868,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
-        const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
         monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
 
         // Use helper functions for monthly stats display
@@ -869,9 +877,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, '<i class="fas fa-camera-retro"></i> Использование медиафайлов:');
 
-        const monthlyThresholdMessages = calculateMonthlyThresholdExceededMessages(monthData, ignoredMessageThreshold); // Renamed call
-        const ignoredTitle = `<i class="fas fa-eye-slash"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`; // Updated title
-        monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(monthlyThresholdMessages, ignoredTitle); // Renamed Element ID & helper
+        displayMonthlyThresholdStats(monthData);
 
         const monthlyAvgDelayStats = calculateMonthlyAverageResponseDelay(monthData); // Renamed call
         const ignoringTitle = `<i class="fas fa-hourglass-half"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
@@ -882,6 +888,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         prevMonthButton.disabled = currentMonthIndex === 0;
         nextMonthButton.disabled = currentMonthIndex === monthsData.length - 1;
+    }
+
+    function displayMonthlyThresholdStats(monthData) {
+        const thresholdMessages = calculateMonthlyThresholdExceededMessages(monthData, ignoredMessageThreshold);
+        const title = `<i class="fas fa-eye-slash"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`;
+        monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
     function calculateMonthlyAverageResponseDelay(monthData) { // Renamed from calculateMonthlyIgnoringStats
