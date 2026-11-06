@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyAverageResponseDelayStatsElement = document.getElementById('monthlyAverageResponseDelayStats'); // Renamed from monthlyIgnoringStats
     const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
 
-    let currentData = null;
+    let overallResponseTimes = null;
     let activeReader = null;
     let currentMonthIndex = 0;
     let monthsData = [];
@@ -87,8 +87,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         ignoredMessageThreshold = minutes * 60;
-        if (currentData) {
-            displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(currentData.messages, ignoredMessageThreshold));
+        if (overallResponseTimes) {
+            displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(overallResponseTimes, ignoredMessageThreshold));
             const monthData = monthsData[currentMonthIndex];
             if (monthData) {
                 displayMonthlyThresholdStats(monthData);
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateSelectedFileName(file.name);
         statsContainer.style.display = 'none';
         showLoadingIndicator();
-        currentData = null;
+        overallResponseTimes = null;
 
         const reader = new FileReader();
         activeReader = reader;
@@ -217,7 +217,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 data.messages = normalizeMessagesOrder(data.messages);
                 analyzeChat(data);
-                currentData = data;
                 statsContainer.style.display = 'block';
                 animateCards();
             } catch (error) {
@@ -510,10 +509,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Подготовка данных по месяцам
         const messagesByMonth = {};
-        messages.forEach((msg, index) => {
+        const responseTimes = Object.create(null);
+        let previousMessage = null;
+        messages.forEach(msg => {
             const date = new Date(msg.date);
+            if (!msg.from || !Number.isFinite(date.getTime())) return;
             const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-            if (!msg.from) return;
 
             if (!messagesByMonth[monthKey]) {
                 messagesByMonth[monthKey] = {
@@ -528,14 +529,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 };
                 allParticipants.forEach(p => {
                     messagesByMonth[monthKey].participants[p] = [];
-                    messagesByMonth[monthKey].responseTimes[p] = Object.create(null);
                     messagesByMonth[monthKey].wordCounts[p] = 0;
                     messagesByMonth[monthKey].mediaTypesStats[p] = Object.create(null);
-                    allParticipants.forEach(recipient => {
-                        if (recipient !== p) {
-                            messagesByMonth[monthKey].responseTimes[p][recipient] = [];
-                        }
-                    });
                 });
             }
 
@@ -554,16 +549,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
             messagesByMonth[monthKey].wordCounts[msg.from] += words.length;
 
-            // Расчет времени ответа
-            if (index > 0) {
-                const prevMsg = messages[index - 1];
-                if (prevMsg.from !== msg.from && prevMsg.from && msg.from) {
-                    const responseTime = (new Date(msg.date) - new Date(prevMsg.date)) / 1000;
-                    if (!messagesByMonth[monthKey].responseTimes[prevMsg.from][msg.from]) {
-                        messagesByMonth[monthKey].responseTimes[prevMsg.from][msg.from] = [];
-                    }
-                    messagesByMonth[monthKey].responseTimes[prevMsg.from][msg.from].push(responseTime);
+            if (msg.type !== 'service') {
+                if (previousMessage && previousMessage.sender !== msg.from) {
+                    const { sender, date: previousDate } = previousMessage;
+                    const seconds = (date - previousDate) / 1000;
+                    recordResponse(responseTimes, sender, msg.from, seconds);
+                    recordResponse(messagesByMonth[monthKey].responseTimes, sender, msg.from, seconds);
                 }
+                previousMessage = { sender: msg.from, date };
             }
         });
 
@@ -573,16 +566,16 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([month, data]) => ({ month, data }));
 
         // Показываем общую статистику
-        displayGeneralStats(data.messages, allParticipants);
-        displayAverageResponseDelayStats(calculateAverageResponseDelay(messagesByMonth)); // Renamed function call
+        displayGeneralStats(messages, allParticipants, responseTimes);
+        displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
         displayWordCountStats(calculateTotalWordCounts(messages));
         displayMediaTypeStats(calculateMediaTypeUsage(messages));
-        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(messages, ignoredMessageThreshold)); // Renamed function call
+        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
 
         // Создаем графики общей статистики
         const allTimeData = calculateAllTimeStats(messages);
         createMonthlyChart(monthsData);
-        createResponseTimeChart(allTimeData.responseTimes);
+        createResponseTimeChart(responseTimes);
         createTimeOfDayChart(allTimeData.timeOfDay);
         createMessageTypesChart(allTimeData.messageTypes);
         createDayOfWeekChart(allTimeData.dayOfWeekActivity);
@@ -590,47 +583,34 @@ document.addEventListener('DOMContentLoaded', () => {
         // Показываем статистику за последний месяц
         currentMonthIndex = monthsData.length - 1;
         updateMonthlyStats();
+        overallResponseTimes = responseTimes;
+    }
+
+    function recordResponse(responseTimes, sender, responder, seconds) {
+        const responses = responseTimes[sender] ??= Object.create(null);
+        (responses[responder] ??= []).push(seconds);
     }
 
     function calculateAllTimeStats(messages) {
         const timeOfDay = new Array(24).fill(0);
         const messageTypes = Object.create(null);
-        const responseTimes = Object.create(null);
         const dayOfWeekActivity = new Array(7).fill(0);
 
-        allParticipants.forEach(p => {
-            responseTimes[p] = Object.create(null);
-            allParticipants.forEach(recipient => {
-                if (recipient !== p) {
-                    responseTimes[p][recipient] = [];
-                }
-            });
-        });
-
-        messages.forEach((msg, index) => {
+        messages.forEach(msg => {
             const date = new Date(msg.date);
-            timeOfDay[date.getHours()]++;
-            dayOfWeekActivity[date.getDay()]++;
+            if (Number.isFinite(date.getTime())) {
+                timeOfDay[date.getHours()]++;
+                dayOfWeekActivity[date.getDay()]++;
+            }
 
             const type = msg.media_type || 'text';
             messageTypes[type] = (messageTypes[type] || 0) + 1;
-
-            if (index > 0) {
-                const prevMsg = messages[index - 1];
-                if (prevMsg.from !== msg.from && prevMsg.from && msg.from) {
-                    const responseTime = (new Date(msg.date) - new Date(prevMsg.date)) / 1000;
-                    if (!responseTimes[prevMsg.from][msg.from]) {
-                        responseTimes[prevMsg.from][msg.from] = [];
-                    }
-                    responseTimes[prevMsg.from][msg.from].push(responseTime);
-                }
-            }
         });
 
-        return { timeOfDay, messageTypes, responseTimes, dayOfWeekActivity };
+        return { timeOfDay, messageTypes, dayOfWeekActivity };
     }
 
-    function displayGeneralStats(messages, participants) {
+    function displayGeneralStats(messages, participants, responseTimes) {
         const messageCountElement = document.getElementById('messageCount');
         const participantStatsElement = document.getElementById('participantStats');
 
@@ -639,7 +619,7 @@ document.addEventListener('DOMContentLoaded', () => {
         participants.forEach(participant => {
              if (participant) {
                  const sanitizedParticipant = sanitizeHTML(participant);
-                 const avgTime = calculateAverageResponseTimeForParticipant(messages, participant);
+                 const avgTime = calculateAverageResponseTimeForParticipant(responseTimes, participant);
                  avgResponseTimeHTML += `<li><strong>${sanitizedParticipant}</strong>: ${avgTime}</li>`;
              }
         });
@@ -651,80 +631,26 @@ document.addEventListener('DOMContentLoaded', () => {
         participantStatsElement.innerHTML = generateParticipantStatsHTML(messages, participants) + avgResponseTimeHTML;
     }
 
-    function calculateAverageResponseTimeForParticipant(messages, participant) {
-        let totalResponseTime = 0;
+    function calculateAverageResponseTimeForParticipant(responseTimes, participant) {
+        let totalSeconds = 0;
         let responseCount = 0;
-        let lastMessageFromOther = null;
-
-        for (const msg of messages) {
-            if (msg.from === participant) {
-                if (lastMessageFromOther) {
-                    const responseTime = (new Date(msg.date) - new Date(lastMessageFromOther.date)) / 1000;
-                    totalResponseTime += responseTime;
-                    responseCount++;
-                }
-            } else {
-                lastMessageFromOther = msg;
-            }
+        for (const responders of Object.values(responseTimes)) {
+            const times = responders[participant] ?? [];
+            totalSeconds += times.reduce((sum, seconds) => sum + seconds, 0);
+            responseCount += times.length;
         }
-
-        if (responseCount === 0) {
-            return 'Нет данных';
-        }
-
-        const averageResponseTime = totalResponseTime / responseCount;
-        return formatTime(averageResponseTime);
+        return responseCount ? formatTime(totalSeconds / responseCount) : 'Нет данных';
     }
 
-
-    function calculateAverageResponseDelay(messagesByMonth) {
-        const avgDelayStats = Object.create(null);
-        allParticipants.forEach(responder => {
-            avgDelayStats[responder] = Object.create(null);
-            allParticipants.forEach(initiator => {
-                if (responder !== initiator) {
-                    avgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
-                }
-            });
-        });
-
-        for (const monthKey in messagesByMonth) {
-            const monthMessages = messagesByMonth[monthKey].messages;
-            for (let i = 1; i < monthMessages.length; i++) {
-                const currentMsg = monthMessages[i];
-                const prevMsg = monthMessages[i - 1];
-
-                // Check if current message is a response from a different person
-                if (prevMsg.from && currentMsg.from && prevMsg.from !== currentMsg.from) {
-                    const responder = currentMsg.from;
-                    const initiator = prevMsg.from;
-                    const responseTime = (new Date(currentMsg.date) - new Date(prevMsg.date)) / 1000; // in seconds
-
-                    if (avgDelayStats[responder] && avgDelayStats[responder][initiator]) {
-                        avgDelayStats[responder][initiator].totalTime += responseTime;
-                        avgDelayStats[responder][initiator].count++;
-                    }
-                }
+    function calculateAverageResponseDelay(responseTimes) {
+        const averages = Object.create(null);
+        for (const [sender, responders] of Object.entries(responseTimes)) {
+            for (const [responder, times] of Object.entries(responders)) {
+                const bySender = averages[responder] ??= Object.create(null);
+                bySender[sender] = times.reduce((sum, seconds) => sum + seconds, 0) / times.length / 60;
             }
         }
-
-        // Calculate averages in minutes
-        const finalAvgDelays = Object.create(null);
-        for (const responder in avgDelayStats) {
-            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = Object.create(null);
-            for (const initiator in avgDelayStats[responder]) {
-                const stats = avgDelayStats[responder][initiator];
-                if (stats.count > 0) {
-                    finalAvgDelays[responder][initiator] = (stats.totalTime / stats.count) / 60; // Average delay in minutes
-                }
-            }
-            // Clean up if no responses were recorded for this responder
-            if (Object.keys(finalAvgDelays[responder]).length === 0) {
-                delete finalAvgDelays[responder];
-            }
-        }
-
-        return finalAvgDelays;
+        return averages;
     }
 
     function displayAverageResponseDelayStats(avgDelayStats) { // Renamed from displayIgnoringStats
@@ -798,47 +724,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function calculateThresholdExceededMessages(messages, thresholdSeconds) { // Renamed from calculateIgnoredMessages
-        const thresholdMessages = Object.create(null); // Renamed variable
-        allParticipants.forEach(sender => {
-            if (!sender) {
-                return;
+    function calculateThresholdExceededMessages(responseTimes, thresholdSeconds) {
+        const counts = Object.create(null);
+        for (const [sender, responders] of Object.entries(responseTimes)) {
+            const byResponder = counts[sender] = Object.create(null);
+            for (const [responder, times] of Object.entries(responders)) {
+                byResponder[responder] = times.filter(seconds => seconds > thresholdSeconds).length;
             }
-            thresholdMessages[sender] = Object.create(null);
-            allParticipants.forEach(recipient => {
-                if (sender !== recipient && recipient) {
-                    thresholdMessages[sender][recipient] = 0;
-                }
-            });
-        });
-
-        for (let i = 1; i < messages.length; i++) {
-            const currentMsg = messages[i];
-            const prevMsg = messages[i - 1];
-
-            if (!prevMsg?.from || !currentMsg?.from || prevMsg.from === currentMsg.from) {
-                continue;
-            }
-
-            const responseTime = (new Date(currentMsg.date) - new Date(prevMsg.date)) / 1000;
-            if (Number.isNaN(responseTime) || responseTime <= thresholdSeconds) {
-                continue;
-            }
-
-            const sender = prevMsg.from;
-            const recipient = currentMsg.from;
-
-            if (!thresholdMessages[sender]) {
-                thresholdMessages[sender] = Object.create(null);
-            }
-
-            if (!thresholdMessages[sender][recipient]) {
-                thresholdMessages[sender][recipient] = 0;
-            }
-
-            thresholdMessages[sender][recipient]++;
         }
-        return thresholdMessages; // Renamed variable
+        return counts;
     }
 
     function displayThresholdExceededMessagesStats(thresholdMessages) { // Renamed from displayIgnoredMessagesStats
@@ -879,7 +773,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         displayMonthlyThresholdStats(monthData);
 
-        const monthlyAvgDelayStats = calculateMonthlyAverageResponseDelay(monthData); // Renamed call
+        const monthlyAvgDelayStats = calculateAverageResponseDelay(data.responseTimes);
         const ignoringTitle = `<i class="fas fa-hourglass-half"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
         monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, ignoringTitle); // Renamed Element ID & helper
 
@@ -891,66 +785,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayMonthlyThresholdStats(monthData) {
-        const thresholdMessages = calculateMonthlyThresholdExceededMessages(monthData, ignoredMessageThreshold);
+        const thresholdMessages = calculateThresholdExceededMessages(monthData.data.responseTimes, ignoredMessageThreshold);
         const title = `<i class="fas fa-eye-slash"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`;
         monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
-    }
-
-    function calculateMonthlyAverageResponseDelay(monthData) { // Renamed from calculateMonthlyIgnoringStats
-        // Make sure monthData.data.messages exists
-        if (!monthData?.data?.messages) {
-            return {};
-        }
-        // Reuse the main calculation logic but only for this month's messages
-        const monthAvgDelayStats = Object.create(null);
-        const participants = new Set(monthData.data.messages.map(m => m.from).filter(Boolean));
-        participants.forEach(responder => {
-            monthAvgDelayStats[responder] = Object.create(null);
-            participants.forEach(initiator => {
-                if (responder !== initiator) {
-                    monthAvgDelayStats[responder][initiator] = { totalTime: 0, count: 0 };
-                }
-            });
-        });
-
-        const monthMessages = monthData.data.messages;
-         for (let i = 1; i < monthMessages.length; i++) {
-            const currentMsg = monthMessages[i];
-            const prevMsg = monthMessages[i - 1];
-            if (prevMsg.from && currentMsg.from && prevMsg.from !== currentMsg.from) {
-                const responder = currentMsg.from;
-                const initiator = prevMsg.from;
-                const responseTime = (new Date(currentMsg.date) - new Date(prevMsg.date)) / 1000;
-                 if (monthAvgDelayStats[responder] && monthAvgDelayStats[responder][initiator]) {
-                     monthAvgDelayStats[responder][initiator].totalTime += responseTime;
-                     monthAvgDelayStats[responder][initiator].count++;
-                 }
-             }
-         }
-
-         // Calculate averages in minutes
-         const finalAvgDelays = Object.create(null);
-        for (const responder in monthAvgDelayStats) {
-            if (!finalAvgDelays[responder]) finalAvgDelays[responder] = Object.create(null);
-            for (const initiator in monthAvgDelayStats[responder]) {
-                const stats = monthAvgDelayStats[responder][initiator];
-                if (stats.count > 0) {
-                    finalAvgDelays[responder][initiator] = (stats.totalTime / stats.count) / 60;
-                }
-            }
-            if (Object.keys(finalAvgDelays[responder]).length === 0) {
-                delete finalAvgDelays[responder];
-            }
-        }
-        return finalAvgDelays;
-    }
-
-    function calculateMonthlyThresholdExceededMessages(monthData, thresholdSeconds) { // Renamed from calculateMonthlyIgnoredMessages
-        // Ensure monthData.data.messages exists
-        if (!monthData?.data?.messages) {
-            return {};
-        }
-        return calculateThresholdExceededMessages(monthData.data.messages, thresholdSeconds); // Renamed call
     }
 
     function createMonthlyDayOfWeekChart(dayOfWeekActivity) {
