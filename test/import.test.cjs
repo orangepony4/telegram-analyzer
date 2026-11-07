@@ -493,6 +493,22 @@ test('preserves daily activity counts across month navigation', async () => {
     assert.deepEqual(daysWithMessages(), [[14, 4]]);
 });
 
+test('shows only calendar days in the selected month', () => {
+    const app = createAnalyzer();
+    const monthEnds = ['2024-02-29', '2025-02-28', '2025-04-30', '2025-12-31'];
+    app.selectFile('chat.json').complete({
+        messages: monthEnds.map((date, id) => ({ id, from: 'Alice', date, text: 'Hi' })),
+    });
+
+    for (const lastDay of [31, 30, 28, 29]) {
+        const { labels, datasets } = app.charts.get('dailyActivityChart').data;
+        assert.deepEqual(Array.from(labels), Array.from({ length: lastDay }, (_, index) => index + 1));
+        assert.equal(datasets[0].data.length, lastDay);
+        assert.equal(datasets[0].data.at(-1), 1);
+        app.element('prevMonth').click();
+    }
+});
+
 test('exports participant totals with quoted, formula-safe names', async () => {
     const app = createAnalyzer();
     const from = '=1+1, "quoted"';

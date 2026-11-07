@@ -1153,8 +1153,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createMonthlyCharts(monthData) {
         const { data } = monthData;
-        const days = Array.from({ length: 31 }, (_, index) => index + 1);
-        createBarChart('dailyActivityChart', days, data.dailyActivity.slice(), 'Сообщений');
+        const endOfMonth = new Date(`${monthData.month}-01T00:00:00Z`);
+        endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1, 0);
+        const dayCount = endOfMonth.getUTCDate();
+        const days = Array.from({ length: dayCount }, (_, index) => index + 1);
+        createBarChart('dailyActivityChart', days, data.dailyActivity.slice(0, dayCount), 'Сообщений');
         createTimeOfDayChart(data.timeOfDay, 'monthlyTimeOfDayChart');
         createMessageTypesChart(data.messageTypes, 'monthlyMessageTypesChart');
         createResponseTimeChart(data.responseTimes, 'monthlyResponseTimeChart');
