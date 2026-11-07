@@ -133,9 +133,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
         };
     }
 
-    function selectDemo() {
-        element('loadDemoChat').click();
-        const reader = readers.at(-1);
+    function demoImport(reader) {
         return {
             file: reader.file,
             async complete() {
@@ -144,8 +142,14 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
         };
     }
 
+    function selectDemo() {
+        element('loadDemoChat').click();
+        return demoImport(readers.at(-1));
+    }
+
     return {
         element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo,
+        startupDemo: demoImport(readers[0]),
         get focusedElement() { return focusedElement; },
     };
 }
@@ -154,8 +158,8 @@ test('toggles the visible theme in both directions when saving preferences is bl
     t.mock.method(console, 'warn', () => {});
     const denyStorage = () => { throw new Error('Storage unavailable'); };
     for (const [getItem, initial, alternate] of [
-        [denyStorage, 'theme-default', 'theme-muted-light'],
-        [() => 'muted-light', 'theme-muted-light', 'theme-default'],
+        [denyStorage, 'theme-muted-light', 'theme-default'],
+        [() => 'default', 'theme-default', 'theme-muted-light'],
     ]) {
         const app = createAnalyzer({ storage: { getItem, setItem: denyStorage } });
         const body = app.element('body');
@@ -176,13 +180,18 @@ test('rejects unrelated JSON and malformed message entries', () => {
     const app = createAnalyzer();
     for (const data of [{}, { messages: [null] }]) {
         app.selectFile('invalid.json').complete(data);
-        assert.match(app.alerts.at(-1), /Telegram Desktop/);
+        assert.match(app.element('fileError').textContent, /Telegram Desktop/);
+        assert.equal(app.element('fileError').hidden, false);
+        assert.equal(app.element('reportPlaceholder').hidden, false);
         assert.equal(app.element('.stats-container').style.display, 'none');
         assert.equal(app.element('loadingIndicator').style.display, 'none');
         assert.equal(app.element('importStatus').textContent, '');
         assert.equal(app.element('jsonFile').value, '');
     }
-    assert.equal(app.alerts.length, 2);
+    assert.deepEqual(app.alerts, []);
+    app.selectFile('valid.json').complete({ messages: [] });
+    assert.equal(app.element('fileError').hidden, true);
+    assert.equal(app.element('reportPlaceholder').hidden, true);
 });
 
 function accountFixture() {
@@ -249,7 +258,7 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.equal(app.charts.size, 0);
     analyze.click();
     assert.equal(app.element('.stats-container').style.display, 'block');
-    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 2/);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">2<\/strong>/);
     assert.match(app.element('participantStats').innerHTML, /Alpha/);
     assert.match(app.element('accountChatStatus').textContent, /Shared title/);
     assert.deepEqual(app.alerts, []);
@@ -288,7 +297,7 @@ test('resets the month and both CSV exports when switching account chats', async
 
     chooseAccountChat(app, '3');
     analyze.click();
-    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 0/);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">0<\/strong>/);
     assert.equal(app.monthlyTab.disabled, true);
     assert.equal(app.element('exportParticipants').disabled, true);
     assert.equal(app.element('exportMonthlyParticipants').disabled, true);
@@ -321,14 +330,15 @@ test('ignores malformed account groups and hides stale choosers on single or dem
     assert.equal(chooser.hidden, true);
     await demo.complete();
     assert.equal(chooser.hidden, true);
-    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 14/);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">14<\/strong>/);
 
     app.selectFile('malformed-account.json').complete({
         chats: { list: [null, { messages: [null] }] }, left_chats: { list: false },
     });
     assert.equal(chooser.hidden, true);
     assert.equal(app.element('.stats-container').style.display, 'none');
-    assert.equal(app.alerts.length, 1);
+    assert.equal(app.element('fileError').hidden, false);
+    assert.deepEqual(app.alerts, []);
 });
 
 test('shows text statistics when the chart library is unavailable', () => {
@@ -364,7 +374,7 @@ test('keeps the last upload and disables monthly statistics for an empty export'
     assert.equal(app.monthlyTab.tabIndex, -1);
     assert.equal(app.allTab.getAttribute('aria-selected'), 'true');
     assert.equal(app.allTab.tabIndex, 0);
-    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 0/);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">0<\/strong>/);
 
     app.selectFile('restored.json').complete({ messages });
     assert.equal(app.monthlyTab.disabled, false);
@@ -372,6 +382,11 @@ test('keeps the last upload and disables monthly statistics for an empty export'
 
 test('loads the fictional demo through normal file import and keeps the newest selection', async () => {
     const app = createAnalyzer();
+    await app.startupDemo.complete();
+    assert.equal(app.element('reportKind').textContent, 'Демо-отчёт');
+    assert.equal(app.element('reportTitle').textContent, 'Демонстрационный чат');
+    assert.match(app.element('reportMeta').textContent, /Вымышленная переписка/);
+    assert.equal(app.element('reportPlaceholder').hidden, true);
     const oldUpload = app.selectFile('old.json');
     const demo = app.selectDemo();
     assert.ok(demo.file instanceof File);
@@ -382,12 +397,12 @@ test('loads the fictional demo through normal file import and keeps the newest s
     await demo.complete();
     oldUpload.complete({ messages: [] });
 
-    assert.equal(app.element('dropFileName').textContent, 'demo-chat.json');
+    assert.equal(app.element('dropFileName').textContent, 'Встроенный пример');
     assert.match(app.element('importStatus').textContent, /Анализ завершён/);
-    assert.match(app.element('messageCount').innerHTML, /Всего сообщений: 14/);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">14<\/strong>/);
     assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-01,2025-02,2025-03');
     assert.ok(app.charts.get('responseTimeChart').data.labels.length > 0);
-    assert.match(app.element('mediaTypeStats').innerHTML, /photo: 2/);
+    assert.match(app.element('mediaTypeStats').innerHTML, /Фото: 2/);
     assert.match(app.element('thresholdExceededMessagesStats').innerHTML, /Лев<\/strong>: 1/);
 
     app.element('exportParticipants').click();

@@ -22,18 +22,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropFileNameElement = document.getElementById('dropFileName');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const importStatus = document.getElementById('importStatus');
+    const sourceFileType = document.getElementById('sourceFileType');
+    const fileError = document.getElementById('fileError');
+    const reportKind = document.getElementById('reportKind');
+    const reportTitle = document.getElementById('reportTitle');
+    const reportMeta = document.getElementById('reportMeta');
+    const reportPlaceholder = document.getElementById('reportPlaceholder');
+    const placeholderTitle = document.getElementById('placeholderTitle');
+    const placeholderText = document.getElementById('placeholderText');
+    const countFormat = new Intl.NumberFormat('ru-RU');
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
-    const DEFAULT_THEME_KEY = 'default';
-    const ALTERNATIVE_THEME_KEY = 'muted-light';
-    const DEFAULT_THEME_CLASS = 'theme-default';
-    const ALTERNATIVE_THEME_CLASS = 'theme-muted-light';
+    const DARK_THEME_KEY = 'default';
+    const LIGHT_THEME_KEY = 'muted-light';
+    const DARK_THEME_CLASS = 'theme-default';
+    const LIGHT_THEME_CLASS = 'theme-muted-light';
+    const monthFormat = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    const messageTypeLabels = new Map([
+        ['text', 'Текст'], ['photo', 'Фото'], ['video_file', 'Видео'],
+        ['voice_message', 'Голосовые'], ['sticker', 'Стикеры'], ['animation', 'Анимации'],
+        ['audio_file', 'Аудио'], ['video_message', 'Видеосообщения'], ['file', 'Файлы'],
+    ]);
     const exportDatePattern = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/i;
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
-            const nextTheme = bodyElement.classList.contains(ALTERNATIVE_THEME_CLASS)
-                ? DEFAULT_THEME_KEY
-                : ALTERNATIVE_THEME_KEY;
+            const nextTheme = bodyElement.classList.contains(LIGHT_THEME_CLASS) ? DARK_THEME_KEY : LIGHT_THEME_KEY;
             applyTheme(nextTheme, { refreshCharts: true });
         });
     }
@@ -176,6 +189,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    loadDemoChat();
+
     function handleFileSelect(event) {
         const file = event.target.files?.[0];
         if (!file) {
@@ -209,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             from_id: `user${person + 1}`, text, media_type: mediaType,
         }));
         const json = JSON.stringify({ name: 'Демонстрационный чат', messages });
-        processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }));
+        processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }), { isDemo: true });
     }
 
     // Helper function to sanitize HTML and prevent XSS
@@ -393,9 +408,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!Array.isArray(list)) return;
             for (const chat of list) {
                 if (!validMessages(chat?.messages)) continue;
+                const name = accountChatName(chat);
                 const prefix = groupIndex === 1 ? ' · Покинутый чат' : '';
-                const label = `${chats.length + 1}. ${accountChatName(chat)}${prefix} · ${chat.messages.length} сообщ.`;
-                chats.push({ label, messages: chat.messages });
+                const label = `${chats.length + 1}. ${name}${prefix} · ${chat.messages.length} сообщ.`;
+                chats.push({ name, label, messages: chat.messages });
             }
         });
         return chats;
@@ -431,30 +447,55 @@ document.addEventListener('DOMContentLoaded', () => {
         return value === '' ? undefined : accountChats[Number(value)];
     }
 
-    function renderMessages(messages, preserveNames = false) {
+    function renderMessages(messages, { name, isDemo = false, preserveNames = false }) {
         const timings = orderMessageTimings(messages);
         if (preserveNames) {
             // Keep original names and sender IDs for later selection of this chat.
             for (const timing of timings) timing.message = { ...timing.message };
         }
         normalizeSenderNames(timings);
-        analyzeChat(timings);
         statsContainer.style.display = 'block';
-        animateCards();
+        selectStatsTab(allStatsTab);
+        analyzeChat(timings);
+        const period = reportPeriod();
+        const source = isDemo ? 'Вымышленная переписка' : 'Экспорт Telegram';
+        setReportHeader(isDemo ? 'Демо-отчёт' : 'Отчёт по чату', name, period ? `${source} · ${period}` : source);
+        reportPlaceholder.hidden = true;
     }
 
     function analyzeAccountChat() {
         const chat = selectedAccountChat();
         if (!chat) return;
-        selectStatsTab(allStatsTab);
         try {
-            renderMessages(chat.messages, true);
+            renderMessages(chat.messages, { name: chat.name, preserveNames: true });
             accountChatStatus.textContent = `Статистика открыта для чата ${chat.label}`;
         } catch (error) {
             console.error('Ошибка анализа выбранного чата:', error);
             clearReport();
+            setReportHeader('Экспорт аккаунта', 'Выберите чат', 'Отчёт появится после анализа выбранной переписки.');
+            setReportPlaceholder('Чат не открылся', 'Попробуйте выбрать другую переписку из списка.');
             accountChatStatus.textContent = 'Не удалось проанализировать этот чат. Выберите другой.';
         }
+    }
+
+    function reportPeriod() {
+        if (!monthsData.length) return '';
+        const first = new Date(`${monthsData[0].month}-01T00:00:00Z`);
+        if (monthsData.length === 1) return monthFormat.format(first);
+        const last = new Date(`${monthsData.at(-1).month}-01T00:00:00Z`);
+        return monthFormat.formatRange(first, last);
+    }
+
+    function setReportHeader(kind, title, meta) {
+        reportKind.textContent = kind;
+        reportTitle.textContent = title;
+        reportMeta.textContent = meta;
+    }
+
+    function setReportPlaceholder(title, text) {
+        placeholderTitle.textContent = title;
+        placeholderText.textContent = text;
+        reportPlaceholder.hidden = false;
     }
 
     function clearReport() {
@@ -468,21 +509,25 @@ document.addEventListener('DOMContentLoaded', () => {
         exportMonthlyParticipantsButton.disabled = true;
     }
 
-    function processSelectedFile(file) {
+    function processSelectedFile(file, { isDemo = false } = {}) {
         if (!file) {
             return;
         }
 
         if (!isJsonFile(file)) {
-            alert('Пожалуйста, выберите файл в формате JSON, экспортированный из Telegram.');
-            resetSelectedFileName();
+            showFileError('Выберите JSON из Telegram Desktop.');
             clearFileInput();
             return;
         }
 
-        updateSelectedFileName(file.name);
+        showFileError('');
+        updateSelectedFileName(isDemo ? 'Встроенный пример' : file.name);
+        sourceFileType.textContent = isDemo ? 'Демо-данные' : 'Файл на устройстве';
         resetAccountChooser();
         clearReport();
+        setReportHeader(isDemo ? 'Демо-отчёт' : 'Импорт', isDemo ? 'Демонстрационный чат' : 'Открываем экспорт',
+            isDemo ? 'Вымышленная переписка' : 'Данные читаются в браузере');
+        setReportPlaceholder(isDemo ? 'Подготовка примера' : 'Чтение файла', 'Отчёт появится после обработки данных.');
         showLoadingIndicator();
 
         const reader = new FileReader();
@@ -496,23 +541,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 const rawContent = e.target?.result;
                 const data = JSON.parse(rawContent);
                 if (validMessages(data?.messages)) {
-                    renderMessages(data.messages);
+                    const name = typeof data.name === 'string' ? data.name.trim() : '';
+                    renderMessages(data.messages, { name: name || file.name, isDemo });
                     status = 'Анализ завершён. Статистика доступна ниже.';
                     return;
                 }
                 const chats = findAccountChats(data);
                 if (chats.length) {
                     showAccountChooser(chats);
+                    sourceFileType.textContent = 'Экспорт аккаунта';
+                    setReportHeader('Экспорт аккаунта', 'Выберите чат', 'В файле несколько переписок. Анализ строится по одной.');
+                    setReportPlaceholder('Чат ещё не выбран', 'Выберите переписку в блоке «Данные чата» и нажмите «Показать статистику».');
                     status = 'Экспорт аккаунта загружен. Выберите чат для анализа.';
                     return;
                 }
-                alert('Файл JSON не содержит корректных данных чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
-                resetSelectedFileName();
+                showImportFailure('В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
             } catch (error) {
                 console.error('Ошибка разбора JSON файла:', error);
-                alert('Ошибка обработки файла. Пожалуйста, убедитесь, что файл JSON корректен.');
-                statsContainer.style.display = 'none';
-                resetSelectedFileName();
+                clearReport();
+                showImportFailure('Проверьте, что файл содержит корректный экспорт в формате JSON.');
             } finally {
                 activeReader = null;
                 hideLoadingIndicator(status);
@@ -526,9 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             activeReader = null;
             console.error('Ошибка чтения файла');
-            alert('Не удалось прочитать файл.');
-            statsContainer.style.display = 'none';
-            resetSelectedFileName();
+            showImportFailure('Файл не прочитан. Попробуйте открыть его ещё раз.');
             hideLoadingIndicator();
             clearFileInput();
         };
@@ -538,9 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (fileError) {
             activeReader = null;
             console.error('Не удалось прочитать файл:', fileError);
-            alert('Произошла ошибка при чтении файла.');
-            statsContainer.style.display = 'none';
-            resetSelectedFileName();
+            showImportFailure('Файл не прочитан. Попробуйте открыть его ещё раз.');
             hideLoadingIndicator();
             clearFileInput();
         }
@@ -623,8 +666,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function resetSelectedFileName() {
-        updateSelectedFileName('');
+    function showFileError(message) {
+        fileError.textContent = message;
+        fileError.hidden = !message;
+    }
+
+    function showImportFailure(message) {
+        showFileError(message);
+        sourceFileType.textContent = 'Ошибка чтения';
+        setReportHeader('Импорт', 'Файл не открылся', 'Выберите экспорт Telegram Desktop.');
+        setReportPlaceholder('Отчёт недоступен', 'Можно открыть другой JSON или вернуться к демо-чату.');
     }
 
     function clearFileInput() {
@@ -655,25 +706,13 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Не удалось прочитать сохранённую тему', storageError);
         }
 
-        if (savedThemeKey === ALTERNATIVE_THEME_KEY) {
-            applyTheme(ALTERNATIVE_THEME_KEY, { persist: false });
-        } else {
-            applyTheme(DEFAULT_THEME_KEY, { persist: false });
-        }
+        applyTheme(savedThemeKey === DARK_THEME_KEY ? DARK_THEME_KEY : LIGHT_THEME_KEY, { persist: false });
     }
 
     function applyTheme(themeKey, { persist = true, refreshCharts = false } = {}) {
-        const isAlternativeTheme = themeKey === ALTERNATIVE_THEME_KEY;
-
-        if (isAlternativeTheme) {
-            bodyElement.classList.add(ALTERNATIVE_THEME_CLASS);
-            bodyElement.classList.remove(DEFAULT_THEME_CLASS);
-            themeKey = ALTERNATIVE_THEME_KEY;
-        } else {
-            bodyElement.classList.remove(ALTERNATIVE_THEME_CLASS);
-            bodyElement.classList.add(DEFAULT_THEME_CLASS);
-            themeKey = DEFAULT_THEME_KEY;
-        }
+        const isLight = themeKey === LIGHT_THEME_KEY;
+        bodyElement.classList.toggle(LIGHT_THEME_CLASS, isLight);
+        bodyElement.classList.toggle(DARK_THEME_CLASS, !isLight);
 
         updateThemeToggleState(themeKey);
         updateChartDefaults();
@@ -700,7 +739,7 @@ document.addEventListener('DOMContentLoaded', () => {
             themeToggleIcon.classList.remove('fa-sun', 'fa-moon');
         }
 
-        if (themeKey === ALTERNATIVE_THEME_KEY) {
+        if (themeKey === LIGHT_THEME_KEY) {
             themeToggleBtn.title = 'Переключить на тёмную тему';
             themeToggleBtn.setAttribute('aria-label', 'Переключить на тёмную тему');
             if (themeToggleIcon) {
@@ -721,68 +760,37 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const styles = getComputedStyle(bodyElement);
-        const chartTextColor = styles.getPropertyValue('--chart-text-color').trim() || '#e4e6ea';
-        const chartBorderColor = styles.getPropertyValue('--chart-border-color').trim() || '#2a2d31';
-        const chartGridColor = styles.getPropertyValue('--chart-grid-color').trim() || 'rgba(255, 255, 255, 0.1)';
+        const color = (name, fallback) => styles.getPropertyValue(name).trim() || fallback;
+        const motionPreference = chartTheme.motionPreference
+            ?? globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+        if (!chartTheme.motionPreference) {
+            motionPreference?.addEventListener?.('change', rethemeExistingCharts);
+        }
 
-        Chart.defaults.color = chartTextColor;
-        Chart.defaults.borderColor = chartBorderColor;
         chartTheme = {
-            textColor: chartTextColor,
-            borderColor: chartBorderColor,
-            gridColor: chartGridColor
+            textColor: color('--chart-text-color', '#aeb6c7'),
+            borderColor: color('--chart-border-color', '#353c4b'),
+            gridColor: color('--chart-grid-color', '#2a3040'),
+            accent: color('--chart-accent', '#6e91ff'),
+            fill: color('--chart-fill', 'rgba(84, 123, 255, 0.16)'),
+            surface: color('--surface', '#181c25'),
+            tooltipText: color('--text-color', '#eef1fa'),
+            motionPreference
         };
+        Chart.defaults.color = chartTheme.textColor;
+        Chart.defaults.borderColor = chartTheme.borderColor;
     }
 
-    function applyThemeToChartInstance(chart) {
-        if (!chart) {
-            return;
-        }
-
-        const legendLabels = chart.options?.plugins?.legend?.labels;
-        if (legendLabels) {
-            legendLabels.color = chartTheme.textColor;
-        }
-
-        if (chart.scales) {
-            Object.values(chart.scales).forEach(scale => {
-                if (!scale?.options) {
-                    return;
-                }
-
-                scale.options.ticks = {
-                    ...(scale.options.ticks || {}),
-                    color: chartTheme.textColor
-                };
-
-                if (scale.options.grid) {
-                    scale.options.grid = {
-                        ...scale.options.grid,
-                        color: chartTheme.gridColor
-                    };
-                }
-
-                if (scale.axis === 'y' && typeof scale.options.beginAtZero === 'undefined') {
-                    scale.options.beginAtZero = true;
-                }
-            });
-        }
+    function chartAnimation() {
+        return chartTheme.motionPreference?.matches
+            ? false
+            : { duration: 180, easing: 'easeOutQuart' };
     }
 
     function rethemeExistingCharts() {
-        if (!renderedCharts.size) {
-            return;
-        }
-
         renderedCharts.forEach(chart => {
-            applyThemeToChartInstance(chart);
-            chart.update();
-        });
-    }
-
-    function animateCards() {
-        document.querySelectorAll('.card').forEach((card, index) => {
-            card.style.animation = `slideUp 0.8s ease-out ${index * 0.1}s both`;
+            chart.options.animation = chartAnimation();
+            chart.update('none');
         });
     }
 
@@ -913,9 +921,15 @@ document.addEventListener('DOMContentLoaded', () => {
         avgResponseTimeHTML += '</ul>';
 
 
-        messageCountElement.innerHTML = `<h3><i class="fas fa-comments" aria-hidden="true"></i> Всего сообщений: ${messages.length}</h3>`;
+        setMessageMetric(messageCountElement, messages.length);
+        document.getElementById('overviewParticipantCount').textContent = countFormat.format(participantTotals.size);
+        document.getElementById('overviewMonthCount').textContent = countFormat.format(monthsData.length);
         // Combine participant stats and average response time
         participantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals) + avgResponseTimeHTML;
+    }
+
+    function setMessageMetric(element, count) {
+        element.innerHTML = `<span class="metric-label">Сообщения</span><strong class="metric-value">${countFormat.format(count)}</strong>`;
     }
 
     function calculateAverageResponseTimeForParticipant(responseTimes, participant) {
@@ -980,27 +994,6 @@ document.addEventListener('DOMContentLoaded', () => {
         mediaTypeStatsElement.innerHTML = generateMediaTypeHTML(mediaTypeUsage, title);
     }
 
-    function createDayOfWeekChart(dayOfDayActivity) {
-        const daysLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-        createChart('dayOfWeekChart', {
-            type: 'bar',
-            data: {
-                labels: daysLabels,
-                datasets: [{
-                    label: 'Сообщений',
-                    data: dayOfDayActivity,
-                    backgroundColor: getRandomColor(0.7),
-                    borderColor: getRandomColor(),
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
     function calculateThresholdExceededMessages(responseTimes, thresholdSeconds) {
         const counts = Object.create(null);
         for (const [sender, responders] of Object.entries(responseTimes)) {
@@ -1029,20 +1022,23 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         currentMonthDisplay.textContent = monthName;
 
-        displayMonthlyStats(monthData, monthName);
+        displayMonthlyStats(monthData);
         createMonthlyCharts(monthData);
     }
 
-    function displayMonthlyStats(monthData, monthName) {
+    function displayMonthlyStats(monthData) {
         const { data } = monthData;
         const monthlyMessageCountElement = document.getElementById('monthlyMessageCount');
         const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
-        monthlyMessageCountElement.innerHTML = `<h3><i class="fas fa-comments" aria-hidden="true"></i> Всего сообщений за ${sanitizeHTML(monthName)}: ${data.messages.length}</h3>`; // Sanitize month name just in case
+        const participantTotals = getParticipantTotals(data.messages);
+        setMessageMetric(monthlyMessageCountElement, data.messages.length);
+        document.getElementById('monthlyParticipantCount').textContent = countFormat.format(participantTotals.size);
+        document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(data.dailyActivity.filter(Boolean).length);
 
         // Use helper functions for monthly stats display
-        monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(getParticipantTotals(data.messages));
+        monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals);
 
         monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, '<i class="fas fa-font" aria-hidden="true"></i> Количество слов:');
 
@@ -1054,8 +1050,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const ignoringTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
         monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, ignoringTitle); // Renamed Element ID & helper
 
-
-        createMonthlyDayOfWeekChart(data.dayOfWeekActivity);
 
         const focusedControl = document.activeElement;
         prevMonthButton.disabled = currentMonthIndex === 0;
@@ -1073,29 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
-    function createMonthlyDayOfWeekChart(dayOfWeekActivity) {
-        const daysLabels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-        createChart('monthlyDayOfWeekChart', {
-            type: 'bar',
-            data: {
-                labels: daysLabels,
-                datasets: [{
-                    label: 'Сообщений',
-                    data: dayOfWeekActivity,
-                    backgroundColor: getRandomColor(0.7),
-                    borderColor: getRandomColor(),
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-
-    function createChart(canvasId, config) {
+    function createChart(canvasId, { type, data, decimalTicks = false }) {
         if (typeof Chart === 'undefined') {
             return;
         }
@@ -1112,194 +1084,178 @@ document.addEventListener('DOMContentLoaded', () => {
             renderedCharts.delete(canvasId);
         }
 
-        const chartOptions = {
+        const doughnut = type === 'doughnut';
+        const options = {
             responsive: true,
-            ...config.options
+            maintainAspectRatio: false,
+            animation: chartAnimation(),
+            interaction: type === 'line' ? { mode: 'index', intersect: false } : undefined,
+            plugins: {
+                legend: {
+                    display: doughnut || canvasId === 'monthlyChart',
+                    position: 'bottom',
+                    labels: {
+                        color: () => chartTheme.textColor,
+                        boxWidth: 8,
+                        boxHeight: 8,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        padding: 14
+                    }
+                },
+                tooltip: {
+                    backgroundColor: () => chartTheme.surface,
+                    borderColor: () => chartTheme.borderColor,
+                    titleColor: () => chartTheme.tooltipText,
+                    bodyColor: () => chartTheme.tooltipText,
+                    borderWidth: 1,
+                    padding: 10,
+                    boxPadding: 4
+                }
+            }
         };
 
-        const chartInstance = new Chart(ctx, {
-            ...config,
-            options: chartOptions
-        });
+        if (doughnut) {
+            options.cutout = '64%';
+        } else {
+            options.scales = {
+                x: {
+                    grid: { display: false },
+                    border: { color: () => chartTheme.borderColor },
+                    ticks: {
+                        color: () => chartTheme.textColor,
+                        maxTicksLimit: 8,
+                        maxRotation: 0,
+                        callback(value) {
+                            const label = this.getLabelForValue(value);
+                            return typeof label === 'string' && label.length > 24
+                                ? label.slice(0, 23) + '…'
+                                : label;
+                        }
+                    }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: () => chartTheme.gridColor, drawTicks: false },
+                    border: { display: false },
+                    ticks: {
+                        color: () => chartTheme.textColor,
+                        maxTicksLimit: 6,
+                        padding: 8,
+                        precision: decimalTicks ? undefined : 0
+                    }
+                }
+            };
+        }
 
-        applyThemeToChartInstance(chartInstance);
-        chartInstance.update();
-        renderedCharts.set(canvasId, chartInstance);
+        renderedCharts.set(canvasId, new Chart(ctx, { type, data, options }));
     }
 
     function createMonthlyCharts(monthData) {
         const { data } = monthData;
-
-        createChart('dailyActivityChart', {
-            type: 'bar',
-            data: {
-                labels: Array.from({ length: 31 }, (_, index) => index + 1),
-                datasets: [{
-                    label: 'Сообщений',
-                    data: data.dailyActivity.slice(),
-                    backgroundColor: getRandomColor(0.7),
-                    borderColor: getRandomColor(),
-                    borderWidth: 2
-                }]
-            },
-            options: {
-                responsive: true,
-            }
-        });
-
-        // График активности по времени суток (месяц)
-        createChart('monthlyTimeOfDayChart', {
-            type: 'line',
-            data: {
-                labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
-                datasets: [{
-                    label: 'Активность',
-                    data: data.timeOfDay,
-                    borderColor: getRandomColor(),
-                    backgroundColor: getRandomColor(0.2),
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-            }
-        });
-
-        // График типов сообщений (месяц)
-        createChart('monthlyMessageTypesChart', {
-            type: 'doughnut',
-            data: {
-                labels: Object.keys(data.messageTypes),
-                datasets: [{
-                    data: Object.values(data.messageTypes),
-                    backgroundColor: Object.keys(data.messageTypes).map(() => getRandomColor(0.7))
-                }]
-            },
-            options: { responsive: true }
-        });
-
-        // График времени ответа за месяц
-        const avgMonthlyResponseTimes = Object.create(null);
-        for (const sender in data.responseTimes) {
-            for (const recipient in data.responseTimes[sender]) {
-                const times = data.responseTimes[sender][recipient];
-                if (times.length > 0) {
-                    const avgTime = times.reduce((sum, t) => sum + t, 0) / times.length / 60;
-                    if (!avgMonthlyResponseTimes[sender]) {
-                        avgMonthlyResponseTimes[sender] = Object.create(null);
-                    }
-                    avgMonthlyResponseTimes[sender][recipient] = avgTime;
-                }
-            }
-        }
-
-        createChart('monthlyResponseTimeChart', {
-            type: 'bar',
-            data: {
-                labels: Object.keys(avgMonthlyResponseTimes).flatMap(sender => Object.keys(avgMonthlyResponseTimes[sender]).map(recipient => `${sender} -> ${recipient}`)),
-                datasets: [{
-                    label: 'Среднее время ответа (мин)',
-                    data: Object.keys(avgMonthlyResponseTimes).flatMap(sender => Object.keys(avgMonthlyResponseTimes[sender]).map(recipient => avgMonthlyResponseTimes[sender][recipient])),
-                    backgroundColor: Object.keys(avgMonthlyResponseTimes).flatMap(sender => Object.keys(avgMonthlyResponseTimes[sender])).map(() => getRandomColor(0.7))
-                }]
-            },
-            options: {
-                responsive: true,
-            }
-        });
-         // График активности по дням недели (месяц)
-         createMonthlyDayOfWeekChart(data.dayOfWeekActivity);
+        const days = Array.from({ length: 31 }, (_, index) => index + 1);
+        createBarChart('dailyActivityChart', days, data.dailyActivity.slice(), 'Сообщений');
+        createTimeOfDayChart(data.timeOfDay, 'monthlyTimeOfDayChart');
+        createMessageTypesChart(data.messageTypes, 'monthlyMessageTypesChart');
+        createResponseTimeChart(data.responseTimes, 'monthlyResponseTimeChart');
+        createDayOfWeekChart(data.dayOfWeekActivity, 'monthlyDayOfWeekChart');
     }
 
     function createMonthlyChart(monthsData) {
         const labels = monthsData.map(m => m.month);
         const participants = Array.from(allParticipants);
 
-        const datasets = participants.map(participant => ({
+        const datasets = participants.map((participant, index) => ({
+            ...lineAppearance(index),
             label: participant,
-            data: monthsData.map(m => m.data.participants[participant]?.length || 0),
-            borderColor: getRandomColor(),
-            backgroundColor: getRandomColor(0.2),
-            fill: false,
-            tension: 0.4
+            data: monthsData.map(m => m.data.participants[participant]?.length || 0)
         }));
 
-        createChart('monthlyChart', {
-            type: 'line',
-            data: { labels, datasets },
-            options: {
-                responsive: true,
-            }
-        });
+        createChart('monthlyChart', { type: 'line', data: { labels, datasets } });
     }
 
-    function createResponseTimeChart(responseTimes) {
-        const avgTimes = Object.create(null);
-        // This chart might need adjustment based on the new avgDelayStats structure
-        // For now, let's keep the old logic for the *overall* response time chart,
-        // as it used a different structure (responseTimes[sender][recipient] = [times])
-        // TODO: Consider unifying the data structure for all response time calculations.
-        for (const sender in responseTimes) {
-            for (const recipient in responseTimes[sender]) {
-                const times = responseTimes[sender][recipient];
-                if (times.length > 0) {
-                    const avgTime = times.reduce((sum, t) => sum + t, 0) / times.length / 60;
-                    if (!avgTimes[sender]) {
-                        avgTimes[sender] = Object.create(null);
-                    }
-                    avgTimes[sender][recipient] = avgTime;
-                }
+    function createResponseTimeChart(responseTimes, canvasId = 'responseTimeChart') {
+        const labels = [];
+        const minutes = [];
+        for (const [sender, recipients] of Object.entries(responseTimes)) {
+            for (const [recipient, times] of Object.entries(recipients)) {
+                if (!times.length) continue;
+                labels.push(`${sender} -> ${recipient}`);
+                minutes.push(times.reduce((sum, seconds) => sum + seconds, 0) / times.length / 60);
             }
         }
 
-        createChart('responseTimeChart', {
+        createBarChart(canvasId, labels, minutes, 'Среднее время ответа (мин)', true);
+    }
+
+    function createDayOfWeekChart(activity, canvasId = 'dayOfWeekChart') {
+        createBarChart(canvasId, ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], activity, 'Сообщений');
+    }
+
+    function createBarChart(canvasId, labels, data, label, decimalTicks = false) {
+        createChart(canvasId, {
             type: 'bar',
+            decimalTicks,
             data: {
-                labels: Object.keys(avgTimes).flatMap(sender => Object.keys(avgTimes[sender]).map(recipient => `${sender} -> ${recipient}`)),
+                labels,
                 datasets: [{
-                    label: 'Среднее время ответа (мин)',
-                    data: Object.keys(avgTimes).flatMap(sender => Object.keys(avgTimes[sender]).map(recipient => avgTimes[sender][recipient])),
-                    backgroundColor: Object.keys(avgTimes).flatMap(sender => Object.keys(avgTimes[sender])).map(() => getRandomColor(0.7))
+                    label,
+                    data,
+                    backgroundColor: () => chartTheme.accent,
+                    borderRadius: 4,
+                    maxBarThickness: 28
                 }]
-            },
-            options: {
-                responsive: true,
             }
         });
     }
 
-    function createTimeOfDayChart(timeOfDay) {
-        createChart('timeOfDayChart', {
+    function createTimeOfDayChart(timeOfDay, canvasId = 'timeOfDayChart') {
+        createChart(canvasId, {
             type: 'line',
             data: {
                 labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
                 datasets: [{
+                    ...lineAppearance(0),
                     label: 'Активность',
-                    data: timeOfDay,
-                    borderColor: getRandomColor(),
-                    backgroundColor: getRandomColor(0.2),
-                    fill: true,
-                    tension: 0.4
+                    data: timeOfDay
                 }]
-            },
-            options: {
-                responsive: true,
             }
         });
     }
 
-    function createMessageTypesChart(messageTypes) {
-        createChart('messageTypesChart', {
+    function lineAppearance(index) {
+        const primary = index === 0;
+        const stroke = primary ? () => chartTheme.accent : chartSeriesColor(1 + (index - 1) % 7);
+        return {
+            borderColor: stroke,
+            borderWidth: primary ? 2.5 : 1.75,
+            backgroundColor: primary ? () => chartTheme.fill : stroke,
+            fill: primary ? 'origin' : false,
+            cubicInterpolationMode: 'monotone',
+            borderDash: index % 3 === 1 ? [5, 4] : [],
+            pointStyle: ['circle', 'rectRounded', 'triangle'][index % 3],
+            pointBackgroundColor: stroke,
+            pointBorderWidth: 0,
+            pointRadius: primary ? 3 : 2,
+            pointHoverRadius: 5
+        };
+    }
+
+    function createMessageTypesChart(messageTypes, canvasId = 'messageTypesChart') {
+        const types = Object.keys(messageTypes);
+        createChart(canvasId, {
             type: 'doughnut',
             data: {
-                labels: Object.keys(messageTypes),
+                labels: types.map(type => messageTypeLabels.get(type) ?? type),
                 datasets: [{
                     data: Object.values(messageTypes),
-                    backgroundColor: Object.keys(messageTypes).map(() => getRandomColor(0.7))
+                    backgroundColor: ({ dataIndex }) => chartSeriesColor(messageTypeColorIndex(types[dataIndex])),
+                    borderColor: () => chartTheme.surface,
+                    hoverBorderColor: () => chartTheme.surface,
+                    borderWidth: 2,
+                    hoverOffset: 3
                 }]
-            },
-            options: { responsive: true }
+            }
         });
     }
 
@@ -1311,16 +1267,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function getRandomColor(alpha = 1) {
-        const colors = [
-            '#6c5ce7', '#ff6b6b', '#10ac84', '#feca57', '#48dbfb', '#ff9f43', '#341f97',
-            '#00d2d3', '#ff4757', '#1dd1a1', '#c56cf0', '#5f27cd', '#54a0ff', '#ff6b81'
-        ];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        if (alpha !== 1) {
-            return color + Math.round(alpha * 255).toString(16).padStart(2, '0');
+    function chartSeriesColor(index) {
+        const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
+            '#74854b', '#5a8890', '#bd775d', '#817a9f'];
+        return colors[index % colors.length];
+    }
+
+    function messageTypeColorIndex(label = '') {
+        const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
+            'sticker', 'animation', 'audio_file', 'video_message'];
+        const index = knownTypes.indexOf(label);
+        if (index >= 0) return index;
+
+        let hash = 0;
+        for (const character of label) {
+            hash = (Math.imul(hash, 31) + character.codePointAt(0)) >>> 0;
         }
-        return color;
+        return hash;
     }
 
     // --- Helper Functions for HTML Generation ---
@@ -1471,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 mediaTypeHTML += `<li><strong>${sanitizedParticipant}</strong>:<ul>`;
                 for (const mediaType in mediaTypeUsage[participant]) {
                     if (Object.hasOwnProperty.call(mediaTypeUsage[participant], mediaType)) {
-                        const sanitizedMediaType = sanitizeHTML(mediaType);
+                        const sanitizedMediaType = sanitizeHTML(messageTypeLabels.get(mediaType) ?? mediaType);
                         mediaTypeHTML += `<li><i class="fas fa-arrow-right" aria-hidden="true"></i> ${sanitizedMediaType}: ${mediaTypeUsage[participant][mediaType]}</li>`;
                     }
                 }
