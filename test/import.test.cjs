@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
 
-function createAnalyzer({ chartsAvailable = true } = {}) {
+function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null } } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
@@ -102,7 +102,7 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
             body: element('body'),
         },
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
-        localStorage: { getItem: () => null },
+        localStorage: storage,
         Chart: chartsAvailable ? Chart : undefined,
         Blob,
         File,
@@ -149,6 +149,28 @@ function createAnalyzer({ chartsAvailable = true } = {}) {
         get focusedElement() { return focusedElement; },
     };
 }
+
+test('toggles the visible theme in both directions when saving preferences is blocked', t => {
+    t.mock.method(console, 'warn', () => {});
+    const denyStorage = () => { throw new Error('Storage unavailable'); };
+    for (const [getItem, initial, alternate] of [
+        [denyStorage, 'theme-default', 'theme-muted-light'],
+        [() => 'muted-light', 'theme-muted-light', 'theme-default'],
+    ]) {
+        const app = createAnalyzer({ storage: { getItem, setItem: denyStorage } });
+        const body = app.element('body');
+        const toggle = app.element('themeToggleBtn');
+        assert.equal(body.classList.contains(initial), true);
+
+        toggle.click();
+        assert.equal(body.classList.contains(alternate), true);
+        assert.equal(body.classList.contains(initial), false);
+
+        toggle.click();
+        assert.equal(body.classList.contains(initial), true);
+        assert.equal(body.classList.contains(alternate), false);
+    }
+});
 
 test('rejects unrelated JSON and malformed message entries', () => {
     const app = createAnalyzer();

@@ -31,15 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (themeToggleBtn) {
         themeToggleBtn.addEventListener('click', () => {
-            let savedTheme;
-            try {
-                savedTheme = localStorage.getItem(THEME_STORAGE_KEY) || DEFAULT_THEME_KEY;
-            } catch (storageError) {
-                console.warn('Не удалось получить тему из localStorage', storageError);
-                savedTheme = DEFAULT_THEME_KEY;
-            }
-
-            const nextTheme = savedTheme === DEFAULT_THEME_KEY ? ALTERNATIVE_THEME_KEY : DEFAULT_THEME_KEY;
+            const nextTheme = bodyElement.classList.contains(ALTERNATIVE_THEME_CLASS)
+                ? DEFAULT_THEME_KEY
+                : ALTERNATIVE_THEME_KEY;
             applyTheme(nextTheme, { refreshCharts: true });
         });
     }
