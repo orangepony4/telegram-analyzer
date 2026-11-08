@@ -127,8 +127,10 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
     function selectFile(name) {
         element('jsonFile').change({ target: { files: [{ name }] } });
         const reader = readers.at(-1);
+        const completeRaw = result => reader.onload({ target: { result } });
         return {
-            complete(data) { reader.onload({ target: { result: JSON.stringify(data) } }); },
+            complete(data) { completeRaw(JSON.stringify(data)); },
+            completeRaw,
             fail() { reader.onerror(); },
         };
     }
@@ -336,9 +338,94 @@ test('ignores malformed account groups and hides stale choosers on single or dem
         chats: { list: [null, { messages: [null] }] }, left_chats: { list: false },
     });
     assert.equal(chooser.hidden, true);
-    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.equal(app.element('reportKind').textContent, 'Демо-отчёт');
     assert.equal(app.element('fileError').hidden, false);
     assert.deepEqual(app.alerts, []);
+});
+
+test('restores the same month and exports after malformed or unreadable replacements', async () => {
+    const app = createAnalyzer();
+    const monthExport = app.element('exportMonthlyParticipants');
+    const overallExport = app.element('exportParticipants');
+    app.selectFile('saved.json').complete({
+        name: 'Saved chat',
+        messages: [
+            { id: 1, from: 'Alice', date: '2026-10-10T12:00:00', text: 'First' },
+            { id: 2, from: 'Bob', date: '2026-11-10T12:00:00', text: 'Second' },
+        ],
+    });
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    const previousChart = app.charts.get('dailyActivityChart');
+    const previousMonth = app.element('currentMonth').textContent;
+
+    const stale = app.selectFile('stale.json');
+    const malformed = app.selectFile('<test>.json');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(monthExport.disabled, true);
+    assert.equal(overallExport.disabled, true);
+    monthExport.click();
+    overallExport.click();
+    assert.equal(app.downloads.length, 0);
+
+    malformed.completeRaw('{ malformed');
+    stale.complete({ name: 'Stale chat', messages: [] });
+    stale.fail();
+    assert.match(app.element('fileError').textContent, /<test>\.json/);
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.element('reportPlaceholder').hidden, true);
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.element('currentMonth').textContent, previousMonth);
+    assert.equal(app.charts.get('dailyActivityChart'), previousChart);
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+    assert.equal(app.element('jsonFile').value, '');
+    assert.equal(monthExport.disabled, false);
+    assert.equal(overallExport.disabled, false);
+
+    app.selectFile('unreadable.json').fail();
+    assert.match(app.element('fileError').textContent, /unreadable\.json/);
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('currentMonth').textContent, previousMonth);
+    monthExport.click();
+    assert.equal(app.downloads[0].name, 'telegram-analyzer-2026-10-participants.csv');
+    assert.match(await app.downloads[0].blob.text(), /"Alice",1,/);
+
+    app.selectFile('replacement.json').complete({ name: 'Replacement', messages: [] });
+    assert.equal(app.element('reportTitle').textContent, 'Replacement');
+    assert.equal(app.element('dropFileName').textContent, 'replacement.json');
+    assert.equal(app.element('fileError').hidden, true);
+    assert.equal(monthExport.disabled, true);
+    assert.equal(overallExport.disabled, true);
+});
+
+test('preserves an account chooser and its selection when the next export is invalid', () => {
+    const app = createAnalyzer();
+    const chooser = app.element('accountChatChooser');
+    const select = app.element('accountChatSelect');
+    const analyze = app.element('analyzeAccountChat');
+    app.selectFile('account.json').complete(accountFixture().data);
+    chooseAccountChat(app, '2');
+    const choices = select.children;
+    const placeholder = app.element('placeholderTitle').textContent;
+
+    const invalid = app.selectFile('unrelated.json');
+    assert.equal(chooser.hidden, true);
+    invalid.complete({ title: 'not a chat' });
+
+    assert.equal(chooser.hidden, false);
+    assert.equal(select.children, choices);
+    assert.equal(select.value, '2');
+    assert.equal(analyze.disabled, false);
+    assert.equal(app.element('dropFileName').textContent, 'account.json');
+    assert.equal(app.element('placeholderTitle').textContent, placeholder);
+    assert.match(app.element('fileError').textContent, /unrelated\.json/);
+    analyze.click();
+    assert.match(app.element('accountChatStatus').textContent, /Покинутый чат/);
+    assert.match(app.element('participantStats').innerHTML, /Gamma/);
 });
 
 test('shows text statistics when the chart library is unavailable', () => {

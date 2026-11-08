@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let overallResponseTimes = null;
     let overallParticipantTotals = new Map();
-    let activeReader = null;
+    let activeImport = null;
     let accountChats = [];
     let currentMonthIndex = 0;
     let monthsData = [];
@@ -164,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     analyzeAccountChatButton.addEventListener('click', analyzeAccountChat);
     exportParticipantsButton.addEventListener('click', () => {
+        if (exportParticipantsButton.disabled) return;
         downloadParticipantSummary(overallParticipantTotals, 'telegram-analyzer-participants.csv');
     });
     exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
@@ -509,6 +510,34 @@ document.addEventListener('DOMContentLoaded', () => {
         exportMonthlyParticipantsButton.disabled = true;
     }
 
+    function suspendImportView() {
+        const previous = {
+            reportVisible: statsContainer.style.display === 'block',
+            chooserVisible: !accountChatChooser.hidden,
+            overallExportDisabled: exportParticipantsButton.disabled,
+            monthlyExportDisabled: exportMonthlyParticipantsButton.disabled,
+            placeholderTitle: placeholderTitle.textContent,
+            placeholderText: placeholderText.textContent,
+        };
+        statsContainer.style.display = 'none';
+        accountChatChooser.hidden = true;
+        exportParticipantsButton.disabled = true;
+        exportMonthlyParticipantsButton.disabled = true;
+        return previous;
+    }
+
+    function restoreImportView(previous) {
+        statsContainer.style.display = previous.reportVisible ? 'block' : 'none';
+        accountChatChooser.hidden = !previous.chooserVisible;
+        exportParticipantsButton.disabled = previous.overallExportDisabled;
+        exportMonthlyParticipantsButton.disabled = previous.monthlyExportDisabled;
+        if (previous.reportVisible) {
+            reportPlaceholder.hidden = true;
+        } else {
+            setReportPlaceholder(previous.placeholderTitle, previous.placeholderText);
+        }
+    }
+
     function processSelectedFile(file, { isDemo = false } = {}) {
         if (!file) {
             return;
@@ -520,72 +549,93 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const reader = new FileReader();
+        const previous = activeImport ? activeImport.previous : suspendImportView();
+        const request = { previous };
+        activeImport = request;
+        const hasPrevious = previous.reportVisible || previous.chooserVisible;
+        const sourceName = isDemo ? 'Встроенный пример' : file.name;
+        const describeFailure = message => `«${sourceName}»: ${message}`;
+
         showFileError('');
-        updateSelectedFileName(isDemo ? 'Встроенный пример' : file.name);
-        sourceFileType.textContent = isDemo ? 'Демо-данные' : 'Файл на устройстве';
-        resetAccountChooser();
-        clearReport();
-        setReportHeader(isDemo ? 'Демо-отчёт' : 'Импорт', isDemo ? 'Демонстрационный чат' : 'Открываем экспорт',
-            isDemo ? 'Вымышленная переписка' : 'Данные читаются в браузере');
+        if (!hasPrevious) {
+            setReportHeader(isDemo ? 'Демо-отчёт' : 'Импорт', isDemo ? 'Демонстрационный чат' : 'Открываем экспорт',
+                isDemo ? 'Вымышленная переписка' : 'Данные читаются в браузере');
+        }
         setReportPlaceholder(isDemo ? 'Подготовка примера' : 'Чтение файла', 'Отчёт появится после обработки данных.');
         showLoadingIndicator();
 
-        const reader = new FileReader();
-        activeReader = reader;
+        const finish = status => {
+            activeImport = null;
+            hideLoadingIndicator(status);
+            clearFileInput();
+        };
+        const rejectImport = message => {
+            if (hasPrevious) {
+                restoreImportView(previous);
+                showFileError(describeFailure(message));
+            } else {
+                updateSelectedFileName(sourceName);
+                showImportFailure(describeFailure(message));
+            }
+        };
+
         reader.onload = (e) => {
-            if (activeReader !== reader) {
+            if (activeImport !== request) {
                 return;
             }
             let status = '';
+            let replacing = false;
             try {
-                const rawContent = e.target?.result;
-                const data = JSON.parse(rawContent);
-                if (validMessages(data?.messages)) {
-                    const name = typeof data.name === 'string' ? data.name.trim() : '';
-                    renderMessages(data.messages, { name: name || file.name, isDemo });
-                    status = 'Анализ завершён. Статистика доступна ниже.';
+                const data = JSON.parse(e.target?.result);
+                const messages = validMessages(data?.messages) ? data.messages : null;
+                const chats = messages ? [] : findAccountChats(data);
+                if (!messages && !chats.length) {
+                    rejectImport('В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
                     return;
                 }
-                const chats = findAccountChats(data);
-                if (chats.length) {
+
+                replacing = true;
+                updateSelectedFileName(sourceName);
+                resetAccountChooser();
+                clearReport();
+                if (messages) {
+                    sourceFileType.textContent = isDemo ? 'Демо-данные' : 'Файл на устройстве';
+                    const name = typeof data.name === 'string' ? data.name.trim() : '';
+                    renderMessages(messages, { name: name || file.name, isDemo });
+                    status = 'Анализ завершён. Статистика доступна ниже.';
+                } else {
                     showAccountChooser(chats);
                     sourceFileType.textContent = 'Экспорт аккаунта';
                     setReportHeader('Экспорт аккаунта', 'Выберите чат', 'В файле несколько переписок. Анализ строится по одной.');
                     setReportPlaceholder('Чат ещё не выбран', 'Выберите переписку в блоке «Данные чата» и нажмите «Показать статистику».');
                     status = 'Экспорт аккаунта загружен. Выберите чат для анализа.';
-                    return;
                 }
-                showImportFailure('В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
             } catch (error) {
-                console.error('Ошибка разбора JSON файла:', error);
-                clearReport();
-                showImportFailure('Проверьте, что файл содержит корректный экспорт в формате JSON.');
+                if (replacing) {
+                    console.error('Ошибка анализа экспорта:', error);
+                    clearReport();
+                    showImportFailure(describeFailure('Не удалось построить отчёт по этому экспорту.'));
+                } else {
+                    rejectImport('Проверьте, что файл содержит корректный экспорт в формате JSON.');
+                }
             } finally {
-                activeReader = null;
-                hideLoadingIndicator(status);
-                clearFileInput();
+                finish(status);
             }
         };
 
-        reader.onerror = () => {
-            if (activeReader !== reader) {
-                return;
-            }
-            activeReader = null;
-            console.error('Ошибка чтения файла');
-            showImportFailure('Файл не прочитан. Попробуйте открыть его ещё раз.');
-            hideLoadingIndicator();
-            clearFileInput();
+        const readFailed = () => {
+            if (activeImport !== request) return;
+            rejectImport('Файл не прочитан. Попробуйте открыть его ещё раз.');
+            finish();
         };
+        reader.onerror = readFailed;
+        reader.onabort = readFailed;
 
         try {
             reader.readAsText(file);
-        } catch (fileError) {
-            activeReader = null;
-            console.error('Не удалось прочитать файл:', fileError);
-            showImportFailure('Файл не прочитан. Попробуйте открыть его ещё раз.');
-            hideLoadingIndicator();
-            clearFileInput();
+        } catch {
+            readFailed();
         }
     }
 
