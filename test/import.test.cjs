@@ -83,6 +83,36 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
         destroy() { charts.delete(this.id); }
     }
 
+    class MockFileReader {
+        static LOADING = 1;
+        static DONE = 2;
+        readyState = 0;
+        aborted = false;
+
+        readAsText(file) {
+            this.file = file;
+            this.readyState = MockFileReader.LOADING;
+            readers.push(this);
+        }
+
+        abort() {
+            if (this.readyState !== MockFileReader.LOADING) return;
+            this.aborted = true;
+            this.readyState = MockFileReader.DONE;
+            this.onabort();
+        }
+
+        complete(result) {
+            this.readyState = MockFileReader.DONE;
+            this.onload({ target: { result } });
+        }
+
+        fail() {
+            this.readyState = MockFileReader.DONE;
+            this.onerror();
+        }
+    }
+
     vm.runInNewContext(source, {
         document: {
             addEventListener(event, handler) { handler(); },
@@ -114,12 +144,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
             revokeObjectURL() {},
         },
         setTimeout(callback) { callback(); },
-        FileReader: class {
-            readAsText(file) {
-                this.file = file;
-                readers.push(this);
-            }
-        },
+        FileReader: MockFileReader,
         alert: message => alerts.push(message),
         console,
     });
@@ -127,11 +152,13 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
     function selectFile(name) {
         element('jsonFile').change({ target: { files: [{ name }] } });
         const reader = readers.at(-1);
-        const completeRaw = result => reader.onload({ target: { result } });
+        const completeRaw = result => reader.complete(result);
         return {
             complete(data) { completeRaw(JSON.stringify(data)); },
             completeRaw,
-            fail() { reader.onerror(); },
+            fail() { reader.fail(); },
+            abort() { reader.abort(); },
+            get aborted() { return reader.aborted; },
         };
     }
 
@@ -139,7 +166,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
         return {
             file: reader.file,
             async complete() {
-                reader.onload({ target: { result: await reader.file.text() } });
+                reader.complete(await reader.file.text());
             },
         };
     }
@@ -445,6 +472,30 @@ test('shows text statistics when the chart library is unavailable', () => {
     assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
     assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
     assert.equal(app.charts.size, 0);
+});
+
+test('cancels a superseded file read without disturbing the newest import', () => {
+    const app = createAnalyzer();
+    app.selectFile('saved.json').complete({
+        name: 'Saved chat',
+        messages: [{ id: 1, from: 'Alice', date: '2026-11-01T00:00:00', text: 'Hello' }],
+    });
+    app.monthlyTab.click();
+    const older = app.selectFile('large-old.json');
+    const newest = app.selectFile('newest.json');
+    assert.equal(older.aborted, true);
+    assert.equal(newest.aborted, false);
+    assert.equal(app.element('loadingIndicator').style.display, 'flex');
+    assert.equal(app.element('fileError').hidden, true);
+    assert.equal(app.element('exportMonthlyParticipants').disabled, true);
+
+    newest.abort();
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+    assert.match(app.element('fileError').textContent, /newest\.json/);
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.element('exportMonthlyParticipants').disabled, false);
 });
 
 test('keeps the last upload and disables monthly statistics for an empty export', () => {

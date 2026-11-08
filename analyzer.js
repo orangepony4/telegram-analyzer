@@ -561,9 +561,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const reader = new FileReader();
-        const previous = activeImport ? activeImport.previous : suspendImportView();
-        const request = { previous };
+        const previousRequest = activeImport;
+        const previous = previousRequest ? previousRequest.previous : suspendImportView();
+        const request = { reader, previous };
         activeImport = request;
+        // The old reader can fire its abort callback synchronously.
+        if (previousRequest?.reader.readyState === FileReader.LOADING) {
+            previousRequest.reader.abort();
+        }
         const hasPrevious = previous.reportVisible || previous.chooserVisible;
         const sourceName = isDemo ? 'Встроенный пример' : file.name;
         const describeFailure = message => `«${sourceName}»: ${message}`;
