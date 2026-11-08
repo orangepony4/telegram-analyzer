@@ -397,7 +397,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function validMessages(messages) {
         return Array.isArray(messages) && messages.every(message =>
-            message && typeof message === 'object' && !Array.isArray(message));
+            message && typeof message === 'object' && !Array.isArray(message)
+            && (message.from === undefined || message.from === null || typeof message.from === 'string'));
     }
 
     function accountChatName(chat) {

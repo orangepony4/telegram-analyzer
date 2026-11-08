@@ -268,6 +268,9 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.ok(app.charts.size > 0);
 
     const { data, hostileName } = accountFixture();
+    data.chats.list.push({
+        name: 'Bad sender field', messages: [{ id: 1, from: ['Invalid'] }],
+    });
     app.selectFile('account.json').complete(data);
     assert.equal(chooser.hidden, false);
     assert.equal(select.value, '');
@@ -279,7 +282,7 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.ok(labels[1].includes(hostileName));
     assert.match(labels[2], /^3\b.*Shared title/);
     assert.match(labels[3], /^4\b/);
-    assert.doesNotMatch(labels.join(' '), /Bad row|Missing messages/);
+    assert.doesNotMatch(labels.join(' '), /Bad row|Bad sender field|Missing messages/);
     assert.equal(app.element('.stats-container').style.display, 'none');
     assert.equal(app.element('exportParticipants').disabled, true);
     assert.equal(app.element('exportMonthlyParticipants').disabled, true);
@@ -422,6 +425,17 @@ test('restores the same month and exports after malformed or unreadable replacem
     assert.match(app.element('fileError').textContent, /unreadable\.json/);
     assert.equal(app.element('reportTitle').textContent, 'Saved chat');
     assert.equal(app.element('currentMonth').textContent, previousMonth);
+
+    app.selectFile('bad-sender.json').complete({
+        messages: [{ id: 1, from: { toString: 0 }, date: '2026-11-01T12:00:00' }],
+    });
+    assert.match(app.element('fileError').textContent, /bad-sender\.json/);
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.equal(app.element('currentMonth').textContent, previousMonth);
+    assert.equal(app.charts.get('dailyActivityChart'), previousChart);
+    assert.equal(monthExport.disabled, false);
+    assert.equal(overallExport.disabled, false);
     monthExport.click();
     assert.equal(app.downloads[0].name, 'telegram-analyzer-2026-10-participants.csv');
     assert.match(await app.downloads[0].blob.text(), /"Alice",1,/);
@@ -444,9 +458,9 @@ test('preserves an account chooser and its selection when the next export is inv
     const choices = select.children;
     const placeholder = app.element('placeholderTitle').textContent;
 
-    const invalid = app.selectFile('unrelated.json');
+    const invalid = app.selectFile('bad-sender.json');
     assert.equal(chooser.hidden, true);
-    invalid.complete({ title: 'not a chat' });
+    invalid.complete({ messages: [{ id: 1, from: 123 }] });
 
     assert.equal(chooser.hidden, false);
     assert.equal(select.children, choices);
@@ -454,7 +468,7 @@ test('preserves an account chooser and its selection when the next export is inv
     assert.equal(analyze.disabled, false);
     assert.equal(app.element('dropFileName').textContent, 'account.json');
     assert.equal(app.element('placeholderTitle').textContent, placeholder);
-    assert.match(app.element('fileError').textContent, /unrelated\.json/);
+    assert.match(app.element('fileError').textContent, /bad-sender\.json/);
     analyze.click();
     assert.match(app.element('accountChatStatus').textContent, /Покинутый чат/);
     assert.match(app.element('participantStats').innerHTML, /Gamma/);
@@ -656,7 +670,7 @@ test('includes dated rows without a sender in monthly activity and totals', asyn
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({ messages: [
         { id: 1, from: 'Alice', date: '2025-04-03T10:00:00', text: 'A' },
-        { id: 2, type: 'message', date: '2025-04-04T11:00:00', media_type: 'photo' },
+        { id: 2, type: 'message', from: null, date: '2025-04-04T11:00:00', media_type: 'photo' },
         { id: 3, type: 'service', actor: 'Bob', date: '2025-05-02T12:00:00' },
         { id: 4, from: 'Carol', text: 'Undated' },
     ] });
