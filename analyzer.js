@@ -803,13 +803,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const responseTimes = Object.create(null);
         let previousMessage = null;
         timings.forEach(({ message: msg, calendar, time }) => {
-            if (!msg.from || !calendar) return;
+            if (!calendar) return;
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
             const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
             const monthKey = `${year}-${monthNumber}`;
 
             const month = messagesByMonth[monthKey] ??= {
                 messages: [],
+                unattributedCount: 0,
                 participants: Object.create(null),
                 messageTypes: Object.create(null),
                 timeOfDay: new Array(24).fill(0),
@@ -821,18 +822,21 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             month.messages.push(msg);
-            (month.participants[msg.from] ??= []).push(msg);
-
             const type = msg.media_type || 'text';
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
+            month.timeOfDay[calendar.getUTCHours()]++;
+            month.dayOfWeekActivity[calendar.getUTCDay()]++;
+            month.dailyActivity[calendar.getUTCDate() - 1]++;
+
+            if (!msg.from) {
+                month.unattributedCount++;
+                return;
+            }
+            (month.participants[msg.from] ??= []).push(msg);
             if (type !== 'text') {
                 const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
-
-            month.timeOfDay[calendar.getUTCHours()]++;
-            month.dayOfWeekActivity[calendar.getUTCDay()]++;
-            month.dailyActivity[calendar.getUTCDate() - 1]++;
 
             const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
             month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words.length;
@@ -879,7 +883,6 @@ document.addEventListener('DOMContentLoaded', () => {
         overallResponseTimes = responseTimes;
         overallParticipantTotals = participantTotals;
         exportParticipantsButton.disabled = participantTotals.size === 0;
-        exportMonthlyParticipantsButton.disabled = monthsData.length === 0;
     }
 
     function recordResponse(responseTimes, sender, responder, seconds) {
@@ -1012,7 +1015,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function updateMonthlyStats() {
-        if (!monthsData.length) return;
+        if (!monthsData.length) {
+            exportMonthlyParticipantsButton.disabled = true;
+            return;
+        }
 
         const monthData = monthsData[currentMonthIndex];
         const monthName = new Date(monthData.month + '-01').toLocaleString('ru', {
@@ -1033,6 +1039,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
         const participantTotals = getParticipantTotals(data.messages);
+        exportMonthlyParticipantsButton.disabled = participantTotals.size === 0;
         setMessageMetric(monthlyMessageCountElement, data.messages.length);
         document.getElementById('monthlyParticipantCount').textContent = countFormat.format(participantTotals.size);
         document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(data.dailyActivity.filter(Boolean).length);
@@ -1174,6 +1181,15 @@ document.addEventListener('DOMContentLoaded', () => {
             data: monthsData.map(m => m.data.participants[participant]?.length || 0)
         }));
 
+        const unattributed = monthsData.map(m => m.data.unattributedCount);
+        if (unattributed.some(Boolean)) {
+            datasets.push({
+                ...lineAppearance(datasets.length),
+                label: 'Записи без отправителя',
+                data: unattributed,
+                borderDash: [4, 4]
+            });
+        }
         createChart('monthlyChart', { type: 'line', data: { labels, datasets } });
     }
 

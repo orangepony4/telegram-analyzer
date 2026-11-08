@@ -509,6 +509,44 @@ test('shows only calendar days in the selected month', () => {
     }
 });
 
+test('includes dated rows without a sender in monthly activity and totals', async () => {
+    const app = createAnalyzer();
+    app.selectFile('chat.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2025-04-03T10:00:00', text: 'A' },
+        { id: 2, type: 'message', date: '2025-04-04T11:00:00', media_type: 'photo' },
+        { id: 3, type: 'service', actor: 'Bob', date: '2025-05-02T12:00:00' },
+        { id: 4, from: 'Carol', text: 'Undated' },
+    ] });
+
+    const data = id => app.charts.get(id).data.datasets[0].data;
+    const monthlyExport = app.element('exportMonthlyParticipants');
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">4</);
+    const trend = app.charts.get('monthlyChart').data;
+    assert.equal(trend.labels.join(), '2025-04,2025-05');
+    assert.equal(trend.datasets.find(series => series.label === 'Записи без отправителя').data.join(), '1,1');
+    app.monthlyTab.click();
+    assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">1</);
+    assert.equal(data('dailyActivityChart')[1], 1);
+    assert.equal(app.element('monthlyParticipantCount').textContent, '0');
+    assert.equal(monthlyExport.disabled, true);
+
+    app.element('prevMonth').click();
+    assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">2</);
+    assert.equal(app.element('monthlyActiveDayCount').textContent, '2');
+    assert.equal(data('dailyActivityChart')[3], 1);
+    assert.equal(data('monthlyTimeOfDayChart')[11], 1);
+    assert.equal(data('monthlyDayOfWeekChart')[5], 1);
+    const types = app.charts.get('monthlyMessageTypesChart').data;
+    assert.equal(data('monthlyMessageTypesChart')[types.labels.indexOf('Фото')], 1);
+    assert.equal(app.element('monthlyParticipantCount').textContent, '1');
+    assert.equal(monthlyExport.disabled, false);
+    monthlyExport.click();
+    assert.match(await app.downloads[0].blob.text(), /\r\n"Alice",1,1\.0\r\n$/);
+
+    app.element('nextMonth').click();
+    assert.equal(monthlyExport.disabled, true);
+});
+
 test('exports participant totals with quoted, formula-safe names', async () => {
     const app = createAnalyzer();
     const from = '=1+1, "quoted"';
