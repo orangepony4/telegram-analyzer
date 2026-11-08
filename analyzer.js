@@ -501,6 +501,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearReport() {
         statsContainer.style.display = 'none';
+        renderedCharts.forEach(chart => chart.destroy());
+        renderedCharts.clear();
         overallResponseTimes = null;
         overallParticipantTotals = new Map();
         monthsData = [];

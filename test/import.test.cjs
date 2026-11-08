@@ -235,6 +235,11 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     const analyze = app.element('analyzeAccountChat');
     assert.equal(chooser.hidden, true);
 
+    app.selectFile('previous.json').complete({ messages: [
+        { id: 1, from: 'Previous sender', date: '2025-04-01T12:00:00', text: 'Previous chat' },
+    ] });
+    assert.ok(app.charts.size > 0);
+
     const { data, hostileName } = accountFixture();
     app.selectFile('account.json').complete(data);
     assert.equal(chooser.hidden, false);
