@@ -926,6 +926,40 @@ test('keeps renamed senders together and separates identical display names', asy
     assert.ok(participants.some(([, name, count]) => name === 'Лена (1)' && count === '1'));
 });
 
+test('chooses the latest sender name across mixed date styles without changing reply timing', async () => {
+    const app = createAnalyzer();
+    const unix = date => String(Date.parse(date) / 1000);
+    app.selectFile('mixed-sender-names.json').complete({
+        messages: [
+            { id: 4, date_unixtime: unix('2026-11-01T12:00:00Z'), from: 'Current name', from_id: 'user1' },
+            { id: 1, date: '2026-01-01T12:00:00', from: 'Old civil name', from_id: 'user1' },
+            { id: 5, date: '2026-12-01T12:00:00', from: 'Stable name', from_id: 'user2' },
+            { id: 2, date: '2026-01-01T12:10:00', from: 'Stable name', from_id: 'user2' },
+            { id: 3, date_unixtime: unix('2026-07-01T12:00:00Z'), from: 'Stale Unix name', from_id: 'user2' },
+            { id: 6, from: 'Undated name', from_id: 'user1' },
+        ],
+    });
+
+    const summary = app.element('participantStats').innerHTML;
+    assert.match(summary, /<strong>Current name<\/strong>/);
+    assert.match(summary, /<strong>Stable name<\/strong>/);
+    assert.doesNotMatch(summary, /Old civil name|Stale Unix name|Undated name/);
+    const reply = app.charts.get('responseTimeChart').data;
+    assert.equal(reply.labels.join(), 'Current name -> Stable name');
+    assert.equal(reply.datasets[0].data.join(), '10');
+    const activity = app.charts.get('monthlyChart').data;
+    assert.equal(activity.labels.join(), '2026-01,2026-07,2026-11,2026-12');
+    assert.equal(activity.datasets.map(series => series.label).join(), 'Current name,Stable name');
+    assert.equal(activity.datasets[0].data.join(), '1,0,1,0');
+    assert.equal(activity.datasets[1].data.join(), '1,1,0,1');
+
+    app.element('exportParticipants').click();
+    const csv = await app.downloads[0].blob.text();
+    assert.match(csv, /"Current name",3,/);
+    assert.match(csv, /"Stable name",3,/);
+    assert.doesNotMatch(csv, /Old civil name|Stale Unix name|Undated name/);
+});
+
 test('matches old numeric sender IDs and keeps the latest dated name', async () => {
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({

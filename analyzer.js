@@ -319,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actualNames = new Set();
         const nameOnly = new Set();
 
-        for (const { message, time } of timings) {
+        for (const { message, time, calendar } of timings) {
             const id = getSenderId(message);
             const name = typeof message.from === 'string' && message.from.trim() ? message.from : null;
             if (name) actualNames.add(name);
@@ -330,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let sender = senders.get(id);
             if (!sender) {
-                sender = { name: null, dated: false };
+                sender = { name: null, nameTime: -Infinity };
                 senders.set(id, sender);
             }
             if (!name) continue;
@@ -338,12 +338,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const knownId = idsByName.get(name);
             if (knownId !== id) idsByName.set(name, knownId === undefined ? id : null);
 
-            if (sender.name !== name) {
-                const dated = Number.isFinite(time);
-                if (dated || !sender.dated) {
-                    sender.name = name;
-                    sender.dated = dated;
-                }
+            // Mixed exports can exclude a dated row from the reply timeline.
+            const nameTime = Number.isFinite(time) ? time : (calendar?.getTime() ?? -Infinity);
+            if (nameTime >= sender.nameTime) {
+                sender.name = name;
+                sender.nameTime = nameTime;
             }
         }
         if (senders.size === 0) return;
