@@ -387,6 +387,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
+    function getMessageCategory({ media_type, photo, file }) {
+        const type = typeof media_type === 'string' ? media_type.trim() : '';
+        if (type) return type;
+        // Telegram keeps these fields even when the attachment was not downloaded.
+        if (typeof photo === 'string' && photo.trim()) return 'photo';
+        if (typeof file === 'string' && file.trim()) return 'file';
+        return 'text';
+    }
+
     function validMessages(messages) {
         return Array.isArray(messages) && messages.every(message =>
             message && typeof message === 'object' && !Array.isArray(message));
@@ -874,7 +883,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             month.messages.push(msg);
-            const type = msg.media_type || 'text';
+            const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
             month.timeOfDay[calendar.getUTCHours()]++;
             month.dayOfWeekActivity[calendar.getUTCDay()]++;
@@ -953,7 +962,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dayOfWeekActivity[calendar.getUTCDay()]++;
             }
 
-            const type = msg.media_type || 'text';
+            const type = getMessageCategory(msg);
             messageTypes[type] = (messageTypes[type] || 0) + 1;
         });
 
@@ -1036,8 +1045,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const mediaTypeUsage = Object.create(null);
         allParticipants.forEach(p => mediaTypeUsage[p] = Object.create(null));
         messages.forEach(msg => {
-            if (msg.from && msg.media_type && msg.media_type !== 'text') {
-                mediaTypeUsage[msg.from][msg.media_type] = (mediaTypeUsage[msg.from][msg.media_type] || 0) + 1;
+            if (!msg.from) return;
+            const type = getMessageCategory(msg);
+            if (type !== 'text') {
+                const counts = mediaTypeUsage[msg.from];
+                counts[type] = (counts[type] ?? 0) + 1;
             }
         });
         return mediaTypeUsage;

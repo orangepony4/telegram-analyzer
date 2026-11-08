@@ -639,6 +639,40 @@ test('includes dated rows without a sender in monthly activity and totals', asyn
     assert.equal(monthlyExport.disabled, true);
 });
 
+test('classifies Telegram photos and file attachments in both reports without exposing paths', () => {
+    const app = createAnalyzer();
+    const skipped = '(File not included. Change data exporting settings to download.)';
+    const fields = [
+        { text: 'Plain text', photo: ' ', file: '' },
+        { text: 'A photo caption', photo: 'photos/fixture.jpg', width: 640, height: 480 },
+        { file: 'files/fixture.pdf', mime_type: 'application/pdf' },
+        { file: 'voice_messages/fixture.ogg', media_type: 'voice_message' },
+        { photo: skipped },
+        { file: skipped, media_type: '  ' },
+    ];
+    app.selectFile('attachments.json').complete({
+        messages: fields.map((fields, index) => ({
+            id: index + 1, type: 'message', from: 'Fixture sender', from_id: 'user1',
+            date: `2026-11-01T12:00:0${index}`, text: '', ...fields,
+        })),
+    });
+
+    for (const id of ['messageTypesChart', 'monthlyMessageTypesChart']) {
+        const { labels, datasets } = app.charts.get(id).data;
+        assert.deepEqual(Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]])), {
+            'Текст': 1, 'Фото': 2, 'Файлы': 2, 'Голосовые': 1,
+        });
+    }
+    for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Fixture sender/);
+        assert.match(html, /Фото: 2/);
+        assert.match(html, /Файлы: 2/);
+        assert.match(html, /Голосовые: 1/);
+        assert.doesNotMatch(html, /fixture\.(?:jpg|pdf|ogg)|File not included|A photo caption/);
+    }
+});
+
 test('exports participant totals with quoted, formula-safe names', async () => {
     const app = createAnalyzer();
     const from = '=1+1, "quoted"';
