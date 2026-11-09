@@ -26,8 +26,10 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records. Search for another participant by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
 - Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
 - Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records.
+- Open **Activity by weekday and hour** in either report to read the same counts as the charts, including zero values. The counts follow the calendar time written in the export.
 - Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
 - Message-type charts and shared-content summaries count each Telegram checklist as one record.
+- Games, invoices, giveaway announcements and results, and paid media also count by type. The report shows the counts without the payment amounts or winner lists.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
 - A formatted post with an embedded photo, video, audio track, or file counts once as rich media, even if the export skipped the attachment.
@@ -86,8 +88,10 @@ Telegram Analyzer показывает активность, участнико�
 - Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
 - В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.
 - В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей.
+- Раздел **«Активность по дням недели и часам»** есть в обоих отчётах. Таблицы показывают те же значения, что и графики, включая нулевые, по календарному времени из экспорта.
 - Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
 - В графиках типов сообщений и сводках по вложениям каждый список задач Telegram учитывается как одна запись.
+- Игры, счета, объявления и итоги розыгрышей, а также платные медиа учитываются по типам. В отчёте видны числа записей без сумм платежей и списков победителей.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
 - Форматированный пост с фотографией, видео, аудио или файлом учитывается как одна запись с медиа, даже если само вложение не скачали.

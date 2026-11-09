@@ -23,6 +23,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportMonthlyActivityButton = document.getElementById('exportMonthlyActivity');
     const dailyActivity = document.getElementById('dailyActivity');
     const dailyActivityRows = document.getElementById('dailyActivityRows');
+    const overviewPatterns = {
+        panel: document.getElementById('overviewActivityPatterns'),
+        weekdays: document.getElementById('overviewWeekdayRows'),
+        hours: document.getElementById('overviewHourlyRows'),
+    };
+    const monthlyPatterns = {
+        panel: document.getElementById('monthlyActivityPatterns'),
+        weekdays: document.getElementById('monthlyWeekdayRows'),
+        hours: document.getElementById('monthlyHourlyRows'),
+    };
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
@@ -199,6 +209,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ['unsupported', ['Unsupported records', 'Неподдерживаемые записи']],
         ['rich_media', ['Rich media', 'Медиа в форматированных постах']],
         ['todo_list', ['Checklists', 'Списки задач']],
+        ['game', ['Games', 'Игры']],
+        ['invoice', ['Invoices', 'Счета']],
+        ['giveaway', ['Giveaways', 'Розыгрыши']],
+        ['paid_media', ['Paid media', 'Платные медиа']],
     ]);
     const translatedAttributes = ['aria-label', 'title', 'placeholder'];
     const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
@@ -218,6 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let countFormat;
     let monthFormat;
     let dayFormat;
+    let weekdayFormat;
     const graphemeSegmenter = typeof Intl.Segmenter === 'function'
         ? new Intl.Segmenter('ru-RU', { granularity: 'grapheme' })
         : null;
@@ -328,6 +343,8 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyActivity.addEventListener('toggle', refreshMonthlyActivity);
     exportMonthlyActivityButton.addEventListener('click', downloadMonthlyActivity);
     dailyActivity.addEventListener('toggle', refreshDailyActivity);
+    overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
+    monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
 
     function selectReportMonth(index) {
         if (!monthsData[index] || index === currentMonthIndex) return;
@@ -468,6 +485,7 @@ document.addEventListener('DOMContentLoaded', () => {
         countFormat = new Intl.NumberFormat(locale);
         monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
         dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+        weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
 
         for (const { element, english, russian, attributes } of staticTranslations) {
             if (russian != null && !localizedText.has(element)) {
@@ -900,9 +918,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function isInvoiceInformation(value) {
+        if (typeof value === 'string') {
+            // Telegram Desktop can export the invoice object inside a JSON string.
+            try {
+                value = JSON.parse(value);
+            } catch {
+                return false;
+            }
+        }
+        return isNonEmptyString(value?.title) && isNonEmptyString(value.currency)
+            && Number.isInteger(value.amount) && value.amount >= 0;
+    }
+
     function getMessageCategory({
         type: recordType, media_type, photo, file, poll, contact_information, location_information, place_name, rich_message,
-        todo_list,
+        todo_list, game_title, invoice_information, giveaway_information, giveaway_results, paid_stars_amount,
     }) {
         // Service records can carry metadata such as the new group photo.
         if (recordType === 'service' || recordType === 'unsupported') return recordType;
@@ -925,6 +956,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isNonEmptyString(place_name)) return 'location';
         if (hasRichMediaBlocks(rich_message?.blocks)) return 'rich_media';
         if (Array.isArray(todo_list?.answers) && getMessageText(todo_list.title).trim()) return 'todo_list';
+        if (isNonEmptyString(game_title)) return 'game';
+        if (isInvoiceInformation(invoice_information)) return 'invoice';
+        const hasGiveaway = Array.isArray(giveaway_information?.channels)
+            && Number.isSafeInteger(giveaway_information.quantity) && giveaway_information.quantity > 0;
+        const hasGiveawayResults = Array.isArray(giveaway_results?.winners)
+            && Number.isSafeInteger(giveaway_results.winners_count) && giveaway_results.winners_count >= 0;
+        if (hasGiveaway || hasGiveawayResults) return 'giveaway';
+        if (Number.isInteger(paid_stars_amount) && paid_stars_amount > 0) return 'paid_media';
         return 'text';
     }
 
@@ -1105,6 +1144,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshDailyActivity();
+        refreshOverviewPatterns();
+        refreshMonthlyPatterns();
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
@@ -1585,15 +1626,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!hasDirectReplies) replyTimingMode = 'adjacent';
         replyTimingSelect.value = replyTimingMode;
         overallParticipantTotals = participantTotals;
+        const allTimeData = calculateAllTimeStats(timings);
         overviewData = {
             messageCount: messages.length,
             words: wordCounts,
             media: calculateMediaTypeUsage(messages),
+            activity: allTimeData,
         };
         renderOverviewStatistics();
+        refreshOverviewPatterns();
 
         // Создаем графики общей статистики
-        const allTimeData = calculateAllTimeStats(timings);
         createMonthlyChart(monthsData);
         createResponseTimeChart(selectedResponseTimes(overallResponseStats));
         createTimeOfDayChart(allTimeData.timeOfDay);
@@ -1644,6 +1687,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!overviewData || statsContainer.style.display !== 'block') return;
 
         renderOverviewStatistics();
+        refreshOverviewPatterns();
         updateMonthlyStats({ rebuildCharts: false });
         for (const chart of renderedCharts.values()) {
             chartTranslations.get(chart)?.(chart.data);
@@ -1865,9 +1909,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function refreshOverviewPatterns() {
+        renderActivityPatterns(overviewPatterns, monthsData.length ? overviewData?.activity : undefined);
+    }
+
+    function refreshMonthlyPatterns() {
+        renderActivityPatterns(monthlyPatterns, monthsData[currentMonthIndex]?.data);
+    }
+
+    function renderActivityPatterns({ panel, weekdays, hours }, data) {
+        panel.hidden = !data;
+        if (!data) panel.open = false;
+        weekdays.replaceChildren();
+        hours.replaceChildren();
+        if (!panel.open || !data) return;
+        // The chart and the table both start the week on Sunday.
+        renderPatternRows(weekdays, data.dayOfWeekActivity, day => weekdayFormat.format(Date.UTC(2024, 0, 7 + day)));
+        renderPatternRows(hours, data.timeOfDay, hour => `${String(hour).padStart(2, '0')}:00`);
+    }
+
+    function renderPatternRows(container, counts, label) {
+        counts.forEach((count, index) => {
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.scope = 'row';
+            heading.textContent = label(index);
+            const records = document.createElement('td');
+            records.textContent = countFormat.format(count);
+            row.append(heading, records);
+            container.append(row);
+        });
+    }
+
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
         if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
+        refreshMonthlyPatterns();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
             return;
@@ -2299,14 +2376,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
             '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076',
-            '#796958', '#567388', '#87575e', '#7f5f92'];
+            '#796958', '#567388', '#87575e', '#7f5f92', '#4b7098', '#9b6e45', '#507e60', '#b05a79'];
         return colors[index % colors.length];
     }
 
     function messageTypeColorIndex(label = '') {
         const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
             'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location',
-            'service', 'unsupported', 'rich_media', 'todo_list'];
+            'service', 'unsupported', 'rich_media', 'todo_list', 'game', 'invoice', 'giveaway', 'paid_media'];
         const index = knownTypes.indexOf(label);
         if (index >= 0) return index;
 

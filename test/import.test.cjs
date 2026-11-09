@@ -949,6 +949,50 @@ test('clears the report and account data and aborts a pending replacement withou
     assert.equal(clear.hidden, false);
 });
 
+test('shows written-hour and weekday counts in both scopes without charts', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const overall = app.element('overviewActivityPatterns');
+    const month = app.element('monthlyActivityPatterns');
+    const row = (id, index) => app.element(id).children[index].children.map(cell => cell.textContent);
+    app.selectFile('patterns.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-01-05T23:10:00-08:00' },
+        { id: 2, from: 'Bob', date: '2026-01-05T23:15:00Z' },
+        { id: 3, type: 'service', date: '2026-02-01T04:00:00Z' },
+        { id: 4, from: 'Alice' },
+    ] });
+    assert.equal(overall.hidden, false);
+    assert.equal(app.element('overviewWeekdayRows').children.length, 0);
+    overall.open = true;
+    overall.toggle();
+    assert.deepEqual(row('overviewWeekdayRows', 0), ['воскресенье', '1']);
+    assert.deepEqual(row('overviewWeekdayRows', 1), ['понедельник', '2']);
+    assert.deepEqual(row('overviewWeekdayRows', 2), ['вторник', '0']);
+    assert.deepEqual(row('overviewHourlyRows', 23), ['23:00', '2']);
+    assert.deepEqual(row('overviewHourlyRows', 4), ['04:00', '1']);
+    assert.equal(app.element('overviewHourlyRows').children.length, 24);
+
+    app.monthlyTab.click();
+    month.open = true;
+    month.toggle();
+    assert.deepEqual(row('monthlyWeekdayRows', 0), ['воскресенье', '1']);
+    assert.deepEqual(row('monthlyHourlyRows', 23), ['23:00', '0']);
+    app.element('prevMonth').click();
+    assert.equal(month.open, true);
+    assert.deepEqual(row('monthlyWeekdayRows', 1), ['понедельник', '2']);
+    assert.deepEqual(row('monthlyHourlyRows', 23), ['23:00', '2']);
+    app.element('languageToggle').click();
+    assert.deepEqual(row('overviewWeekdayRows', 1), ['Monday', '2']);
+    assert.deepEqual(row('monthlyWeekdayRows', 1), ['Monday', '2']);
+    app.element('clearLoadedData').click();
+    assert.equal(overall.hidden, true);
+    assert.equal(month.hidden, true);
+    assert.equal(app.element('overviewWeekdayRows').children.length, 0);
+    assert.equal(app.element('monthlyHourlyRows').children.length, 0);
+    app.selectFile('undated.json').complete({ messages: [{ id: 5, from: 'Alice' }] });
+    assert.equal(overall.hidden, true);
+    assert.equal(month.hidden, true);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
@@ -1786,6 +1830,78 @@ test('classifies Telegram checklists without counting or exposing checklist cont
     app.element('exportMonthlyParticipants').click();
     for (const { blob } of app.downloads) {
         assert.equal(await blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n"Alice",1,9.0\r\n"Bob",6,2.5\r\n');
+    }
+});
+
+test('counts games, invoices, giveaways and paid media without exposing their metadata', async () => {
+    const app = createAnalyzer();
+    const game = { game_title: 'Synthetic game title', game_link: 'https://example.com/synthetic-game' };
+    const invoiceFields = { title: 'Synthetic invoice title', amount: 193170, currency: 'USD' };
+    const invoice = { invoice_information: JSON.stringify(invoiceFields) };
+    const start = { giveaway_information: { quantity: 4, channels: [1234567], countries: [] } };
+    const result = { giveaway_results: { channel: 1234567, winners: [7654321], winners_count: 1 } };
+    const paid = { paid_stars_amount: 93472 };
+    const records = [
+        { from: 'Alice', text: 'Ordinary text' },
+        { from: 'Bob', ...game, reply_to_message_id: 1 },
+        { from: 'Bob', ...invoice, text: 'Caption' },
+        { from: 'Bob', invoice_information: { ...invoiceFields, amount: 2 ** 54 } },
+        { from: 'Bob', ...start },
+        { from: 'Bob', ...result },
+        { from: 'Bob', ...paid },
+        { from: 'Bob', game_title: '  ', game_description: 'Synthetic malformed game' },
+        { from: 'Bob', invoice_information: JSON.stringify({ ...invoiceFields, amount: '193170' }) },
+        { from: 'Bob', invoice_information: '{broken' },
+        { from: 'Bob', giveaway_information: { ...start.giveaway_information, channels: null } },
+        { from: 'Bob', giveaway_results: { ...result.giveaway_results, winners_count: -1 } },
+        { from: 'Bob', paid_stars_amount: '93472' },
+        { from: 'Bob', paid_stars_amount: 0 },
+        { from: 'Bob', paid_stars_amount: 3.5 },
+        { from: 'Bob', photo: 'Synthetic private path', ...paid },
+        { from: 'Bob', media_type: 'sticker', ...game },
+        { type: 'service', actor: 'Synthetic moderator', ...invoice },
+        { type: 'unsupported', ...start },
+    ];
+    app.selectFile('structured-posts.json').complete({ messages: records.map((record, index) => ({
+        id: index + 1, type: 'message', date: new Date(Date.UTC(2026, 10, 1, 12, index)).toISOString(),
+        text: '', ...record,
+    })) });
+
+    const chartCounts = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    const scopes = ['messageTypesChart', 'monthlyMessageTypesChart'];
+    for (const id of scopes) {
+        assert.deepEqual(chartCounts(id), {
+            Текст: 9, Игры: 1, Счета: 2, Розыгрыши: 2, 'Платные медиа': 1, Фото: 1, Стикеры: 1,
+            'Служебные события': 1, 'Неподдерживаемые записи': 1,
+        });
+    }
+    assert.deepEqual(chartCounts('responseTimeChart'), { 'Alice -> Bob': 1 });
+    const timing = app.element('replyTiming');
+    timing.value = 'direct';
+    timing.change();
+    assert.deepEqual(chartCounts('monthlyResponseTimeChart'), { 'Alice -> Bob': 1 });
+    assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 1 слов/);
+
+    app.element('languageToggle').click();
+    for (const id of scopes) {
+        assert.deepEqual(chartCounts(id), {
+            Text: 9, Games: 1, Invoices: 2, Giveaways: 2, 'Paid media': 1, Photos: 1, Stickers: 1,
+            'Service events': 1, 'Unsupported records': 1,
+        });
+    }
+    for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Games: 1.*Invoices: 2.*Giveaways: 2.*Paid media: 1/s);
+        assert.doesNotMatch(html, /Synthetic|193170|93472|1234567|7654321|USD|example\.com|Caption/);
+    }
+    app.element('exportParticipants').click();
+    app.element('exportMonthlyParticipants').click();
+    for (const { blob } of app.downloads) {
+        assert.equal(await blob.text(),
+            'Участник,Сообщения,Средняя длина сообщения\r\n"Alice",1,13.0\r\n"Bob",16,0.4\r\n');
     }
 });
 

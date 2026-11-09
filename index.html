@@ -219,6 +219,22 @@
                         </table>
                     </details>
 
+                    <details id="overviewActivityPatterns" class="activity-data" hidden>
+                        <summary data-ru="Активность по дням недели и часам">Activity by weekday and hour</summary>
+                        <div class="activity-pattern-tables">
+                            <table>
+                                <caption data-ru="Записи по дням недели">Records by weekday</caption>
+                                <thead><tr><th scope="col" data-ru="День недели">Weekday</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
+                                <tbody id="overviewWeekdayRows"></tbody>
+                            </table>
+                            <table>
+                                <caption data-ru="Записи по часам">Records by hour</caption>
+                                <thead><tr><th scope="col" data-ru="Час">Hour</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
+                                <tbody id="overviewHourlyRows"></tbody>
+                            </table>
+                        </div>
+                    </details>
+
                     <section class="detail-section" aria-labelledby="allDetailsHeading">
                         <div class="section-heading">
                             <h2 id="allDetailsHeading" data-ru="Детали переписки">Chat details</h2>
@@ -298,6 +314,22 @@
                             </thead>
                             <tbody id="dailyActivityRows"></tbody>
                         </table>
+                    </details>
+
+                    <details id="monthlyActivityPatterns" class="activity-data" hidden>
+                        <summary data-ru="Активность по дням недели и часам">Activity by weekday and hour</summary>
+                        <div class="activity-pattern-tables">
+                            <table aria-describedby="currentMonth">
+                                <caption data-ru="Записи по дням недели">Records by weekday</caption>
+                                <thead><tr><th scope="col" data-ru="День недели">Weekday</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
+                                <tbody id="monthlyWeekdayRows"></tbody>
+                            </table>
+                            <table aria-describedby="currentMonth">
+                                <caption data-ru="Записи по часам">Records by hour</caption>
+                                <thead><tr><th scope="col" data-ru="Час">Hour</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
+                                <tbody id="monthlyHourlyRows"></tbody>
+                            </table>
+                        </div>
                     </details>
 
                     <section class="detail-section" aria-labelledby="monthDetailsHeading">
