@@ -184,6 +184,21 @@
                         </section>
                     </div>
 
+                    <details id="monthlyActivity" class="activity-data" hidden>
+                        <summary data-ru="Активность по месяцам в таблице">Monthly activity table</summary>
+                        <table>
+                            <caption data-ru="Выберите месяц, чтобы открыть его отчёт. В таблице учтены все записи с датой.">Select a month to open its report. Counts include all dated records.</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col" data-ru="Месяц">Month</th>
+                                    <th scope="col" data-ru="Записи">Records</th>
+                                    <th scope="col" data-ru="Активные дни">Active days</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monthlyActivityRows"></tbody>
+                        </table>
+                    </details>
+
                     <section class="detail-section" aria-labelledby="allDetailsHeading">
                         <div class="section-heading">
                             <h2 id="allDetailsHeading" data-ru="Детали переписки">Chat details</h2>

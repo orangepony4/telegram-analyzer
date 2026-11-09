@@ -138,7 +138,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
                 if (tag === 'a') {
                     return { click() { downloads.push({ name: this.download, blob: downloadedBlob }); } };
                 }
-                if (tag === 'button' || tag === 'span') return element(Symbol(tag));
+                if (['button', 'span', 'tr', 'th', 'td'].includes(tag)) return element(Symbol(tag));
                 return { get innerHTML() { return this.textContent; } };
             },
             body: element('body'),
@@ -319,6 +319,41 @@ test('can measure linked replies across months without changing the active month
     assert.equal(mode.disabled, true);
     assert.equal(mode.value, 'adjacent');
     assert.deepEqual(pairs('responseTimeChart'), { 'Alice -> Bob': 2 });
+});
+
+test('weights participant reply averages by each response, including zero-second replies', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const base = Date.parse('2026-10-01T00:00:00Z') / 1000;
+    const row = (id, from, second, reply_to_message_id) => ({
+        id, from, date_unixtime: String(base + second), reply_to_message_id, text: 'X',
+    });
+    app.selectFile('weighted-replies.json').complete({ messages: [
+        row(1, 'Sender A', 0),
+        row(2, '__proto__', 0, 1),
+        row(3, 'Sender A', 1),
+        row(4, '__proto__', 11, 3),
+        row(5, 'Sender B', 12),
+        row(6, '__proto__', 32, 5),
+        row(7, '0', 32, 6),
+    ] });
+    const details = app.element('participantStats');
+    assert.match(details.innerHTML, /<strong>__proto__<\/strong>: 10 сек/);
+    assert.match(details.innerHTML, /<strong>0<\/strong>: 0 сек/);
+    app.element('exportParticipants').click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change({ target: mode });
+    assert.match(details.innerHTML, /<strong>Sender B<\/strong>: Нет данных/);
+    assert.match(details.innerHTML, /<strong>__proto__<\/strong>: 10 сек/);
+    assert.match(details.innerHTML, /<strong>0<\/strong>: 0 сек/);
+    app.element('languageToggle').click();
+    assert.match(details.innerHTML, /<strong>Sender B<\/strong>: No data/);
+    assert.match(details.innerHTML, /<strong>__proto__<\/strong>: 10 sec/);
+    assert.match(details.innerHTML, /<strong>0<\/strong>: 0 sec/);
+    app.element('exportParticipants').click();
+    const before = await app.downloads[0].blob.text();
+    assert.equal(await app.downloads[1].blob.text(), before);
+    assert.match(before, /"Sender A",2,1\.0\r\n"__proto__",3,1\.0\r\n"Sender B",1,1\.0\r\n"0",1,1\.0\r\n$/);
 });
 
 test('does not guess direct reply pairs for duplicate, foreign, missing, future or undated targets', () => {
@@ -594,6 +629,42 @@ test('jumps between available months and keeps charts, arrows, language and CSV 
     assert.equal(picker.value, '');
     assert.equal(picker.children.length, 0);
     assert.equal(app.monthlyTab.disabled, true);
+});
+
+test('opens dated activity as a localized table without charts and jumps to its month', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const details = app.element('monthlyActivity');
+    const rows = app.element('monthlyActivityRows');
+    app.selectFile('activity.json').complete({ messages: [
+        { id: 1, from: 'Ari', date: '2021-04-03T12:00:00', text: 'First' },
+        { id: 2, from: 'Bo', date: '2021-04-03T12:05:00', text: 'Second' },
+        { id: 3, type: 'service', date: '2021-04-04T01:30:00', action: 'pin_message' },
+        { id: 4, from: 'Cam', date: '2024-10-06T18:00:00', text: 'Latest' },
+        { id: 5, type: 'unsupported' },
+    ] });
+    assert.equal(details.hidden, false);
+    assert.equal(rows.children.length, 0);
+    details.open = true;
+    details.toggle();
+    assert.equal(rows.children.length, 2);
+    const cells = index => rows.children[index].children;
+    assert.match(cells(0)[0].children[0].textContent, /апрель.*2021/);
+    assert.deepEqual(cells(0).slice(1).map(cell => cell.textContent), ['3', '2']);
+    assert.deepEqual(cells(1).slice(1).map(cell => cell.textContent), ['1', '1']);
+
+    app.element('languageToggle').click();
+    assert.equal(details.open, true);
+    assert.match(cells(0)[0].children[0].textContent, /April 2021/);
+    cells(0)[0].children[0].click();
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.focusedElement, app.monthlyTab);
+    assert.equal(app.element('reportMonth').value, '2021-04');
+    assert.match(app.element('monthlyParticipantStats').innerHTML, /Ari/);
+
+    app.selectFile('empty.json').complete({ messages: [{ id: 6, type: 'unsupported' }] });
+    assert.equal(details.hidden, true);
+    assert.equal(details.open, false);
+    assert.equal(rows.children.length, 0);
 });
 
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {

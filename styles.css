@@ -913,6 +913,58 @@ a { color: var(--accent); }
 
 .charts-unavailable .charts-grid { display: none; }
 
+.activity-data {
+    margin-top: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.activity-data summary {
+    min-height: 44px;
+    padding: 11px 12px;
+    border-radius: var(--radius);
+    font-weight: 630;
+    cursor: pointer;
+}
+
+.activity-data table {
+    width: calc(100% - 24px);
+    margin: 0 12px 12px;
+    border-collapse: collapse;
+    font-size: .875rem;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+.activity-data caption {
+    padding: 0 0 8px;
+    color: var(--text-muted);
+    text-align: start;
+}
+
+.activity-data th, .activity-data td {
+    padding: 4px 6px;
+    border-bottom: 1px solid var(--border);
+    text-align: end;
+}
+
+.activity-data th:first-child { text-align: start; }
+.activity-data th[scope="row"] { font-weight: 500; }
+.activity-data tbody tr:last-child > * { border-bottom: 0; }
+
+.activity-month {
+    min-height: 36px;
+    padding: 4px 0;
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font: inherit;
+    text-align: start;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
 .detail-section { margin-top: 24px; }
 
 .section-heading {

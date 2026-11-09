@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyChartSeries = document.getElementById('monthlyChartSeries');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const reportMonthSelect = document.getElementById('reportMonth');
+    const monthlyActivity = document.getElementById('monthlyActivity');
+    const monthlyActivityRows = document.getElementById('monthlyActivityRows');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
@@ -282,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
     reportMonthSelect.addEventListener('change', () => {
         selectReportMonth(monthsData.findIndex(({ month }) => month === reportMonthSelect.value));
     });
+    monthlyActivity.addEventListener('toggle', refreshMonthlyActivity);
 
     function selectReportMonth(index) {
         if (!monthsData[index] || index === currentMonthIndex) return;
@@ -435,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
         refreshAccountChooserLabels();
         refreshReportMonthOptions();
+        refreshMonthlyActivity();
         refreshReportLanguage();
     }
 
@@ -961,6 +965,7 @@ document.addEventListener('DOMContentLoaded', () => {
         monthsData = [];
         currentMonthIndex = -1;
         refreshReportMonthOptions();
+        refreshMonthlyActivity();
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
@@ -1428,6 +1433,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Показываем статистику за последний месяц
         currentMonthIndex = monthsData.length - 1;
         refreshReportMonthOptions();
+        refreshMonthlyActivity();
         monthlyStatsTab.disabled = monthsData.length === 0;
         if (monthlyStatsTab.disabled && monthlyStatsTab.classList.contains('active')) {
             selectStatsTab(allStatsTab);
@@ -1506,14 +1512,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageCountElement = document.getElementById('messageCount');
         const participantStatsElement = document.getElementById('participantStats');
 
-        // Calculate average response time separately as it wasn't refactored into generateParticipantStatsHTML
+        const responseTotals = summarizeResponsesByResponder(responseTimes);
         let avgResponseTimeHTML = `<h3><i class="fas fa-calculator" aria-hidden="true"></i> ${translate('participantResponse')}</h3><ul>`;
         for (const participant of participantTotals.keys()) {
-             if (participant) {
-                 const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
-                 const avgTime = calculateAverageResponseTimeForParticipant(responseTimes, participant);
-                 avgResponseTimeHTML += `<li><strong>${sanitizedParticipant}</strong>: ${avgTime}</li>`;
-             }
+            if (participant) {
+                const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
+                const total = responseTotals.get(participant);
+                const avgTime = total?.count ? formatTime(total.seconds / total.count) : translate('noData');
+                avgResponseTimeHTML += `<li><strong>${sanitizedParticipant}</strong>: ${avgTime}</li>`;
+            }
         }
         avgResponseTimeHTML += '</ul>';
 
@@ -1529,15 +1536,17 @@ document.addEventListener('DOMContentLoaded', () => {
         element.innerHTML = `<span class="metric-label">${translate('messages')}</span><strong class="metric-value">${countFormat.format(count)}</strong>`;
     }
 
-    function calculateAverageResponseTimeForParticipant(responseTimes, participant) {
-        let totalSeconds = 0;
-        let responseCount = 0;
+    function summarizeResponsesByResponder(responseTimes) {
+        const totals = new Map();
         for (const responders of Object.values(responseTimes)) {
-            const times = responders[participant] ?? [];
-            totalSeconds += times.reduce((sum, seconds) => sum + seconds, 0);
-            responseCount += times.length;
+            for (const [participant, times] of Object.entries(responders)) {
+                const total = totals.get(participant) ?? { seconds: 0, count: 0 };
+                total.seconds += times.reduce((sum, seconds) => sum + seconds, 0);
+                total.count += times.length;
+                totals.set(participant, total);
+            }
         }
-        return responseCount ? formatTime(totalSeconds / responseCount) : translate('noData');
+        return totals;
     }
 
     function calculateAverageResponseDelay(responseTimes) {
@@ -1613,6 +1622,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         reportMonthSelect.value = monthsData[currentMonthIndex]?.month ?? '';
         reportMonthSelect.disabled = monthsData.length < 2;
+    }
+
+    function refreshMonthlyActivity() {
+        monthlyActivity.hidden = monthsData.length === 0;
+        if (monthlyActivity.hidden) monthlyActivity.open = false;
+        monthlyActivityRows.replaceChildren();
+        if (!monthlyActivity.open) return;
+
+        for (const [index, { month, data }] of monthsData.entries()) {
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.scope = 'row';
+            const openMonth = document.createElement('button');
+            openMonth.type = 'button';
+            openMonth.className = 'activity-month';
+            openMonth.textContent = formatReportMonth(month);
+            openMonth.addEventListener('click', () => {
+                selectReportMonth(index);
+                selectStatsTab(monthlyStatsTab);
+                monthlyStatsTab.focus();
+            });
+            heading.append(openMonth);
+            const records = document.createElement('td');
+            records.textContent = countFormat.format(data.messages.length);
+            const activeDays = document.createElement('td');
+            activeDays.textContent = countFormat.format(data.dailyActivity.filter(Boolean).length);
+            row.append(heading, records, activeDays);
+            monthlyActivityRows.append(row);
+        }
     }
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
