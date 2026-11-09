@@ -691,6 +691,49 @@ test('shows text statistics when the chart library is unavailable', () => {
     assert.equal(app.charts.size, 0);
 });
 
+test('keeps text, month navigation, language and CSV usable without a canvas context', () => {
+    const deniedContexts = [
+        () => null,
+        () => { throw new Error('Canvas context unavailable'); },
+    ];
+    for (const getContext of deniedContexts) {
+        const app = createAnalyzer({ search: '?view=upload' });
+        // This chart follows the trend, so the fallback must dispose of partial charts.
+        app.element('messageTypesChart').getContext = getContext;
+        app.selectFile('chat.json').complete({ messages: [
+            { id: 1, from: 'Alice', date: '2026-10-01T00:00:00', text: 'Hello there' },
+            { id: 2, from: 'Bob', date: '2026-11-01T00:00:00', text: 'Reply', reply_to_message_id: 1 },
+        ] });
+        const stats = app.element('.stats-container');
+        assert.equal(stats.style.display, 'block');
+        assert.equal(stats.classList.contains('charts-unavailable'), true);
+        assert.equal(app.element('chartsUnavailableNotice').hidden, false);
+        assert.equal(app.element('monthlyChartLegend').hidden, true);
+        assert.equal(app.charts.size, 0);
+
+        app.monthlyTab.click();
+        app.element('prevMonth').click();
+        app.element('languageToggle').click();
+        assert.match(app.element('currentMonth').textContent, /October/i);
+        assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 2 words/);
+        assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 2 words/);
+        const mode = app.element('replyTiming');
+        assert.equal(mode.disabled, false);
+        mode.value = 'direct';
+        mode.change({ target: mode });
+        app.element('nextMonth').click();
+        assert.match(app.element('currentMonth').textContent, /November/i);
+        assert.equal(app.element('replyTimingHint').textContent, 'Direct replies timed · 1 of 1');
+        assert.equal(app.charts.size, 0);
+
+        app.element('exportMonthlyParticipants').click();
+        app.element('exportParticipants').click();
+        assert.deepEqual(app.downloads.map(({ name }) => name), [
+            'telegram-analyzer-2026-11-participants.csv', 'telegram-analyzer-participants.csv',
+        ]);
+    }
+});
+
 test('cancels a superseded file read without disturbing the newest import', () => {
     const app = createAnalyzer();
     app.selectFile('saved.json').complete({

@@ -228,8 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeLanguage();
     initializeTheme();
     if (typeof Chart === 'undefined') {
-        statsContainer.classList.add('charts-unavailable');
-        document.getElementById('chartsUnavailableNotice').hidden = false;
+        showChartsUnavailable();
     }
 
     statsTabs.forEach(tab => {
@@ -948,9 +947,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function clearReport() {
         statsContainer.style.display = 'none';
-        renderedCharts.forEach(chart => chart.destroy());
-        renderedCharts.clear();
-        renderMonthlyChartLegend();
+        clearRenderedCharts();
         overallResponseStats = null;
         overallParticipantTotals = new Map();
         overviewData = null;
@@ -960,6 +957,18 @@ document.addEventListener('DOMContentLoaded', () => {
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
+    }
+
+    function clearRenderedCharts() {
+        renderedCharts.forEach(chart => chart.destroy());
+        renderedCharts.clear();
+        renderMonthlyChartLegend();
+    }
+
+    function showChartsUnavailable() {
+        clearRenderedCharts();
+        statsContainer.classList.add('charts-unavailable');
+        document.getElementById('chartsUnavailableNotice').hidden = false;
     }
 
     function suspendImportView() {
@@ -1641,7 +1650,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createChart(canvasId, { type, data, decimalTicks = false, localize }) {
-        if (typeof Chart === 'undefined') {
+        if (statsContainer.classList.contains('charts-unavailable')) {
             return;
         }
         const canvas = document.getElementById(canvasId);
@@ -1650,7 +1659,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const ctx = canvas.getContext('2d');
+        let ctx;
+        try {
+            ctx = canvas.getContext('2d');
+        } catch {
+            // Some browsers deny canvas access even when the chart script is available.
+        }
+        if (!ctx) {
+            showChartsUnavailable();
+            return;
+        }
         const existingChart = Chart.getChart(ctx);
         if (existingChart) {
             existingChart.destroy();
