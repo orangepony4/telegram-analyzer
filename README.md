@@ -24,6 +24,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 ### What the report measures
 
 - Activity charts show messages by month, time of day, and day of the week. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
+- Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
 - **Reply timing** defaults to **Adjacent messages**, which estimates delays between consecutive messages from different participants. Choose **Direct replies** to measure the elapsed time from each explicitly replied-to message to its reply. Direct mode uses pairs with known times and distinct senders in the same export. Both modes skip service events and assign an interval to the month of the reply. The setting applies to the reply charts, participant details, and adjustable long-response threshold.
@@ -76,6 +77,7 @@ Telegram Analyzer показывает активность, участнико�
 ### Что считает анализатор
 
 - Графики показывают активность по месяцам, времени суток и дням недели. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
+- Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
 - В меню **«Замер ответов»** по умолчанию выбраны **«Соседние сообщения»**. Этот режим оценивает паузы между соседними сообщениями разных участников. Выберите **«Прямые ответы»**, чтобы измерять время от исходного сообщения до ответа, связанного с ним в Telegram. Подходят пары из одной переписки с известным временем и разными отправителями. Служебные события пропускаются. В обоих режимах интервал относится к месяцу ответа, а настройка применяется к графикам, деталям по участникам и порогу долгого ответа.

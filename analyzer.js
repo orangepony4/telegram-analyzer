@@ -158,6 +158,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ['animation', ['Animations', 'Анимации']], ['audio_file', ['Audio', 'Аудио']],
         ['video_message', ['Video messages', 'Видеосообщения']], ['file', ['Files', 'Файлы']],
         ['poll', ['Polls', 'Опросы']], ['contact', ['Contacts', 'Контакты']], ['location', ['Locations', 'Геопозиции']],
+        ['service', ['Service events', 'Служебные события']],
+        ['unsupported', ['Unsupported records', 'Неподдерживаемые записи']],
     ]);
     const translatedAttributes = ['aria-label', 'title', 'placeholder'];
     const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
@@ -785,7 +787,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return typeof value === 'string' && value.trim() !== '';
     }
 
-    function getMessageCategory({ media_type, photo, file, poll, contact_information, location_information, place_name }) {
+    function getMessageCategory({
+        type: recordType, media_type, photo, file, poll, contact_information, location_information, place_name,
+    }) {
+        // Service records can carry metadata such as the new group photo.
+        if (recordType === 'service' || recordType === 'unsupported') return recordType;
         const type = typeof media_type === 'string' ? media_type.trim() : '';
         if (type) return type;
         // Telegram keeps these fields even when the attachment was not downloaded.
@@ -804,6 +810,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Telegram can export a venue name even when its coordinates are unavailable.
         if (isNonEmptyString(place_name)) return 'location';
         return 'text';
+    }
+
+    function isSharedContentCategory(type) {
+        return type !== 'text' && type !== 'service' && type !== 'unsupported';
     }
 
     function validMessages(messages) {
@@ -1345,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             (month.participants[msg.from] ??= []).push(msg);
-            if (type !== 'text') {
+            if (isSharedContentCategory(type)) {
                 const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
@@ -1541,7 +1551,7 @@ document.addEventListener('DOMContentLoaded', () => {
         messages.forEach(msg => {
             if (!msg.from) return;
             const type = getMessageCategory(msg);
-            if (type !== 'text') {
+            if (isSharedContentCategory(type)) {
                 const counts = mediaTypeUsage[msg.from];
                 counts[type] = (counts[type] ?? 0) + 1;
             }
@@ -1898,13 +1908,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
-            '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076'];
+            '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076',
+            '#796958', '#567388'];
         return colors[index % colors.length];
     }
 
     function messageTypeColorIndex(label = '') {
         const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
-            'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location'];
+            'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location',
+            'service', 'unsupported'];
         const index = knownTypes.indexOf(label);
         if (index >= 0) return index;
 

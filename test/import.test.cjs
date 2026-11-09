@@ -1004,6 +1004,50 @@ test('classifies Telegram photos and file attachments in both reports without ex
     }
 });
 
+test('classifies service and unsupported records separately from text and shared content', async () => {
+    const app = createAnalyzer();
+    const at = (minutes, fields) => ({
+        date: '2026-10-01T00:' + minutes + ':00', ...fields,
+    });
+    app.selectFile('group-events.json').complete({ messages: [
+        at('00', { id: 1, type: 'message', from: 'Alice', text: 'Hello' }),
+        at('05', { id: 2, type: 'service', actor: 'Synthetic admin', action: 'invite_members', members: ['Synthetic member'] }),
+        at('06', { id: 3, type: 'service', actor: 'Synthetic admin', action: 'edit_group_photo', photo: 'photos/group-private.jpg' }),
+        at('08', { id: 4, type: 'service', from: 'Bob', photo: 'photos/legacy-private.jpg' }),
+        at('10', { id: 5, type: 'message', from: 'Bob', photo: 'photos/shared-private.jpg' }),
+        { id: 6, type: 'unsupported' },
+        { id: 7, type: 'unsupported', from: 'Bob', file: 'files/unsupported-private.pdf' },
+    ] });
+
+    const counts = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    assert.deepEqual(counts('messageTypesChart'), {
+        Текст: 1, 'Служебные события': 3, Фото: 1, 'Неподдерживаемые записи': 2,
+    });
+    assert.deepEqual(counts('monthlyMessageTypesChart'), { Текст: 1, 'Служебные события': 3, Фото: 1 });
+    assert.deepEqual(counts('responseTimeChart'), { 'Alice -> Bob': 10 });
+    assert.deepEqual(counts('monthlyResponseTimeChart'), { 'Alice -> Bob': 10 });
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">7</);
+    assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">5</);
+    app.element('languageToggle').click();
+    assert.deepEqual(counts('messageTypesChart'), { Text: 1, 'Service events': 3, Photos: 1, 'Unsupported records': 2 });
+    assert.deepEqual(counts('monthlyMessageTypesChart'), { Text: 1, 'Service events': 3, Photos: 1 });
+    for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Bob/);
+        assert.match(html, /Photos: 1/);
+        assert.doesNotMatch(html, /Synthetic admin|Synthetic member|private\.(?:jpg|pdf)|Service events|Unsupported records|Files/);
+    }
+    app.element('exportParticipants').click();
+    app.element('exportMonthlyParticipants').click();
+    const header = 'Участник,Сообщения,Средняя длина сообщения\r\n"Alice",1,5.0\r\n';
+    const [overall, month] = app.downloads;
+    assert.equal(await overall.blob.text(), header + '"Bob",3,0.0\r\n');
+    assert.equal(await month.blob.text(), header + '"Bob",2,0.0\r\n');
+});
+
 test('classifies shared polls, contacts and locations without exposing their contents', () => {
     const app = createAnalyzer();
     const poll = { question: ['Private ', { type: 'bold', text: 'poll' }], answers: [] };
