@@ -543,6 +543,59 @@ test('resets the month and both CSV exports when switching account chats', async
     assert.equal(app.element('exportMonthlyParticipants').disabled, true);
 });
 
+test('jumps between available months and keeps charts, arrows, language and CSV in sync', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const picker = app.element('reportMonth');
+    const previous = app.element('prevMonth');
+    const next = app.element('nextMonth');
+    const upload = (name, messages) => app.selectFile(name).complete({ name, messages });
+    const messages = [
+        { id: 1, from: 'Ari', date: '2021-04-03T12:00:00', text: 'Earliest' },
+        { id: 2, from: 'Bo', date: '2024-11-04T12:00:00', text: 'Middle' },
+        { id: 3, from: 'Cam', date: '2026-07-06T12:00:00', text: 'Latest' },
+    ];
+    upload('long.json', messages);
+    app.monthlyTab.click();
+    assert.deepEqual(picker.children.map(option => option.value), ['2021-04', '2024-11', '2026-07']);
+    assert.equal(picker.disabled, false);
+    assert.equal(picker.value, '2026-07');
+    assert.equal(next.disabled, true);
+
+    picker.focus();
+    picker.value = '2021-04';
+    picker.change();
+    assert.equal(app.focusedElement, picker);
+    assert.equal(previous.disabled, true);
+    assert.equal(next.disabled, false);
+    assert.match(app.element('currentMonth').textContent, /апрель.*2021/);
+    assert.match(app.element('monthlyParticipantStats').innerHTML, /Ari/);
+    assert.doesNotMatch(app.element('monthlyParticipantStats').innerHTML, /Cam/);
+    app.element('exportMonthlyParticipants').click();
+    assert.equal(app.downloads[0].name, 'telegram-analyzer-2021-04-participants.csv');
+    assert.match(await app.downloads[0].blob.text(), /"Ari",1,/);
+
+    next.click();
+    assert.equal(picker.value, '2024-11');
+    app.element('languageToggle').click();
+    assert.equal(picker.value, '2024-11');
+    assert.match(picker.children[1].textContent, /November 2024/);
+    assert.match(app.element('currentMonth').textContent, /November 2024/);
+    const invalid = app.selectFile('invalid.json');
+    invalid.completeRaw('{bad json');
+    assert.equal(picker.value, '2024-11');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+
+    upload('single.json', [messages[2]]);
+    assert.equal(picker.value, '2026-07');
+    assert.equal(picker.disabled, true);
+    assert.deepEqual(picker.children.map(option => option.value), ['2026-07']);
+    upload('empty.json', []);
+    assert.equal(picker.disabled, true);
+    assert.equal(picker.value, '');
+    assert.equal(picker.children.length, 0);
+    assert.equal(app.monthlyTab.disabled, true);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
@@ -1440,6 +1493,50 @@ test('uses one civil timeline for mixed legacy rows and a UTC calendar for Unix-
     assert.equal(hours[0], 1);
     assert.equal(hours[2], 1);
     assert.equal(hours[23], 1);
+});
+
+test('uses absolute clocks for direct pairs even when adjacency needs a mixed legacy timeline', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const unix = value => String(Date.parse(value) / 1000);
+    app.selectFile('direct-clocks.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-11-01T01:55:00', date_unixtime: unix('2026-11-01T05:55:00Z') },
+        { id: 2, from: 'Bob', date: '2026-11-01T01:05:00', date_unixtime: unix('2026-11-01T06:05:00Z'), reply_to_message_id: 1 },
+        { id: 3, from: 'Cara', date_unixtime: unix('2026-11-01T06:20:00Z'), reply_to_message_id: 2 },
+        { id: 4, from: 'Dana', date: '2026-10-31T23:55:00-04:00' },
+        { id: 5, from: 'Legacy sender', date: '2026-11-01T00:05:00', reply_to_message_id: 4 },
+        { id: 10, from: 'Eve', date: '2026-11-01T01:20:00-05:00' },
+        { id: 9, from: 'Earlier ID', date: '2026-11-01T06:20:00Z', reply_to_message_id: 10 },
+        { id: 11, from: 'Later ID', date: '2026-11-01T00:20:00-06:00', reply_to_message_id: 10 },
+        { id: 12, from: 'Wall clock only', date: '2026-11-01T02:10:00', reply_to_message_id: 3 },
+    ] });
+
+    const pairs = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    const adjacent = pairs('responseTimeChart');
+    assert.equal(adjacent['Bob -> Eve'], 15);
+    assert.equal(adjacent['Eve -> Alice'], 35);
+    assert.equal(adjacent['Bob -> Cara'], undefined);
+    const hint = app.element('replyTimingHint');
+    assert.equal(hint.textContent, 'Замерено прямых ответов · 4 из 6');
+    const mode = app.element('replyTiming');
+    assert.equal(mode.disabled, false);
+    mode.value = 'direct';
+    mode.change({ target: mode });
+    const expected = {
+        'Dana -> Legacy sender': 10,
+        'Eve -> Later ID': 0,
+        'Alice -> Bob': 10,
+        'Bob -> Cara': 15,
+    };
+    assert.deepEqual(pairs('responseTimeChart'), expected);
+    assert.deepEqual(pairs('monthlyResponseTimeChart'), expected);
+    app.monthlyTab.click();
+    assert.equal(hint.textContent, 'Замерено прямых ответов · 4 из 6');
+    app.element('prevMonth').click();
+    assert.deepEqual(pairs('monthlyResponseTimeChart'), {});
+    assert.equal(hint.textContent, 'В этой сводке нет ссылок на прямые ответы.');
 });
 
 test('keeps renamed senders together and separates identical display names', async () => {

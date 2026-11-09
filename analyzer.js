@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyChartLegend = document.getElementById('monthlyChartLegend');
     const monthlyChartSeries = document.getElementById('monthlyChartSeries');
     const currentMonthDisplay = document.getElementById('currentMonth');
+    const reportMonthSelect = document.getElementById('reportMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
@@ -276,20 +277,17 @@ document.addEventListener('DOMContentLoaded', () => {
         next.focus();
     }
 
-    // Обработчики навигации по месяцам
-    prevMonthButton.addEventListener('click', () => {
-        if (currentMonthIndex > 0) {
-            currentMonthIndex--;
-            updateMonthlyStats();
-        }
+    prevMonthButton.addEventListener('click', () => selectReportMonth(currentMonthIndex - 1));
+    nextMonthButton.addEventListener('click', () => selectReportMonth(currentMonthIndex + 1));
+    reportMonthSelect.addEventListener('change', () => {
+        selectReportMonth(monthsData.findIndex(({ month }) => month === reportMonthSelect.value));
     });
 
-    nextMonthButton.addEventListener('click', () => {
-        if (currentMonthIndex < monthsData.length - 1) {
-            currentMonthIndex++;
-            updateMonthlyStats();
-        }
-    });
+    function selectReportMonth(index) {
+        if (!monthsData[index] || index === currentMonthIndex) return;
+        currentMonthIndex = index;
+        updateMonthlyStats();
+    }
 
     // Обработчик изменения порога игнорирования
     ignoredThresholdInput.addEventListener('change', (e) => {
@@ -436,6 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (languageToggleLabel) languageToggleLabel.textContent = next === 'ru' ? 'EN' : 'RU';
         updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
         refreshAccountChooserLabels();
+        refreshReportMonthOptions();
         refreshReportLanguage();
     }
 
@@ -529,10 +528,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (calendar) {
             const year = calendar.getUTCFullYear();
             if (Number.isNaN(year) || year < 0 || year > 9999) {
-                return { message, time: Infinity, calendar: null, hasWallClock: false };
+                return { message, time: Infinity, absoluteTime: Infinity, calendar: null, hasWallClock: false };
             }
         }
-        return { message, time: Number.isFinite(time) ? time : Infinity, calendar, hasWallClock: wall !== null };
+        const absoluteTime = Number.isFinite(time) ? time : Infinity;
+        return { message, time: absoluteTime, absoluteTime, calendar, hasWallClock: wall !== null };
     }
 
     function orderMessageTimings(messages) {
@@ -592,17 +592,23 @@ document.addEventListener('DOMContentLoaded', () => {
         return targets;
     }
 
-    function originalForReply(message, time, targetId, targets) {
+    function measureDirectReply(reply, targetId, targets) {
+        const { message } = reply;
         if (message.reply_to_peer_id != null) return null;
         const original = targets.get(targetId);
         if (!original || !original.message.from || original.message.type === 'service'
-            || original.message.from === message.from || !Number.isFinite(original.time)
-            || original.time > time) return null;
-        if (original.time === time) {
+            || original.message.from === message.from) return null;
+
+        // A linked pair can use exact times even if adjacency uses a civil timeline.
+        const useAbsolute = Number.isFinite(reply.absoluteTime) && Number.isFinite(original.absoluteTime);
+        const replyTime = useAbsolute ? reply.absoluteTime : reply.time;
+        const originalTime = useAbsolute ? original.absoluteTime : original.time;
+        if (!Number.isFinite(replyTime) || !Number.isFinite(originalTime) || originalTime > replyTime) return null;
+        if (originalTime === replyTime) {
             const responseId = numericMessageId(message.id);
             if (responseId === null || targetId >= responseId) return null;
         }
-        return original;
+        return { sender: original.message.from, seconds: (replyTime - originalTime) / 1000 };
     }
 
     function getSenderId({ from_id: id }) {
@@ -954,6 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syntheticNames.clear();
         monthsData = [];
         currentMonthIndex = -1;
+        refreshReportMonthOptions();
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
@@ -1325,7 +1332,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const replyTargets = findReplyTargets(timings);
         const wordCounts = Object.create(null);
         let previousMessage = null;
-        timings.forEach(({ message: msg, calendar, time }) => {
+        timings.forEach(timing => {
+            const { message: msg, calendar, time } = timing;
             const replyLink = replyLinkId(msg);
             if (replyLink !== null) linkedReplies++;
             const words = msg.from ? countWords(getReportMessageText(msg)) : 0;
@@ -1378,15 +1386,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordResponse(responseTimes, sender, msg.from, seconds);
                     recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
-                const original = replyLink === null ? null : originalForReply(msg, time, replyLink, replyTargets);
-                if (original) {
-                    const seconds = (time - original.time) / 1000;
-                    recordResponse(directResponses, original.message.from, msg.from, seconds);
-                    recordResponse(month.directResponses, original.message.from, msg.from, seconds);
-                    timedReplies++;
-                    month.timedReplies++;
-                }
                 previousMessage = { sender: msg.from, time };
+            }
+            const direct = replyLink === null ? null : measureDirectReply(timing, replyLink, replyTargets);
+            if (direct) {
+                recordResponse(directResponses, direct.sender, msg.from, direct.seconds);
+                recordResponse(month.directResponses, direct.sender, msg.from, direct.seconds);
+                timedReplies++;
+                month.timedReplies++;
             }
         });
 
@@ -1420,6 +1427,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Показываем статистику за последний месяц
         currentMonthIndex = monthsData.length - 1;
+        refreshReportMonthOptions();
         monthlyStatsTab.disabled = monthsData.length === 0;
         if (monthlyStatsTab.disabled && monthlyStatsTab.classList.contains('active')) {
             selectStatsTab(allStatsTab);
@@ -1591,6 +1599,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
+    function formatReportMonth(month) {
+        return monthFormat.format(new Date(`${month}-01T00:00:00Z`));
+    }
+
+    function refreshReportMonthOptions() {
+        reportMonthSelect.replaceChildren();
+        for (const { month } of monthsData) {
+            const option = document.createElement('option');
+            option.value = month;
+            option.textContent = formatReportMonth(month);
+            reportMonthSelect.append(option);
+        }
+        reportMonthSelect.value = monthsData[currentMonthIndex]?.month ?? '';
+        reportMonthSelect.disabled = monthsData.length < 2;
+    }
+
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
         if (rebuildCharts) updateReplyTimingHint();
         if (!monthsData.length) {
@@ -1599,8 +1623,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const monthData = monthsData[currentMonthIndex];
-        const monthDate = new Date(monthData.month + '-01');
-        setLocalizedText(currentMonthDisplay, () => monthFormat.format(monthDate));
+        reportMonthSelect.value = monthData.month;
+        setLocalizedText(currentMonthDisplay, () => formatReportMonth(monthData.month));
 
         displayMonthlyStats(monthData);
         if (rebuildCharts) createMonthlyCharts(monthData);
