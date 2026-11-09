@@ -553,7 +553,7 @@ a { color: var(--accent); }
     font-weight: 630;
 }
 
-.account-chat-field select, #ignoredThreshold {
+.account-chat-field select, #ignoredThreshold, #replyTiming {
     max-width: 100%;
     min-height: 40px;
     padding: 6px 8px;
@@ -665,6 +665,22 @@ a { color: var(--accent); }
 .notice { margin-bottom: 12px; border: 1px solid var(--border); }
 
 .report-toolbar { margin-bottom: 14px; }
+
+.reply-timing {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 4px 8px;
+    max-width: 100%;
+    color: var(--text-muted);
+    font-size: .8125rem;
+}
+
+.reply-timing p {
+    grid-column: 1 / -1;
+    max-width: 24rem;
+    font-size: .75rem;
+}
 
 .tabs {
     --tab-inset: 3px;
@@ -990,7 +1006,7 @@ a { color: var(--accent); }
     .drop-hint { display: none; }
     .source-file { padding: 2px 0 4px; }
     .export-help { padding: 0; }
-    .button, .icon-button, .nav-btn, .tab-btn, .account-chat-field select { min-height: 44px; }
+    .button, .icon-button, .nav-btn, .tab-btn, .account-chat-field select, #replyTiming { min-height: 44px; }
     .icon-button, .nav-btn { width: 44px; }
     .report-heading { margin-bottom: 13px; padding-bottom: 12px; }
     .report-heading h1, .report-heading h2 { font-size: clamp(1.625rem, 6.7vw, 2.375rem); }

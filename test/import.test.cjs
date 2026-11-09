@@ -264,6 +264,111 @@ test('defaults to English and switches language without losing the report, month
     assert.match(app.element('currentMonth').textContent, /October/i);
 });
 
+test('can measure linked replies across months without changing the active month, trend or CSV', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    app.selectFile('direct-replies.json').complete({
+        messages: [
+            { id: 3, from: 'Bob', date: '2026-02-01T00:10:00', reply_to_message_id: '1', text: 'Linked answer' },
+            { id: 1, from: 'Alice', date: '2026-01-31T23:50:00', text: 'Question' },
+            { id: 2, from: 'Eve', date: '2026-02-01T00:00:00', text: 'Unrelated turn' },
+            { id: 4, from: 'Alice', date: '2026-03-01T12:00:00', text: 'Question' },
+            { id: 5, from: 'Eve', date: '2026-03-01T12:00:00', reply_to_message_id: 4, text: 'Same-second answer' },
+        ],
+    });
+    const mode = app.element('replyTiming');
+    assert.equal(mode.disabled, false);
+    assert.equal(mode.value, 'adjacent');
+    const pairs = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    assert.equal(pairs('responseTimeChart')['Eve -> Bob'], 10);
+    const trend = app.charts.get('monthlyChart');
+    app.element('monthlyChartSeries').children[0].click();
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    assert.match(app.element('currentMonth').textContent, /феврал/);
+    app.element('exportMonthlyParticipants').click();
+    const priorCsv = await app.downloads.at(-1).blob.text();
+
+    mode.value = 'direct';
+    mode.change();
+    assert.deepEqual(pairs('responseTimeChart'), { 'Alice -> Bob': 20, 'Alice -> Eve': 0 });
+    assert.deepEqual(pairs('monthlyResponseTimeChart'), { 'Alice -> Bob': 20 });
+    assert.match(app.element('currentMonth').textContent, /феврал/);
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.charts.get('monthlyChart'), trend);
+    assert.equal(trend.isDatasetVisible(0), false);
+    app.element('exportMonthlyParticipants').click();
+    assert.equal(await app.downloads.at(-1).blob.text(), priorCsv);
+
+    app.element('ignoredThreshold').change({ target: { valueAsNumber: 15 } });
+    assert.match(app.element('thresholdExceededMessagesStats').innerHTML, /Bob<\/strong>: 1/);
+    assert.match(app.element('monthlyThresholdExceededMessagesStats').innerHTML, /Bob<\/strong>: 1/);
+    app.element('prevMonth').click();
+    assert.deepEqual(pairs('monthlyResponseTimeChart'), {});
+    assert.match(app.element('currentMonth').textContent, /январ/);
+
+    app.selectFile('invalid.json').completeRaw('{');
+    assert.equal(mode.value, 'direct');
+    assert.deepEqual(pairs('responseTimeChart'), { 'Alice -> Bob': 20, 'Alice -> Eve': 0 });
+    app.selectFile('plain.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-01-01T12:00:00' },
+        { id: 2, from: 'Bob', date: '2026-01-01T12:02:00' },
+    ] });
+    assert.equal(mode.disabled, true);
+    assert.equal(mode.value, 'adjacent');
+    assert.deepEqual(pairs('responseTimeChart'), { 'Alice -> Bob': 2 });
+});
+
+test('does not guess direct reply pairs for duplicate, foreign, missing, future or undated targets', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const at = (id, from, hour, extra = {}) => ({
+        id, from, date: `2026-03-01T${String(hour).padStart(2, '0')}:00:00`, ...extra,
+    });
+    app.selectFile('unmatched.json').complete({ messages: [
+        at(1, 'Alice', 8),
+        at(2, 'Bob', 9, { reply_to_message_id: 1, reply_to_peer_id: 'channel42' }),
+        at(3, 'Alice', 10, { reply_to_message_id: 1 }),
+        at(4, 'Bob', 11, { reply_to_message_id: 5 }),
+        at(5, 'Alice', 12),
+        at(6, 'Bob', 12, { reply_to_message_id: 7 }),
+        at(7, 'Alice', 12),
+        at(8, 'Alice', 13),
+        at(8, 'Bob', 14),
+        at(9, 'Cora', 15, { reply_to_message_id: 8 }),
+        at(10, 'Bob', 16, { type: 'service' }),
+        at(11, 'Cora', 17, { reply_to_message_id: 10 }),
+        { id: 12, from: 'Bob' },
+        at(13, 'Cora', 18, { reply_to_message_id: 12 }),
+        at(14, 'Cora', 19, { reply_to_message_id: 99 }),
+        at(15, 'Cora', 20, { reply_to_message_id: 1, type: 'service' }),
+    ] });
+    assert.equal(app.element('directRepliesOption').disabled, true);
+    assert.equal(app.element('replyTiming').disabled, true);
+    assert.equal(app.element('replyTiming').value, 'adjacent');
+    assert.match(app.element('replyTimingHint').textContent, /нет прямых ответов/);
+    assert.ok(app.charts.get('responseTimeChart').data.labels.length > 0);
+});
+
+test('matches direct replies in migrated Telegram history with negative message IDs', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const date = '2026-04-01T12:00:00';
+    app.selectFile('migrated.json').complete({ messages: [
+        { id: -999999999, from: 'Alice', date },
+        { id: -999999998, from: 'Bob', date, reply_to_message_id: '-999999999' },
+        { id: 1, from: 'Bob', date },
+        { id: 2, from: 'Alice', date, reply_to_message_id: 1 },
+    ] });
+    const mode = app.element('replyTiming');
+    assert.equal(mode.disabled, false);
+    mode.value = 'direct';
+    mode.change();
+    const { labels, datasets } = app.charts.get('responseTimeChart').data;
+    assert.deepEqual(Array.from(labels), ['Alice -> Bob', 'Bob -> Alice']);
+    assert.deepEqual(Array.from(datasets[0].data), [0, 0]);
+});
+
 test('rejects unrelated JSON and malformed message entries', () => {
     const app = createAnalyzer();
     for (const data of [{}, { messages: [null] }]) {

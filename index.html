@@ -128,6 +128,14 @@
                         <button type="button" id="monthlyStatsTab" class="tab-btn" data-tab="monthly" role="tab"
                                 aria-controls="monthly" aria-selected="false" tabindex="-1" data-ru="По месяцам">By month</button>
                     </div>
+                    <div class="reply-timing">
+                        <label for="replyTiming" data-ru="Замер ответов">Reply timing</label>
+                        <select id="replyTiming" aria-describedby="replyTimingHint" disabled>
+                            <option value="adjacent" data-ru="Соседние сообщения">Adjacent messages</option>
+                            <option id="directRepliesOption" value="direct" data-ru="Прямые ответы" disabled>Direct replies</option>
+                        </select>
+                        <p id="replyTimingHint"></p>
+                    </div>
                 </div>
 
                 <div class="tab-content active" id="all" role="tabpanel" aria-labelledby="allStatsTab" tabindex="0">

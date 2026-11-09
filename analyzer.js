@@ -32,6 +32,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportPlaceholder = document.getElementById('reportPlaceholder');
     const placeholderTitle = document.getElementById('placeholderTitle');
     const placeholderText = document.getElementById('placeholderText');
+    const replyTimingSelect = document.getElementById('replyTiming');
+    const directRepliesOption = document.getElementById('directRepliesOption');
+    const replyTimingHint = document.getElementById('replyTimingHint');
     const languageToggle = document.getElementById('languageToggle');
     const languageToggleLabel = document.getElementById('languageToggleLabel');
     const LOCALE_STORAGE_KEY = 'telegramAnalyzerLocale';
@@ -112,6 +115,14 @@ document.addEventListener('DOMContentLoaded', () => {
         unattributed: ['Records without a sender', 'Записи без отправителя'],
         weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
         chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
+        directRepliesAvailable: [
+            'Direct replies use links to messages in this export.',
+            'Прямые ответы определяются по ссылкам на сообщения в экспорте.',
+        ],
+        directRepliesUnavailable: [
+            'No direct replies with an original message in this export.',
+            'В экспорте нет прямых ответов с исходным сообщением.',
+        ],
         participantStats: ['Participant statistics', 'Статистика по участникам:'],
         participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
         meanDelay: ['Average response delay (minutes)', 'Средняя задержка ответа (в минутах):'],
@@ -195,7 +206,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyAverageResponseDelayStatsElement = document.getElementById('monthlyAverageResponseDelayStats'); // Renamed from monthlyIgnoringStats
     const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
 
-    let overallResponseTimes = null;
+    let overallResponseStats = null;
+    let replyTimingMode = 'adjacent';
     let overallParticipantTotals = new Map();
     let overviewData = null;
     let activeImport = null;
@@ -285,12 +297,27 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         ignoredMessageThreshold = minutes * 60;
-        if (overallResponseTimes) {
-            displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(overallResponseTimes, ignoredMessageThreshold));
+        if (overallResponseStats) {
+            const responseTimes = selectedResponseTimes(overallResponseStats);
+            displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
             const monthData = monthsData[currentMonthIndex];
             if (monthData) {
                 displayMonthlyThresholdStats(monthData);
             }
+        }
+    });
+
+    replyTimingSelect.addEventListener('change', () => {
+        const mode = replyTimingSelect.value;
+        if (!overallResponseStats || mode === replyTimingMode) return;
+        if (mode !== 'adjacent' && (mode !== 'direct' || directRepliesOption.disabled)) return;
+        replyTimingMode = mode;
+        renderOverviewStatistics();
+        createResponseTimeChart(selectedResponseTimes(overallResponseStats));
+        const month = monthsData[currentMonthIndex];
+        if (month) {
+            updateMonthlyStats({ rebuildCharts: false });
+            createResponseTimeChart(selectedResponseTimes(month.data), 'monthlyResponseTimeChart');
         }
     });
 
@@ -446,9 +473,11 @@ document.addEventListener('DOMContentLoaded', () => {
             ['2025-03-08T16:24:00', 1, 'Записал видео с финальной прогулкой.', 'video_file'],
             ['2025-03-08T16:27:00', 0, 'Всё работает. Маяк виден с самого причала!'],
         ];
+        const directReplies = { 2: 1, 4: 2, 6: 5, 8: 7, 10: 7, 12: 11, 14: 11 };
         const messages = rows.map(([date, person, text, mediaType], index) => ({
             id: index + 1, type: 'message', date, from: people[person],
             from_id: `user${person + 1}`, text, media_type: mediaType,
+            reply_to_message_id: directReplies[index + 1],
         }));
         const json = JSON.stringify({ name: 'Демонстрационный чат', messages });
         processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }), { isDemo: true });
@@ -531,6 +560,48 @@ document.addEventListener('DOMContentLoaded', () => {
             return firstId - secondId;
         });
         return timings;
+    }
+
+    function numericMessageId(value) {
+        if (typeof value === 'string' && /^-?\d+$/.test(value)) value = Number(value);
+        // Telegram shifts migrated chat history into negative IDs.
+        return Number.isSafeInteger(value) && value !== 0 ? value : null;
+    }
+
+    function replyTargetId(message) {
+        // Telegram omits reply_to_peer_id when the original is in this chat.
+        if (message.type === 'service' || message.reply_to_peer_id != null) return null;
+        return numericMessageId(message.reply_to_message_id);
+    }
+
+    function findReplyTargets(timings) {
+        const targets = new Map();
+        for (const { message } of timings) {
+            const id = replyTargetId(message);
+            if (id !== null) targets.set(id, null);
+        }
+        if (targets.size === 0) return targets;
+
+        for (const timing of timings) {
+            const id = numericMessageId(timing.message.id);
+            if (!targets.has(id)) continue;
+            // A duplicate ID cannot identify the original message reliably.
+            targets.set(id, targets.get(id) === null ? timing : undefined);
+        }
+        return targets;
+    }
+
+    function originalForReply(message, time, targets) {
+        const targetId = replyTargetId(message);
+        const original = targets.get(targetId);
+        if (!original || !original.message.from || original.message.type === 'service'
+            || original.message.from === message.from || !Number.isFinite(original.time)
+            || original.time > time) return null;
+        if (original.time === time) {
+            const responseId = numericMessageId(message.id);
+            if (responseId === null || targetId >= responseId) return null;
+        }
+        return original;
     }
 
     function getSenderId({ from_id: id }) {
@@ -869,7 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderedCharts.forEach(chart => chart.destroy());
         renderedCharts.clear();
         renderMonthlyChartLegend();
-        overallResponseTimes = null;
+        overallResponseStats = null;
         overallParticipantTotals = new Map();
         overviewData = null;
         syntheticNames.clear();
@@ -1228,6 +1299,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Подготовка данных по месяцам
         const messagesByMonth = {};
         const responseTimes = Object.create(null);
+        const directResponses = Object.create(null);
+        const replyTargets = findReplyTargets(timings);
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(({ message: msg, calendar, time }) => {
@@ -1245,6 +1318,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 messageTypes: Object.create(null),
                 timeOfDay: new Array(24).fill(0),
                 responseTimes: Object.create(null),
+                directResponses: Object.create(null),
                 wordCounts: Object.create(null),
                 mediaTypesStats: Object.create(null),
                 dayOfWeekActivity: new Array(7).fill(0),
@@ -1277,6 +1351,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordResponse(responseTimes, sender, msg.from, seconds);
                     recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
+                if (replyTargets.size) {
+                    const original = originalForReply(msg, time, replyTargets);
+                    if (original) {
+                        const seconds = (time - original.time) / 1000;
+                        recordResponse(directResponses, original.message.from, msg.from, seconds);
+                        recordResponse(month.directResponses, original.message.from, msg.from, seconds);
+                    }
+                }
                 previousMessage = { sender: msg.from, time };
             }
         });
@@ -1287,7 +1369,13 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([month, data]) => ({ month, data }));
 
         // Показываем общую статистику
-        overallResponseTimes = responseTimes;
+        overallResponseStats = { responseTimes, directResponses };
+        const hasDirectReplies = Object.keys(directResponses).length > 0;
+        directRepliesOption.disabled = !hasDirectReplies;
+        replyTimingSelect.disabled = !hasDirectReplies;
+        if (!hasDirectReplies) replyTimingMode = 'adjacent';
+        replyTimingSelect.value = replyTimingMode;
+        setLocalizedText(replyTimingHint, translated(hasDirectReplies ? 'directRepliesAvailable' : 'directRepliesUnavailable'));
         overallParticipantTotals = getParticipantTotals(messages);
         overviewData = {
             messageCount: messages.length,
@@ -1299,7 +1387,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Создаем графики общей статистики
         const allTimeData = calculateAllTimeStats(timings);
         createMonthlyChart(monthsData);
-        createResponseTimeChart(responseTimes);
+        createResponseTimeChart(selectedResponseTimes(overallResponseStats));
         createTimeOfDayChart(allTimeData.timeOfDay);
         createMessageTypesChart(allTimeData.messageTypes);
         createDayOfWeekChart(allTimeData.dayOfWeekActivity);
@@ -1315,11 +1403,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderOverviewStatistics() {
-        displayGeneralStats(overviewData.messageCount, overallParticipantTotals, overallResponseTimes);
-        displayAverageResponseDelayStats(calculateAverageResponseDelay(overallResponseTimes));
+        const responseTimes = selectedResponseTimes(overallResponseStats);
+        displayGeneralStats(overviewData.messageCount, overallParticipantTotals, responseTimes);
+        displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
         displayWordCountStats(overviewData.words);
         displayMediaTypeStats(overviewData.media);
-        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(overallResponseTimes, ignoredMessageThreshold));
+        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
+    }
+
+    function selectedResponseTimes({ responseTimes, directResponses }) {
+        return replyTimingMode === 'direct' ? directResponses : responseTimes;
     }
 
     function refreshReportLanguage() {
@@ -1497,7 +1590,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         displayMonthlyThresholdStats(monthData);
 
-        const monthlyAvgDelayStats = calculateAverageResponseDelay(data.responseTimes);
+        const monthlyAvgDelayStats = calculateAverageResponseDelay(selectedResponseTimes(data));
         const delayTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('monthDelay')}`;
         monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, delayTitle);
 
@@ -1513,7 +1606,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayMonthlyThresholdStats(monthData) {
-        const thresholdMessages = calculateThresholdExceededMessages(monthData.data.responseTimes, ignoredMessageThreshold);
+        const responseTimes = selectedResponseTimes(monthData.data);
+        const thresholdMessages = calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold);
         const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> ${translate('monthLongResponses', ignoredMessageThreshold / 60)}`;
         monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
@@ -1616,7 +1710,7 @@ document.addEventListener('DOMContentLoaded', () => {
         createBarChart('dailyActivityChart', () => days, data.dailyActivity.slice(0, dayCount), 'chartMessages');
         createTimeOfDayChart(data.timeOfDay, 'monthlyTimeOfDayChart');
         createMessageTypesChart(data.messageTypes, 'monthlyMessageTypesChart');
-        createResponseTimeChart(data.responseTimes, 'monthlyResponseTimeChart');
+        createResponseTimeChart(selectedResponseTimes(data), 'monthlyResponseTimeChart');
         createDayOfWeekChart(data.dayOfWeekActivity, 'monthlyDayOfWeekChart');
     }
 
