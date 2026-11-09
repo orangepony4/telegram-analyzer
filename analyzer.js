@@ -32,7 +32,138 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportPlaceholder = document.getElementById('reportPlaceholder');
     const placeholderTitle = document.getElementById('placeholderTitle');
     const placeholderText = document.getElementById('placeholderText');
-    const countFormat = new Intl.NumberFormat('ru-RU');
+    const languageToggle = document.getElementById('languageToggle');
+    const languageToggleLabel = document.getElementById('languageToggleLabel');
+    const LOCALE_STORAGE_KEY = 'telegramAnalyzerLocale';
+    const copy = {
+        switchLanguage: ['Switch language to Russian', 'Переключить язык на английский'],
+        darkTheme: ['Switch to dark theme', 'Переключить на тёмную тему'],
+        lightTheme: ['Switch to light theme', 'Переключить на светлую тему'],
+        demoReport: ['Demo report', 'Демо-отчёт'],
+        demoTitle: ['Sample chat', 'Демонстрационный чат'],
+        demoSource: ['Fictional conversation', 'Вымышленная переписка'],
+        demoFile: ['Built-in example', 'Встроенный пример'],
+        demoData: ['Demo data', 'Демо-данные'],
+        report: ['Chat report', 'Отчёт по чату'],
+        telegramSource: ['Telegram export', 'Экспорт Telegram'],
+        accountExport: ['Account export', 'Экспорт аккаунта'],
+        localFile: ['File on this device', 'Файл на устройстве'],
+        savedMessages: ['Saved Messages', 'Избранное'],
+        replies: ['Replies', 'Ответы'],
+        verificationCodes: ['Verification Codes', 'Коды подтверждения'],
+        untitledChat: ['Untitled chat', 'Чат без названия'],
+        leftChat: ['Left chat', 'Покинутый чат'],
+        unknownParticipant: ['Unknown participant', 'Неизвестный участник'],
+        selectChat: ['Choose a chat', 'Выберите чат'],
+        selectChatStatus: ['Choose a chat to see its statistics.', 'Выберите чат, чтобы увидеть его статистику.'],
+        accountOption: [
+            (number, name, suffix, count) => `${number}. ${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'}`,
+            (number, name, suffix, count) => `${number}. ${name}${suffix} · ${count} сообщ.`,
+        ],
+        selectedChat: [label => `Showing statistics for chat ${label}`, label => `Статистика открыта для чата ${label}`],
+        accountInstructions: [
+            'This file contains multiple chats. The report covers one conversation.',
+            'В файле несколько переписок. Анализ строится по одной.',
+        ],
+        noChatSelected: ['No chat selected', 'Чат ещё не выбран'],
+        chooseToAnalyze: [
+            'Choose a conversation under Chat data, then select Analyze chat.',
+            'Выберите переписку в блоке «Данные чата» и нажмите «Показать статистику».',
+        ],
+        accountReady: ['Account export loaded. Choose a chat to analyze.', 'Экспорт аккаунта загружен. Выберите чат для анализа.'],
+        chooseToReport: [
+            'The report appears after you analyze the selected conversation.',
+            'Отчёт появится после анализа выбранной переписки.',
+        ],
+        chatFailed: ['The chat could not be opened', 'Чат не открылся'],
+        tryOtherChat: ['Try another conversation in the list.', 'Попробуйте выбрать другую переписку из списка.'],
+        chatFailedStatus: [
+            'Could not analyze this chat. Choose another one.',
+            'Не удалось проанализировать этот чат. Выберите другой.',
+        ],
+        import: ['Import', 'Импорт'],
+        openingExport: ['Opening export', 'Открываем экспорт'],
+        processingLocally: ['Reading data in the browser', 'Данные читаются в браузере'],
+        preparingDemo: ['Preparing the example', 'Подготовка примера'],
+        readingFile: ['Reading file', 'Чтение файла'],
+        reportAfterRead: ['The report appears after the data is processed.', 'Отчёт появится после обработки данных.'],
+        processing: ['Reading and analyzing data…', 'Загрузка и анализ данных...'],
+        reportReady: ['Analysis complete. The report is available below.', 'Анализ завершён. Статистика доступна ниже.'],
+        chooseJson: ['Choose a JSON export from Telegram Desktop.', 'Выберите JSON из Telegram Desktop.'],
+        noChatHistory: [
+            'No chat history found. Choose a chat or account export from Telegram Desktop.',
+            'В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.',
+        ],
+        reportFailed: ['Could not build a report from this export.', 'Не удалось построить отчёт по этому экспорту.'],
+        invalidJson: [
+            'Check that this file contains a valid JSON export.',
+            'Проверьте, что файл содержит корректный экспорт в формате JSON.',
+        ],
+        fileUnreadable: ['The file could not be read. Try opening it again.', 'Файл не прочитан. Попробуйте открыть его ещё раз.'],
+        fileError: [(name, message) => `“${name}” · ${message}`, (name, message) => `«${name}»: ${message}`],
+        readingError: ['Read error', 'Ошибка чтения'],
+        fileFailed: ['The file could not be opened', 'Файл не открылся'],
+        chooseExport: ['Choose a Telegram Desktop export.', 'Выберите экспорт Telegram Desktop.'],
+        reportUnavailable: ['Report unavailable', 'Отчёт недоступен'],
+        tryOtherFile: ['Open another JSON file or try the demo chat.', 'Можно открыть другой JSON или вернуться к демо-чату.'],
+        messages: ['Messages', 'Сообщения'],
+        chartMessages: ['Messages', 'Сообщений'],
+        activity: ['Activity', 'Активность'],
+        unattributed: ['Records without a sender', 'Записи без отправителя'],
+        weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
+        chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
+        participantStats: ['Participant statistics', 'Статистика по участникам:'],
+        participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
+        meanDelay: ['Average response delay (minutes)', 'Средняя задержка ответа (в минутах):'],
+        monthDelay: ['Average response delay this month (minutes)', 'Средняя задержка ответа (за месяц, в минутах):'],
+        delayFor: [name => `Average response delay for ${name}`, name => `Средняя задержка ответа ${name}:`],
+        totalWords: ['Total word count', 'Общее количество слов:'],
+        monthWords: ['Word count', 'Количество слов:'],
+        mediaUsage: ['Attachments by participant', 'Использование медиафайлов:'],
+        longResponses: [
+            minutes => `Responses after more than ${minutes} min`,
+            minutes => `Количество сообщений с ответом > ${minutes} мин:`,
+        ],
+        monthLongResponses: [
+            minutes => `Responses after more than ${minutes} min this month`,
+            minutes => `Сообщений с ответом > ${minutes} мин (за месяц):`,
+        ],
+        noData: ['No data', 'Нет данных'],
+        noDelayData: ['No response delays to report.', 'Нет данных для этой статистики.'],
+        noLongResponses: ['No responses exceed this threshold.', 'Нет данных для этой статистики (с учетом порога).'],
+        averageLength: [length => `Average length · ${length} characters`, length => `Средняя длина: ${length} символов`],
+        messageTotal: [count => `Messages · ${count}`, count => `Сообщений: ${count}`],
+        wordTotal: [count => `${count} ${count === 1 ? 'word' : 'words'}`, count => `${count} слов`],
+        toParticipant: ['To', 'К'],
+        fromParticipant: ['From', 'От'],
+        seconds: ['sec', 'сек'],
+        minutes: ['min', 'мин'],
+        hours: ['hr', 'ч'],
+        days: ['d', 'дн'],
+    };
+    const messageTypeLabels = new Map([
+        ['text', ['Text', 'Текст']], ['photo', ['Photos', 'Фото']], ['video_file', ['Videos', 'Видео']],
+        ['voice_message', ['Voice messages', 'Голосовые']], ['sticker', ['Stickers', 'Стикеры']],
+        ['animation', ['Animations', 'Анимации']], ['audio_file', ['Audio', 'Аудио']],
+        ['video_message', ['Video messages', 'Видеосообщения']], ['file', ['Files', 'Файлы']],
+    ]);
+    const translatedAttributes = ['aria-label', 'title', 'placeholder'];
+    const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
+        .map(element => ({
+            element,
+            english: element.textContent,
+            russian: element.getAttribute('data-ru'),
+            attributes: translatedAttributes.flatMap(attribute => {
+                const russian = element.getAttribute(`data-ru-${attribute}`);
+                return russian == null ? [] : [{ attribute, russian, english: element.getAttribute(attribute) }];
+            }),
+        }));
+    const localizedText = new Map();
+    const chartTranslations = new WeakMap();
+    const syntheticNames = new Map();
+    let language = 'en';
+    let countFormat;
+    let monthFormat;
     const graphemeSegmenter = typeof Intl.Segmenter === 'function'
         ? new Intl.Segmenter('ru-RU', { granularity: 'grapheme' })
         : null;
@@ -41,12 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const LIGHT_THEME_KEY = 'muted-light';
     const DARK_THEME_CLASS = 'theme-default';
     const LIGHT_THEME_CLASS = 'theme-muted-light';
-    const monthFormat = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-    const messageTypeLabels = new Map([
-        ['text', 'Текст'], ['photo', 'Фото'], ['video_file', 'Видео'],
-        ['voice_message', 'Голосовые'], ['sticker', 'Стикеры'], ['animation', 'Анимации'],
-        ['audio_file', 'Аудио'], ['video_message', 'Видеосообщения'], ['file', 'Файлы'],
-    ]);
     const exportDatePattern = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?)?$/i;
 
     if (themeToggleBtn) {
@@ -64,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let overallResponseTimes = null;
     let overallParticipantTotals = new Map();
+    let overviewData = null;
     let activeImport = null;
     let accountChats = [];
     let currentMonthIndex = 0;
@@ -77,6 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const renderedCharts = new Map();
 
+    initializeLanguage();
     initializeTheme();
     if (typeof Chart === 'undefined') {
         statsContainer.classList.add('charts-unavailable');
@@ -203,6 +330,86 @@ document.addEventListener('DOMContentLoaded', () => {
         loadDemoChat();
     }
 
+    function translate(key, ...args) {
+        const value = copy[key][language === 'ru' ? 1 : 0];
+        return typeof value === 'function' ? value(...args) : value;
+    }
+
+    function translated(key, ...args) {
+        return () => translate(key, ...args);
+    }
+
+    function resolveText(value) {
+        return typeof value === 'function' ? value() : value;
+    }
+
+    function setLocalizedText(element, value) {
+        localizedText.set(element, value);
+        element.textContent = resolveText(value);
+    }
+
+    function initializeLanguage() {
+        let saved;
+        try {
+            saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+        } catch {
+            // The current language is still available when storage is blocked.
+        }
+        applyLanguage(saved === 'ru' ? 'ru' : 'en');
+        if (languageToggle) {
+            languageToggle.hidden = false;
+            languageToggle.addEventListener('click', () => {
+                applyLanguage(language === 'en' ? 'ru' : 'en');
+                try {
+                    localStorage.setItem(LOCALE_STORAGE_KEY, language);
+                } catch {
+                    // Leave the current view in the selected language.
+                }
+            });
+        }
+    }
+
+    function applyLanguage(next) {
+        language = next;
+        if (document.documentElement) document.documentElement.lang = next;
+        const locale = next === 'ru' ? 'ru-RU' : 'en';
+        countFormat = new Intl.NumberFormat(locale);
+        monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+
+        for (const { element, english, russian, attributes } of staticTranslations) {
+            if (russian != null && !localizedText.has(element)) {
+                element.textContent = next === 'ru' ? russian : english;
+            }
+            for (const entry of attributes) {
+                const value = next === 'ru' ? entry.russian : entry.english;
+                if (value == null) element.removeAttribute(entry.attribute);
+                else element.setAttribute(entry.attribute, value);
+            }
+        }
+        for (const [element, value] of localizedText) {
+            element.textContent = resolveText(value);
+        }
+        if (dropFileNameElement && localizedText.has(dropFileNameElement)) {
+            updateSelectedFileName(localizedText.get(dropFileNameElement));
+        }
+        if (languageToggle) {
+            languageToggle.setAttribute('aria-label', translate('switchLanguage'));
+            languageToggle.title = translate('switchLanguage');
+        }
+        if (languageToggleLabel) languageToggleLabel.textContent = next === 'ru' ? 'EN' : 'RU';
+        updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
+        refreshAccountChooserLabels();
+        refreshReportLanguage();
+    }
+
+    function mediaLabel(type) {
+        return messageTypeLabels.get(type)?.[language === 'ru' ? 1 : 0] ?? type;
+    }
+
+    function participantLabel(name) {
+        return language === 'en' ? syntheticNames.get(name) ?? name : name;
+    }
+
     function handleFileSelect(event) {
         const file = event.target.files?.[0];
         if (!file) {
@@ -325,6 +532,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function normalizeSenderNames(timings) {
+        syntheticNames.clear();
         const senders = new Map();
         const idsByName = new Map();
         const actualNames = new Set();
@@ -361,8 +569,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // Preserve ambiguous name-only records as their own group.
         const usedLabels = new Set([...nameOnly].filter(name => !idsByName.get(name)));
         const nextSuffixByName = new Map();
+        const unnamedLabels = [];
         for (const sender of senders.values()) {
-            const baseName = sender.name ?? 'Неизвестный участник';
+            const baseName = sender.name ?? copy.unknownParticipant[1];
             let label = baseName;
             if (usedLabels.has(label) || (!sender.name && actualNames.has(label))) {
                 let suffix = nextSuffixByName.get(baseName) ?? 2;
@@ -372,7 +581,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 nextSuffixByName.set(baseName, suffix);
             }
             sender.label = label;
+            if (!sender.name) unnamedLabels.push(label);
             usedLabels.add(label);
+        }
+
+        // Localize generated labels without changing participant keys or CSV content.
+        const englishBase = copy.unknownParticipant[0];
+        let englishSuffix = 1;
+        for (const label of unnamedLabels) {
+            let englishLabel;
+            do {
+                englishLabel = englishSuffix === 1 ? englishBase : `${englishBase} (${englishSuffix})`;
+                englishSuffix++;
+            } while (usedLabels.has(englishLabel));
+            syntheticNames.set(label, englishLabel);
         }
 
         // Existing statistics use from as their participant key and display label.
@@ -424,10 +646,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function accountChatName(chat) {
         if (typeof chat.name === 'string' && chat.name.trim()) return chat.name.trim();
         switch (chat.type) {
-            case 'saved_messages': return 'Избранное';
-            case 'replies': return 'Ответы';
-            case 'verification_codes': return 'Коды подтверждения';
-            default: return 'Чат без названия';
+            case 'saved_messages': return translated('savedMessages');
+            case 'replies': return translated('replies');
+            case 'verification_codes': return translated('verificationCodes');
+            default: return translated('untitledChat');
         }
     }
 
@@ -438,13 +660,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!Array.isArray(list)) return;
             for (const chat of list) {
                 if (!validMessages(chat?.messages)) continue;
-                const name = accountChatName(chat);
-                const prefix = groupIndex === 1 ? ' · Покинутый чат' : '';
-                const label = `${chats.length + 1}. ${name}${prefix} · ${chat.messages.length} сообщ.`;
-                chats.push({ name, label, messages: chat.messages });
+                chats.push({
+                    name: accountChatName(chat), number: chats.length + 1,
+                    left: groupIndex === 1, messages: chat.messages,
+                });
             }
         });
         return chats;
+    }
+
+    function accountChatLabel(chat) {
+        const suffix = chat.left ? ' · ' + translate('leftChat') : '';
+        return translate('accountOption', chat.number, resolveText(chat.name), suffix, chat.messages.length);
+    }
+
+    function refreshAccountChooserLabels() {
+        if (!accountChats.length) return;
+        const options = accountChatSelect.children;
+        options[0].textContent = translate('selectChat');
+        accountChats.forEach((chat, index) => {
+            options[index + 1].textContent = accountChatLabel(chat);
+        });
     }
 
     function resetAccountChooser() {
@@ -452,24 +688,23 @@ document.addEventListener('DOMContentLoaded', () => {
         accountChatChooser.hidden = true;
         accountChatSelect.replaceChildren();
         analyzeAccountChatButton.disabled = true;
-        accountChatStatus.textContent = '';
+        setLocalizedText(accountChatStatus, '');
     }
 
     function showAccountChooser(chats) {
         accountChats = chats;
         const placeholder = document.createElement('option');
         placeholder.value = '';
-        placeholder.textContent = 'Выберите чат';
         accountChatSelect.append(placeholder);
         accountChats.forEach((chat, index) => {
             const option = document.createElement('option');
             option.value = String(index);
-            option.textContent = chat.label;
             accountChatSelect.append(option);
         });
+        refreshAccountChooserLabels();
         accountChatSelect.value = '';
         accountChatChooser.hidden = false;
-        accountChatStatus.textContent = 'Выберите чат, чтобы увидеть его статистику.';
+        setLocalizedText(accountChatStatus, translated('selectChatStatus'));
     }
 
     function selectedAccountChat() {
@@ -487,9 +722,12 @@ document.addEventListener('DOMContentLoaded', () => {
         statsContainer.style.display = 'block';
         selectStatsTab(allStatsTab);
         analyzeChat(timings);
-        const period = reportPeriod();
-        const source = isDemo ? 'Вымышленная переписка' : 'Экспорт Telegram';
-        setReportHeader(isDemo ? 'Демо-отчёт' : 'Отчёт по чату', name, period ? `${source} · ${period}` : source);
+        const meta = () => {
+            const period = reportPeriod();
+            const source = translate(isDemo ? 'demoSource' : 'telegramSource');
+            return period ? `${source} · ${period}` : source;
+        };
+        setReportHeader(translated(isDemo ? 'demoReport' : 'report'), name, meta);
         reportPlaceholder.hidden = true;
     }
 
@@ -498,13 +736,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!chat) return;
         try {
             renderMessages(chat.messages, { name: chat.name, preserveNames: true });
-            accountChatStatus.textContent = `Статистика открыта для чата ${chat.label}`;
+            setLocalizedText(accountChatStatus, () => translate('selectedChat', accountChatLabel(chat)));
         } catch (error) {
             console.error('Ошибка анализа выбранного чата:', error);
             clearReport();
-            setReportHeader('Экспорт аккаунта', 'Выберите чат', 'Отчёт появится после анализа выбранной переписки.');
-            setReportPlaceholder('Чат не открылся', 'Попробуйте выбрать другую переписку из списка.');
-            accountChatStatus.textContent = 'Не удалось проанализировать этот чат. Выберите другой.';
+            setReportHeader(translated('accountExport'), translated('selectChat'), translated('chooseToReport'));
+            setReportPlaceholder(translated('chatFailed'), translated('tryOtherChat'));
+            setLocalizedText(accountChatStatus, translated('chatFailedStatus'));
         }
     }
 
@@ -513,18 +751,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const first = new Date(`${monthsData[0].month}-01T00:00:00Z`);
         if (monthsData.length === 1) return monthFormat.format(first);
         const last = new Date(`${monthsData.at(-1).month}-01T00:00:00Z`);
-        return monthFormat.formatRange(first, last);
+        return monthFormat.formatRange?.(first, last) ?? `${monthFormat.format(first)} – ${monthFormat.format(last)}`;
     }
 
     function setReportHeader(kind, title, meta) {
-        reportKind.textContent = kind;
-        reportTitle.textContent = title;
-        reportMeta.textContent = meta;
+        setLocalizedText(reportKind, kind);
+        setLocalizedText(reportTitle, title);
+        setLocalizedText(reportMeta, meta);
     }
 
     function setReportPlaceholder(title, text) {
-        placeholderTitle.textContent = title;
-        placeholderText.textContent = text;
+        setLocalizedText(placeholderTitle, title);
+        setLocalizedText(placeholderText, text);
         reportPlaceholder.hidden = false;
     }
 
@@ -535,6 +773,8 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMonthlyChartLegend();
         overallResponseTimes = null;
         overallParticipantTotals = new Map();
+        overviewData = null;
+        syntheticNames.clear();
         monthsData = [];
         currentMonthIndex = -1;
         allParticipants = new Set();
@@ -548,8 +788,9 @@ document.addEventListener('DOMContentLoaded', () => {
             chooserVisible: !accountChatChooser.hidden,
             overallExportDisabled: exportParticipantsButton.disabled,
             monthlyExportDisabled: exportMonthlyParticipantsButton.disabled,
-            placeholderTitle: placeholderTitle.textContent,
-            placeholderText: placeholderText.textContent,
+            placeholderTitle: localizedText.get(placeholderTitle) ?? placeholderTitle.textContent,
+            placeholderText: localizedText.get(placeholderText) ?? placeholderText.textContent,
+            language,
         };
         statsContainer.style.display = 'none';
         accountChatChooser.hidden = true;
@@ -565,6 +806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         exportMonthlyParticipantsButton.disabled = previous.monthlyExportDisabled;
         if (previous.reportVisible) {
             reportPlaceholder.hidden = true;
+            if (previous.language !== language) refreshReportLanguage();
         } else {
             setReportPlaceholder(previous.placeholderTitle, previous.placeholderText);
         }
@@ -576,7 +818,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!isJsonFile(file)) {
-            showFileError('Выберите JSON из Telegram Desktop.');
+            showFileError(translated('chooseJson'));
             clearFileInput();
             return;
         }
@@ -591,15 +833,15 @@ document.addEventListener('DOMContentLoaded', () => {
             previousRequest.reader.abort();
         }
         const hasPrevious = previous.reportVisible || previous.chooserVisible;
-        const sourceName = isDemo ? 'Встроенный пример' : file.name;
-        const describeFailure = message => `«${sourceName}»: ${message}`;
+        const sourceName = isDemo ? translated('demoFile') : file.name;
+        const describeFailure = key => () => translate('fileError', resolveText(sourceName), translate(key));
 
         showFileError('');
         if (!hasPrevious) {
-            setReportHeader(isDemo ? 'Демо-отчёт' : 'Импорт', isDemo ? 'Демонстрационный чат' : 'Открываем экспорт',
-                isDemo ? 'Вымышленная переписка' : 'Данные читаются в браузере');
+            setReportHeader(translated(isDemo ? 'demoReport' : 'import'), translated(isDemo ? 'demoTitle' : 'openingExport'),
+                translated(isDemo ? 'demoSource' : 'processingLocally'));
         }
-        setReportPlaceholder(isDemo ? 'Подготовка примера' : 'Чтение файла', 'Отчёт появится после обработки данных.');
+        setReportPlaceholder(translated(isDemo ? 'preparingDemo' : 'readingFile'), translated('reportAfterRead'));
         showLoadingIndicator();
 
         const finish = status => {
@@ -607,13 +849,13 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoadingIndicator(status);
             clearFileInput();
         };
-        const rejectImport = message => {
+        const rejectImport = key => {
             if (hasPrevious) {
                 restoreImportView(previous);
-                showFileError(describeFailure(message));
+                showFileError(describeFailure(key));
             } else {
                 updateSelectedFileName(sourceName);
-                showImportFailure(describeFailure(message));
+                showImportFailure(describeFailure(key));
             }
         };
 
@@ -628,7 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const messages = validMessages(data?.messages) ? data.messages : null;
                 const chats = messages ? [] : findAccountChats(data);
                 if (!messages && !chats.length) {
-                    rejectImport('В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.');
+                    rejectImport('noChatHistory');
                     return;
                 }
 
@@ -637,24 +879,24 @@ document.addEventListener('DOMContentLoaded', () => {
                 resetAccountChooser();
                 clearReport();
                 if (messages) {
-                    sourceFileType.textContent = isDemo ? 'Демо-данные' : 'Файл на устройстве';
+                    setLocalizedText(sourceFileType, translated(isDemo ? 'demoData' : 'localFile'));
                     const name = typeof data.name === 'string' ? data.name.trim() : '';
-                    renderMessages(messages, { name: name || file.name, isDemo });
-                    status = 'Анализ завершён. Статистика доступна ниже.';
+                    renderMessages(messages, { name: isDemo ? translated('demoTitle') : name || file.name, isDemo });
+                    status = translated('reportReady');
                 } else {
                     showAccountChooser(chats);
-                    sourceFileType.textContent = 'Экспорт аккаунта';
-                    setReportHeader('Экспорт аккаунта', 'Выберите чат', 'В файле несколько переписок. Анализ строится по одной.');
-                    setReportPlaceholder('Чат ещё не выбран', 'Выберите переписку в блоке «Данные чата» и нажмите «Показать статистику».');
-                    status = 'Экспорт аккаунта загружен. Выберите чат для анализа.';
+                    setLocalizedText(sourceFileType, translated('accountExport'));
+                    setReportHeader(translated('accountExport'), translated('selectChat'), translated('accountInstructions'));
+                    setReportPlaceholder(translated('noChatSelected'), translated('chooseToAnalyze'));
+                    status = translated('accountReady');
                 }
             } catch (error) {
                 if (replacing) {
                     console.error('Ошибка анализа экспорта:', error);
                     clearReport();
-                    showImportFailure(describeFailure('Не удалось построить отчёт по этому экспорту.'));
+                    showImportFailure(describeFailure('reportFailed'));
                 } else {
-                    rejectImport('Проверьте, что файл содержит корректный экспорт в формате JSON.');
+                    rejectImport('invalidJson');
                 }
             } finally {
                 finish(status);
@@ -663,7 +905,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const readFailed = () => {
             if (activeImport !== request) return;
-            rejectImport('Файл не прочитан. Попробуйте открыть его ещё раз.');
+            rejectImport('fileUnreadable');
             finish();
         };
         reader.onerror = readFailed;
@@ -733,36 +975,36 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showLoadingIndicator() {
         loadingIndicator.style.display = 'flex';
-        importStatus.textContent = 'Загрузка и анализ данных...';
+        setLocalizedText(importStatus, translated('processing'));
     }
 
     function hideLoadingIndicator(status = '') {
         loadingIndicator.style.display = 'none';
-        importStatus.textContent = status;
+        setLocalizedText(importStatus, status);
     }
 
     function updateSelectedFileName(fileName) {
         if (!dropFileNameElement) {
             return;
         }
-        dropFileNameElement.textContent = fileName || '';
-        if (fileName) {
-            dropFileNameElement.title = fileName;
+        setLocalizedText(dropFileNameElement, fileName || '');
+        if (dropFileNameElement.textContent) {
+            dropFileNameElement.title = dropFileNameElement.textContent;
         } else {
             dropFileNameElement.removeAttribute('title');
         }
     }
 
     function showFileError(message) {
-        fileError.textContent = message;
-        fileError.hidden = !message;
+        setLocalizedText(fileError, message);
+        fileError.hidden = !fileError.textContent;
     }
 
     function showImportFailure(message) {
         showFileError(message);
-        sourceFileType.textContent = 'Ошибка чтения';
-        setReportHeader('Импорт', 'Файл не открылся', 'Выберите экспорт Telegram Desktop.');
-        setReportPlaceholder('Отчёт недоступен', 'Можно открыть другой JSON или вернуться к демо-чату.');
+        setLocalizedText(sourceFileType, translated('readingError'));
+        setReportHeader(translated('import'), translated('fileFailed'), translated('chooseExport'));
+        setReportPlaceholder(translated('reportUnavailable'), translated('tryOtherFile'));
     }
 
     function clearFileInput() {
@@ -827,14 +1069,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (themeKey === LIGHT_THEME_KEY) {
-            themeToggleBtn.title = 'Переключить на тёмную тему';
-            themeToggleBtn.setAttribute('aria-label', 'Переключить на тёмную тему');
+            themeToggleBtn.title = translate('darkTheme');
+            themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
             if (themeToggleIcon) {
                 themeToggleIcon.classList.add('fa-moon');
             }
         } else {
-            themeToggleBtn.title = 'Переключить на светлую тему';
-            themeToggleBtn.setAttribute('aria-label', 'Переключить на светлую тему');
+            themeToggleBtn.title = translate('lightTheme');
+            themeToggleBtn.setAttribute('aria-label', themeToggleBtn.title);
             if (themeToggleIcon) {
                 themeToggleIcon.classList.add('fa-sun');
             }
@@ -945,12 +1187,14 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([month, data]) => ({ month, data }));
 
         // Показываем общую статистику
-        const participantTotals = getParticipantTotals(messages);
-        displayGeneralStats(messages, participantTotals, responseTimes);
-        displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
-        displayWordCountStats(calculateTotalWordCounts(messages));
-        displayMediaTypeStats(calculateMediaTypeUsage(messages));
-        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
+        overallResponseTimes = responseTimes;
+        overallParticipantTotals = getParticipantTotals(messages);
+        overviewData = {
+            messageCount: messages.length,
+            words: calculateTotalWordCounts(messages),
+            media: calculateMediaTypeUsage(messages),
+        };
+        renderOverviewStatistics();
 
         // Создаем графики общей статистики
         const allTimeData = calculateAllTimeStats(timings);
@@ -967,9 +1211,35 @@ document.addEventListener('DOMContentLoaded', () => {
             selectStatsTab(allStatsTab);
         }
         updateMonthlyStats();
-        overallResponseTimes = responseTimes;
-        overallParticipantTotals = participantTotals;
-        exportParticipantsButton.disabled = participantTotals.size === 0;
+        exportParticipantsButton.disabled = overallParticipantTotals.size === 0;
+    }
+
+    function renderOverviewStatistics() {
+        displayGeneralStats(overviewData.messageCount, overallParticipantTotals, overallResponseTimes);
+        displayAverageResponseDelayStats(calculateAverageResponseDelay(overallResponseTimes));
+        displayWordCountStats(overviewData.words);
+        displayMediaTypeStats(overviewData.media);
+        displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(overallResponseTimes, ignoredMessageThreshold));
+    }
+
+    function refreshReportLanguage() {
+        if (!overviewData || statsContainer.style.display !== 'block') return;
+
+        renderOverviewStatistics();
+        updateMonthlyStats({ rebuildCharts: false });
+        for (const chart of renderedCharts.values()) {
+            chartTranslations.get(chart)?.(chart.data);
+            chart.options.locale = language;
+            chart.update('none');
+        }
+
+        const trend = renderedCharts.get('monthlyChart');
+        if (trend && monthlyChartSeries) {
+            trend.data.datasets.forEach((dataset, index) => {
+                const label = monthlyChartSeries.children[index]?.children[1];
+                if (label) label.textContent = dataset.label;
+            });
+        }
     }
 
     function recordResponse(responseTimes, sender, responder, seconds) {
@@ -995,15 +1265,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return { timeOfDay, messageTypes, dayOfWeekActivity };
     }
 
-    function displayGeneralStats(messages, participantTotals, responseTimes) {
+    function displayGeneralStats(messageCount, participantTotals, responseTimes) {
         const messageCountElement = document.getElementById('messageCount');
         const participantStatsElement = document.getElementById('participantStats');
 
         // Calculate average response time separately as it wasn't refactored into generateParticipantStatsHTML
-        let avgResponseTimeHTML = '<h3><i class="fas fa-calculator" aria-hidden="true"></i> Среднее время ответа по участникам:</h3><ul>';
+        let avgResponseTimeHTML = `<h3><i class="fas fa-calculator" aria-hidden="true"></i> ${translate('participantResponse')}</h3><ul>`;
         for (const participant of participantTotals.keys()) {
              if (participant) {
-                 const sanitizedParticipant = sanitizeHTML(participant);
+                 const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
                  const avgTime = calculateAverageResponseTimeForParticipant(responseTimes, participant);
                  avgResponseTimeHTML += `<li><strong>${sanitizedParticipant}</strong>: ${avgTime}</li>`;
              }
@@ -1011,7 +1281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         avgResponseTimeHTML += '</ul>';
 
 
-        setMessageMetric(messageCountElement, messages.length);
+        setMessageMetric(messageCountElement, messageCount);
         document.getElementById('overviewParticipantCount').textContent = countFormat.format(participantTotals.size);
         document.getElementById('overviewMonthCount').textContent = countFormat.format(monthsData.length);
         // Combine participant stats and average response time
@@ -1019,7 +1289,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setMessageMetric(element, count) {
-        element.innerHTML = `<span class="metric-label">Сообщения</span><strong class="metric-value">${countFormat.format(count)}</strong>`;
+        element.innerHTML = `<span class="metric-label">${translate('messages')}</span><strong class="metric-value">${countFormat.format(count)}</strong>`;
     }
 
     function calculateAverageResponseTimeForParticipant(responseTimes, participant) {
@@ -1030,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', () => {
             totalSeconds += times.reduce((sum, seconds) => sum + seconds, 0);
             responseCount += times.length;
         }
-        return responseCount ? formatTime(totalSeconds / responseCount) : 'Нет данных';
+        return responseCount ? formatTime(totalSeconds / responseCount) : translate('noData');
     }
 
     function calculateAverageResponseDelay(responseTimes) {
@@ -1044,8 +1314,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return averages;
     }
 
-    function displayAverageResponseDelayStats(avgDelayStats) { // Renamed from displayIgnoringStats
-        const title = '<i class="fas fa-hourglass-half" aria-hidden="true"></i> Средняя задержка ответа (в минутах):'; // Updated title
+    function displayAverageResponseDelayStats(avgDelayStats) {
+        const title = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('meanDelay')}`;
         averageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(avgDelayStats, title);
     }
 
@@ -1063,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayWordCountStats(wordCounts) {
         const wordCountStatsElement = document.getElementById('wordCountStats');
-        const title = '<i class="fas fa-font" aria-hidden="true"></i> Общее количество слов:';
+        const title = `<i class="fas fa-font" aria-hidden="true"></i> ${translate('totalWords')}`;
         wordCountStatsElement.innerHTML = generateWordCountHTML(wordCounts, title);
     }
 
@@ -1083,7 +1353,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayMediaTypeStats(mediaTypeUsage) {
         const mediaTypeStatsElement = document.getElementById('mediaTypeStats');
-        const title = '<i class="fas fa-camera-retro" aria-hidden="true"></i> Использование медиафайлов:';
+        const title = `<i class="fas fa-camera-retro" aria-hidden="true"></i> ${translate('mediaUsage')}`;
         mediaTypeStatsElement.innerHTML = generateMediaTypeHTML(mediaTypeUsage, title);
     }
 
@@ -1098,28 +1368,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return counts;
     }
 
-    function displayThresholdExceededMessagesStats(thresholdMessages) { // Renamed from displayIgnoredMessagesStats
-        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> Количество сообщений с ответом > ${ignoredMessageThreshold / 60} мин:`; // Updated title
+    function displayThresholdExceededMessagesStats(thresholdMessages) {
+        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> ${translate('longResponses', ignoredMessageThreshold / 60)}`;
         thresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
 
-    function updateMonthlyStats() {
+    function updateMonthlyStats({ rebuildCharts = true } = {}) {
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
             return;
         }
 
         const monthData = monthsData[currentMonthIndex];
-        const monthName = new Date(monthData.month + '-01').toLocaleString('ru', {
-            month: 'long',
-            year: 'numeric',
-            timeZone: 'UTC'
-        });
-        currentMonthDisplay.textContent = monthName;
+        const monthDate = new Date(monthData.month + '-01');
+        setLocalizedText(currentMonthDisplay, () => monthFormat.format(monthDate));
 
         displayMonthlyStats(monthData);
-        createMonthlyCharts(monthData);
+        if (rebuildCharts) createMonthlyCharts(monthData);
     }
 
     function displayMonthlyStats(monthData) {
@@ -1137,15 +1403,15 @@ document.addEventListener('DOMContentLoaded', () => {
         // Use helper functions for monthly stats display
         monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals);
 
-        monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, '<i class="fas fa-font" aria-hidden="true"></i> Количество слов:');
+        monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, `<i class="fas fa-font" aria-hidden="true"></i> ${translate('monthWords')}`);
 
-        monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, '<i class="fas fa-camera-retro" aria-hidden="true"></i> Использование медиафайлов:');
+        monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, `<i class="fas fa-camera-retro" aria-hidden="true"></i> ${translate('mediaUsage')}`);
 
         displayMonthlyThresholdStats(monthData);
 
         const monthlyAvgDelayStats = calculateAverageResponseDelay(data.responseTimes);
-        const ignoringTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> Средняя задержка ответа (за месяц, в минутах):`; // Updated title
-        monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, ignoringTitle); // Renamed Element ID & helper
+        const delayTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('monthDelay')}`;
+        monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, delayTitle);
 
 
         const focusedControl = document.activeElement;
@@ -1160,11 +1426,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function displayMonthlyThresholdStats(monthData) {
         const thresholdMessages = calculateThresholdExceededMessages(monthData.data.responseTimes, ignoredMessageThreshold);
-        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> Сообщений с ответом > ${ignoredMessageThreshold / 60} мин (за месяц):`;
+        const title = `<i class="fas fa-eye-slash" aria-hidden="true"></i> ${translate('monthLongResponses', ignoredMessageThreshold / 60)}`;
         monthlyThresholdExceededMessagesStatsElement.innerHTML = generateThresholdExceededMessagesHTML(thresholdMessages, title);
     }
 
-    function createChart(canvasId, { type, data, decimalTicks = false }) {
+    function createChart(canvasId, { type, data, decimalTicks = false, localize }) {
         if (typeof Chart === 'undefined') {
             return;
         }
@@ -1183,6 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const doughnut = type === 'doughnut';
         const options = {
+            locale: language,
             responsive: true,
             maintainAspectRatio: false,
             animation: chartAnimation(),
@@ -1245,7 +1512,9 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
+        localize(data);
         const chart = new Chart(ctx, { type, data, options });
+        chartTranslations.set(chart, localize);
         renderedCharts.set(canvasId, chart);
         return chart;
     }
@@ -1256,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', () => {
         endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1, 0);
         const dayCount = endOfMonth.getUTCDate();
         const days = Array.from({ length: dayCount }, (_, index) => index + 1);
-        createBarChart('dailyActivityChart', days, data.dailyActivity.slice(0, dayCount), 'Сообщений');
+        createBarChart('dailyActivityChart', () => days, data.dailyActivity.slice(0, dayCount), 'chartMessages');
         createTimeOfDayChart(data.timeOfDay, 'monthlyTimeOfDayChart');
         createMessageTypesChart(data.messageTypes, 'monthlyMessageTypesChart');
         createResponseTimeChart(data.responseTimes, 'monthlyResponseTimeChart');
@@ -1269,7 +1538,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const datasets = participants.map((participant, index) => ({
             ...lineAppearance(index),
-            label: participant,
             data: monthsData.map(m => m.data.participants[participant]?.length || 0)
         }));
 
@@ -1277,12 +1545,22 @@ document.addEventListener('DOMContentLoaded', () => {
         if (unattributed.some(Boolean)) {
             datasets.push({
                 ...lineAppearance(datasets.length),
-                label: 'Записи без отправителя',
                 data: unattributed,
                 borderDash: [4, 4]
             });
         }
-        const chart = createChart('monthlyChart', { type: 'line', data: { labels, datasets } });
+        const chart = createChart('monthlyChart', {
+            type: 'line',
+            data: { labels, datasets },
+            localize(chartData) {
+                participants.forEach((participant, index) => {
+                    chartData.datasets[index].label = participantLabel(participant);
+                });
+                if (chartData.datasets.length > participants.length) {
+                    chartData.datasets[participants.length].label = translate('unattributed');
+                }
+            }
+        });
         renderMonthlyChartLegend(chart);
     }
 
@@ -1319,36 +1597,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createResponseTimeChart(responseTimes, canvasId = 'responseTimeChart') {
-        const labels = [];
+        const pairs = [];
         const minutes = [];
         for (const [sender, recipients] of Object.entries(responseTimes)) {
             for (const [recipient, times] of Object.entries(recipients)) {
                 if (!times.length) continue;
-                labels.push(`${sender} -> ${recipient}`);
+                pairs.push([sender, recipient]);
                 minutes.push(times.reduce((sum, seconds) => sum + seconds, 0) / times.length / 60);
             }
         }
 
-        createBarChart(canvasId, labels, minutes, 'Среднее время ответа (мин)', true);
+        const labels = () => pairs.map(([sender, recipient]) => `${participantLabel(sender)} -> ${participantLabel(recipient)}`);
+        createBarChart(canvasId, labels, minutes, 'chartResponse', true);
     }
 
     function createDayOfWeekChart(activity, canvasId = 'dayOfWeekChart') {
-        createBarChart(canvasId, ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'], activity, 'Сообщений');
+        createBarChart(canvasId, () => translate('weekdays').slice(), activity, 'chartMessages');
     }
 
-    function createBarChart(canvasId, labels, data, label, decimalTicks = false) {
+    function createBarChart(canvasId, getLabels, data, labelKey, decimalTicks = false) {
         createChart(canvasId, {
             type: 'bar',
             decimalTicks,
             data: {
-                labels,
                 datasets: [{
-                    label,
                     data,
                     backgroundColor: () => chartTheme.accent,
                     borderRadius: 4,
                     maxBarThickness: 28
                 }]
+            },
+            localize(chartData) {
+                chartData.labels = getLabels();
+                chartData.datasets[0].label = translate(labelKey);
             }
         });
     }
@@ -1360,9 +1641,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: Array.from({ length: 24 }, (_, i) => `${i}:00`),
                 datasets: [{
                     ...lineAppearance(0),
-                    label: 'Активность',
                     data: timeOfDay
                 }]
+            },
+            localize(chartData) {
+                chartData.datasets[0].label = translate('activity');
             }
         });
     }
@@ -1390,7 +1673,6 @@ document.addEventListener('DOMContentLoaded', () => {
         createChart(canvasId, {
             type: 'doughnut',
             data: {
-                labels: types.map(type => messageTypeLabels.get(type) ?? type),
                 datasets: [{
                     data: Object.values(messageTypes),
                     backgroundColor: ({ dataIndex }) => chartSeriesColor(messageTypeColorIndex(types[dataIndex])),
@@ -1399,15 +1681,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     borderWidth: 2,
                     hoverOffset: 3
                 }]
+            },
+            localize(chartData) {
+                chartData.labels = types.map(mediaLabel);
             }
         });
     }
 
     function formatTime(seconds) {
-        if (seconds < 60) return `${Math.round(seconds)} сек`;
-        if (seconds < 3600) return `${Math.round(seconds / 60)} мин`;
-        if (seconds < 86400) return `${Math.round(seconds / 3600)} ч`;
-        return `${Math.round(seconds / 86400)} дн`;
+        if (seconds < 60) return `${Math.round(seconds)} ${translate('seconds')}`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)} ${translate('minutes')}`;
+        if (seconds < 86400) return `${Math.round(seconds / 3600)} ${translate('hours')}`;
+        return `${Math.round(seconds / 86400)} ${translate('days')}`;
     }
 
 
@@ -1448,17 +1733,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function generateParticipantStatsHTML(totalsByParticipant) {
-        let statsHTML = '<h3><i class="fas fa-users" aria-hidden="true"></i> Статистика по участникам:</h3><ul>';
+        let statsHTML = `<h3><i class="fas fa-users" aria-hidden="true"></i> ${translate('participantStats')}</h3><ul>`;
         for (const [participant, { messageCount, textLength }] of totalsByParticipant) {
-            const sanitizedParticipant = sanitizeHTML(participant);
+            const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
             const avgLength = textLength / messageCount;
 
             statsHTML += `
                 <li>
                     <strong>${sanitizedParticipant}</strong>:
                     <ul>
-                        <li><i class="fas fa-comment" aria-hidden="true"></i> Сообщений: ${messageCount}</li>
-                        <li><i class="fas fa-text-width" aria-hidden="true"></i> Средняя длина: ${avgLength.toFixed(1)} символов</li>
+                        <li><i class="fas fa-comment" aria-hidden="true"></i> ${translate('messageTotal', messageCount)}</li>
+                        <li><i class="fas fa-text-width" aria-hidden="true"></i> ${translate('averageLength', avgLength.toFixed(1))}</li>
                     </ul>
                 </li>
             `;
@@ -1494,24 +1779,24 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
 
-    function generateAverageResponseDelayHTML(avgDelayStats, title) { // Renamed from generateIgnoringStatsHTML
+    function generateAverageResponseDelayHTML(avgDelayStats, title) {
         let html = `<h3>${title}</h3><ul>`;
         const validResponders = Object.keys(avgDelayStats).filter(r => r);
         if (validResponders.length === 0) {
-            return '<p>Нет данных для этой статистики.</p>';
+            return `<p>${translate('noDelayData')}</p>`;
         }
 
         validResponders.forEach(responder => {
-            const sanitizedResponder = sanitizeHTML(responder);
+            const sanitizedResponder = sanitizeHTML(participantLabel(responder));
             const initiatorDelays = avgDelayStats[responder];
             const validInitiators = Object.keys(initiatorDelays).filter(i => i && initiatorDelays[i] !== undefined);
 
             if (validInitiators.length > 0) {
-                html += `<li><strong>Средняя задержка ответа ${sanitizedResponder}:</strong><ul>`; // Updated text
+                html += `<li><strong>${translate('delayFor', sanitizedResponder)}</strong><ul>`;
                 validInitiators.forEach(initiator => {
-                    const sanitizedInitiator = sanitizeHTML(initiator);
+                    const sanitizedInitiator = sanitizeHTML(participantLabel(initiator));
                     const avgTime = initiatorDelays[initiator]?.toFixed(1) || 'N/A';
-                    html += `<li>К <strong>${sanitizedInitiator}</strong>: ${avgTime} мин</li>`; // Updated text
+                    html += `<li>${translate('toParticipant')} <strong>${sanitizedInitiator}</strong>: ${avgTime} ${translate('minutes')}</li>`;
                 });
                 html += `</ul></li>`;
             }
@@ -1521,7 +1806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return html;
     }
 
-    function generateThresholdExceededMessagesHTML(thresholdMessages, title) { // Renamed from generateIgnoredMessagesHTML
+    function generateThresholdExceededMessagesHTML(thresholdMessages, title) {
         const validSenders = Object.keys(thresholdMessages || {}).filter(Boolean);
         const sections = [];
 
@@ -1534,14 +1819,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const sanitizedSender = sanitizeHTML(sender);
+            const sanitizedSender = sanitizeHTML(participantLabel(sender));
             const recipientItems = recipientsWithCounts.map(([recipient, count]) => {
-                return `<li>К <strong>${sanitizeHTML(recipient)}</strong>: ${count}</li>`;
+                return `<li>${translate('toParticipant')} <strong>${sanitizeHTML(participantLabel(recipient))}</strong>: ${count}</li>`;
             }).join('');
 
             const senderSection = `
                 <li>
-                    <strong>От ${sanitizedSender}:</strong>
+                    <strong>${translate('fromParticipant')} ${sanitizedSender}:</strong>
                     <ul>
                         ${recipientItems}
                     </ul>
@@ -1552,7 +1837,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (!sections.length) {
-            return '<p>Нет данных для этой статистики (с учетом порога).</p>';
+            return `<p>${translate('noLongResponses')}</p>`;
         }
 
         return `<h3>${title}</h3><ul>${sections.join('')}</ul>`;
@@ -1562,8 +1847,8 @@ document.addEventListener('DOMContentLoaded', () => {
         let wordCountHTML = `<h3>${title}</h3><ul>`;
         for (const participant in wordCounts) {
             if (Object.hasOwnProperty.call(wordCounts, participant) && participant) {
-                const sanitizedParticipant = sanitizeHTML(participant);
-                wordCountHTML += `<li><strong>${sanitizedParticipant}</strong>: ${wordCounts[participant]} слов</li>`;
+                const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
+                wordCountHTML += `<li><strong>${sanitizedParticipant}</strong>: ${translate('wordTotal', wordCounts[participant])}</li>`;
             }
         }
         wordCountHTML += '</ul>';
@@ -1574,11 +1859,11 @@ document.addEventListener('DOMContentLoaded', () => {
         let mediaTypeHTML = `<h3>${title}</h3><ul>`;
         for (const participant in mediaTypeUsage) {
              if (Object.hasOwnProperty.call(mediaTypeUsage, participant) && participant && Object.keys(mediaTypeUsage[participant]).length > 0) {
-                const sanitizedParticipant = sanitizeHTML(participant);
+                const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
                 mediaTypeHTML += `<li><strong>${sanitizedParticipant}</strong>:<ul>`;
                 for (const mediaType in mediaTypeUsage[participant]) {
                     if (Object.hasOwnProperty.call(mediaTypeUsage[participant], mediaType)) {
-                        const sanitizedMediaType = sanitizeHTML(messageTypeLabels.get(mediaType) ?? mediaType);
+                        const sanitizedMediaType = sanitizeHTML(mediaLabel(mediaType));
                         mediaTypeHTML += `<li><i class="fas fa-arrow-right" aria-hidden="true"></i> ${sanitizedMediaType}: ${mediaTypeUsage[participant][mediaType]}</li>`;
                     }
                 }

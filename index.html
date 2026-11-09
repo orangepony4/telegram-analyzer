@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:;
                    connect-src 'none'; base-uri 'none'; form-action 'none'">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Аналитика экспорта Telegram: активность, участники и время ответа. Обработка файлов в браузере.">
+    <meta name="description" content="Explore Telegram exports with activity charts, participant stats, and reply times. Your files stay in the browser.">
     <title>Telegram Analyzer</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23245442'/%3E%3Cpath d='M7 8h18v13H13l-5 4v-4H7zM12 17v-3m4 3v-5m4 5v-7' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="styles.css">
@@ -14,7 +14,7 @@
     <script src="analyzer.js" defer></script>
 </head>
 <body class="theme-muted-light">
-    <a class="skip-link" href="#reportTitle">К отчёту</a>
+    <a class="skip-link" href="#reportTitle" data-ru="К отчёту">Skip to report</a>
     <header class="app-header">
         <div class="header-inner">
             <div class="brand">
@@ -26,11 +26,15 @@
                 <span class="brand-name">Telegram Analyzer</span>
             </div>
             <div class="header-tools">
-                <span class="privacy-indicator"><i class="fas fa-shield-alt" aria-hidden="true"></i> Локальная обработка</span>
-                <button id="themeToggleBtn" class="icon-button theme-toggle-button" type="button" aria-label="Переключить на тёмную тему" title="Переключить на тёмную тему">
+                <span class="privacy-indicator"><i class="fas fa-shield-alt" aria-hidden="true"></i> <span data-ru="Локальная обработка">Local processing</span></span>
+                <button id="languageToggle" class="icon-button language-toggle" type="button" aria-label="Switch language to Russian" title="Switch language to Russian" hidden>
+                    <span id="languageToggleLabel">RU</span>
+                </button>
+                <button id="themeToggleBtn" class="icon-button theme-toggle-button" type="button" aria-label="Switch to dark theme" title="Switch to dark theme">
                     <i class="fas fa-moon" aria-hidden="true"></i>
                 </button>
-                <a class="icon-button" href="https://github.com/orangepony4/telegram-analyzer" aria-label="Исходный код на GitHub" title="Исходный код на GitHub">
+                <a class="icon-button" href="https://github.com/orangepony4/telegram-analyzer" aria-label="Source code on GitHub" title="Source code on GitHub"
+                   data-ru-aria-label="Исходный код на GitHub" data-ru-title="Исходный код на GitHub">
                     <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M15 7h5v5m0-5-8 8m5-1v5H5V7h5"/>
                     </svg>
@@ -42,15 +46,15 @@
     <main class="workspace">
         <aside class="source-rail" aria-labelledby="sourceHeading">
             <div class="source-heading">
-                <p class="eyebrow">Источник</p>
-                <h2 id="sourceHeading">Данные чата</h2>
+                <p class="eyebrow" data-ru="Источник">Source</p>
+                <h2 id="sourceHeading" data-ru="Данные чата">Chat data</h2>
             </div>
             <div class="source-panel">
                 <div class="source-file">
                     <span class="source-file-icon" aria-hidden="true"><i class="fas fa-file-upload"></i></span>
                     <div class="source-file-meta">
-                        <strong id="dropFileName" class="file-name">Файл не выбран</strong>
-                        <span id="sourceFileType">JSON из Telegram Desktop</span>
+                        <strong id="dropFileName" class="file-name" data-ru="Файл не выбран">No file selected</strong>
+                        <span id="sourceFileType" data-ru="JSON из Telegram Desktop">Telegram Desktop JSON</span>
                     </div>
                 </div>
                 <div class="source-actions">
@@ -58,19 +62,19 @@
                         <input type="file" id="jsonFile" accept=".json,application/json" class="sr-only" aria-describedby="uploadHint">
                         <label for="jsonFile" class="button button-primary file-button">
                             <i class="fas fa-file-upload" aria-hidden="true"></i>
-                            <span>Открыть JSON</span>
+                            <span data-ru="Открыть JSON">Open JSON</span>
                         </label>
-                        <p id="uploadHint" class="drop-hint">Можно перетащить файл сюда</p>
+                        <p id="uploadHint" class="drop-hint" data-ru="Можно перетащить файл сюда">You can also drop a file here</p>
                     </div>
                     <button type="button" id="loadDemoChat" class="button button-quiet" aria-describedby="demoImportHint">
-                        <i class="fas fa-comments" aria-hidden="true"></i> Демо-чат
+                        <i class="fas fa-comments" aria-hidden="true"></i> <span data-ru="Демо-чат">Sample chat</span>
                     </button>
                 </div>
-                <p id="demoImportHint" class="sr-only">Вымышленная переписка за три месяца.</p>
+                <p id="demoImportHint" class="sr-only" data-ru="Вымышленная переписка за три месяца.">A fictional conversation spanning three months.</p>
                 <p id="fileError" class="file-error" role="alert" hidden></p>
                 <div id="loadingIndicator" class="loading-indicator" aria-hidden="true">
                     <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                    <span>Читаем файл…</span>
+                    <span data-ru="Читаем файл…">Reading file…</span>
                 </div>
                 <p id="importStatus" class="sr-only" role="status"></p>
             </div>
@@ -78,104 +82,104 @@
             <div class="account-chat-chooser" id="accountChatChooser" hidden>
                 <div class="account-chat-controls">
                     <div class="account-chat-field">
-                        <label for="accountChatSelect">Чат из экспорта аккаунта</label>
+                        <label for="accountChatSelect" data-ru="Чат из экспорта аккаунта">Chat from account export</label>
                         <select id="accountChatSelect" aria-describedby="accountChatStatus">
-                            <option value="" disabled selected>Выберите чат</option>
+                            <option value="" disabled selected data-ru="Выберите чат">Choose a chat</option>
                         </select>
                     </div>
-                    <button type="button" id="analyzeAccountChat" class="button button-secondary" disabled>Показать статистику</button>
+                    <button type="button" id="analyzeAccountChat" class="button button-secondary" data-ru="Показать статистику" disabled>Analyze chat</button>
                 </div>
                 <p id="accountChatStatus" class="account-chat-status" role="status"></p>
             </div>
 
             <details class="export-help">
-                <summary>Где взять JSON?</summary>
-                <p>Откройте чат в Telegram Desktop. В меню выберите «Экспорт истории чата» и укажите формат JSON. В анализаторе откройте полученный файл result.json.</p>
-                <p>Подходит и общий экспорт аккаунта с включённой историей чатов.</p>
+                <summary data-ru="Где взять JSON?">Where do I get a JSON file?</summary>
+                <p data-ru="Откройте чат в Telegram Desktop. В меню выберите «Экспорт истории чата» и укажите формат JSON. В анализаторе откройте полученный файл result.json.">In Telegram Desktop, open the chat menu, choose “Export chat history,” and select JSON. Open the resulting result.json file here.</p>
+                <p data-ru="Подходит и общий экспорт аккаунта с включённой историей чатов.">You can also use an account export that includes chat history.</p>
             </details>
-            <p class="source-privacy"><i class="fas fa-shield-alt" aria-hidden="true"></i> Файлы остаются в браузере</p>
+            <p class="source-privacy"><i class="fas fa-shield-alt" aria-hidden="true"></i> <span data-ru="Файлы остаются в браузере">Files stay in your browser</span></p>
         </aside>
 
         <section class="report" aria-labelledby="reportTitle">
             <header class="report-heading">
                 <div class="report-title-group">
-                    <p id="reportKind" class="eyebrow report-kind">Отчёт по чату</p>
-                    <h1 id="reportTitle" tabindex="-1">Анализ переписки</h1>
-                    <p id="reportMeta" class="report-meta">Статистика сообщений и участников</p>
+                    <p id="reportKind" class="eyebrow report-kind" data-ru="Отчёт по чату">Chat report</p>
+                    <h1 id="reportTitle" tabindex="-1" data-ru="Анализ переписки">Chat analysis</h1>
+                    <p id="reportMeta" class="report-meta" data-ru="Статистика сообщений и участников">Message and participant statistics</p>
                 </div>
                 <button type="button" id="exportParticipants" class="button button-secondary" disabled>
-                    <i class="fas fa-download" aria-hidden="true"></i> CSV чата
+                    <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV чата">Chat CSV</span>
                 </button>
             </header>
 
             <div id="reportPlaceholder" class="report-placeholder">
                 <i class="fas fa-chart-line" aria-hidden="true"></i>
-                <h2 id="placeholderTitle">Выберите JSON-файл</h2>
-                <p id="placeholderText">Откройте экспорт из Telegram Desktop или посмотрите демо-чат.</p>
-                <noscript><p>Включите JavaScript, чтобы построить отчёт в браузере.</p></noscript>
+                <h2 id="placeholderTitle" data-ru="Выберите JSON-файл">Choose a JSON file</h2>
+                <p id="placeholderText" data-ru="Откройте экспорт из Telegram Desktop или посмотрите демо-чат.">Open a Telegram Desktop export or explore the sample chat.</p>
+                <noscript><p>Enable JavaScript to build the report in your browser.</p></noscript>
             </div>
 
             <div class="stats-container">
-                <p id="chartsUnavailableNotice" class="stat-box notice" hidden>Файл графиков не открылся. Если вы пользуетесь локальной копией, распакуйте её целиком и заново откройте index.html.</p>
+                <p id="chartsUnavailableNotice" class="stat-box notice" data-ru="Файл графиков не открылся. Если вы пользуетесь локальной копией, распакуйте её целиком и заново откройте index.html." hidden>Charts could not load. If you are using the offline copy, extract the entire ZIP and reopen index.html.</p>
                 <div class="report-toolbar">
-                    <div class="tabs" role="tablist" aria-label="Разделы статистики">
+                    <div class="tabs" role="tablist" aria-label="Report sections" data-ru-aria-label="Разделы статистики">
                         <button type="button" id="allStatsTab" class="tab-btn active" data-tab="all" role="tab"
-                                aria-controls="all" aria-selected="true" tabindex="0">Обзор</button>
+                                aria-controls="all" aria-selected="true" tabindex="0" data-ru="Обзор">Overview</button>
                         <button type="button" id="monthlyStatsTab" class="tab-btn" data-tab="monthly" role="tab"
-                                aria-controls="monthly" aria-selected="false" tabindex="-1">По месяцам</button>
+                                aria-controls="monthly" aria-selected="false" tabindex="-1" data-ru="По месяцам">By month</button>
                     </div>
                 </div>
 
                 <div class="tab-content active" id="all" role="tabpanel" aria-labelledby="allStatsTab" tabindex="0">
-                    <div class="metric-band" aria-label="Сводка по чату">
+                    <div class="metric-band" aria-label="Chat summary" data-ru-aria-label="Сводка по чату">
                         <div id="messageCount" class="metric"></div>
-                        <div class="metric"><span class="metric-label">Участники</span><strong class="metric-value" id="overviewParticipantCount">—</strong></div>
-                        <div class="metric"><span class="metric-label">Месяцы с перепиской</span><strong class="metric-value" id="overviewMonthCount">—</strong></div>
+                        <div class="metric"><span class="metric-label" data-ru="Участники">Participants</span><strong class="metric-value" id="overviewParticipantCount">—</strong></div>
+                        <div class="metric"><span class="metric-label" data-ru="Месяцы с перепиской">Active months</span><strong class="metric-value" id="overviewMonthCount">—</strong></div>
                     </div>
 
                     <div class="charts-grid">
                         <section class="chart-card chart-feature">
                             <div class="chart-heading">
-                                <h3 id="monthlyChartLabel">Динамика переписки</h3>
-                                <p>Количество сообщений по месяцам</p>
+                                <h3 id="monthlyChartLabel" data-ru="Динамика переписки">Activity over time</h3>
+                                <p data-ru="Количество сообщений по месяцам">Messages per month</p>
                             </div>
                             <div class="chart-plot"><canvas id="monthlyChart" role="img" aria-labelledby="monthlyChartLabel"></canvas></div>
                             <fieldset id="monthlyChartLegend" class="chart-series" hidden>
-                                <legend>Линии графика</legend>
+                                <legend data-ru="Линии графика">Chart series</legend>
                                 <div id="monthlyChartSeries" class="chart-series-list"></div>
                             </fieldset>
                         </section>
                         <section class="chart-card chart-side">
                             <div class="chart-heading">
-                                <h3 id="messageTypesChartLabel">Типы сообщений</h3>
-                                <p>Текст и медиа в чате</p>
+                                <h3 id="messageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
+                                <p data-ru="Текст и медиа в чате">Text and media in the chat</p>
                             </div>
                             <div class="chart-plot"><canvas id="messageTypesChart" role="img" aria-labelledby="messageTypesChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
                             <div class="chart-heading">
-                                <h3 id="responseTimeChartLabel">Время ответа</h3>
-                                <p>Средний интервал по участникам</p>
+                                <h3 id="responseTimeChartLabel" data-ru="Время ответа">Reply times</h3>
+                                <p data-ru="Средний интервал по участникам">Average time per participant</p>
                             </div>
                             <div class="chart-plot"><canvas id="responseTimeChart" role="img" aria-labelledby="responseTimeChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
                             <div class="chart-heading">
-                                <h3 id="timeOfDayChartLabel">Активность по часам</h3>
-                                <p>По времени в экспорте</p>
+                                <h3 id="timeOfDayChartLabel" data-ru="Активность по часам">Activity by hour</h3>
+                                <p data-ru="По времени в экспорте">Based on the time in the export</p>
                             </div>
                             <div class="chart-plot"><canvas id="timeOfDayChart" role="img" aria-labelledby="timeOfDayChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
-                            <div class="chart-heading"><h3 id="dayOfWeekChartLabel">Активность по дням недели</h3></div>
+                            <div class="chart-heading"><h3 id="dayOfWeekChartLabel" data-ru="Активность по дням недели">Activity by weekday</h3></div>
                             <div class="chart-plot"><canvas id="dayOfWeekChart" role="img" aria-labelledby="dayOfWeekChartLabel"></canvas></div>
                         </section>
                     </div>
 
                     <section class="detail-section" aria-labelledby="allDetailsHeading">
                         <div class="section-heading">
-                            <h2 id="allDetailsHeading">Детали переписки</h2>
-                            <label class="threshold-control" for="ignoredThreshold">Долгий ответ, мин <input type="number" id="ignoredThreshold" value="60" min="1"></label>
+                            <h2 id="allDetailsHeading" data-ru="Детали переписки">Chat details</h2>
+                            <label class="threshold-control" for="ignoredThreshold"><span data-ru="Долгий ответ, мин">Long reply threshold, min</span> <input type="number" id="ignoredThreshold" value="60" min="1"></label>
                         </div>
                         <div class="detail-grid">
                             <div id="participantStats" class="stat-box"></div>
@@ -190,56 +194,56 @@
                 <div class="tab-content" id="monthly" role="tabpanel" aria-labelledby="monthlyStatsTab" tabindex="0">
                     <div class="month-toolbar">
                         <div class="month-selector">
-                            <button type="button" class="nav-btn" id="prevMonth" aria-label="Предыдущий месяц">
+                            <button type="button" class="nav-btn" id="prevMonth" aria-label="Previous month" data-ru-aria-label="Предыдущий месяц">
                                 <i class="fas fa-chevron-left" aria-hidden="true"></i>
                             </button>
-                            <h2 id="currentMonth" aria-live="polite" aria-atomic="true">Выберите месяц</h2>
-                            <button type="button" class="nav-btn" id="nextMonth" aria-label="Следующий месяц">
+                            <h2 id="currentMonth" aria-live="polite" aria-atomic="true" data-ru="Выберите месяц">Choose a month</h2>
+                            <button type="button" class="nav-btn" id="nextMonth" aria-label="Next month" data-ru-aria-label="Следующий месяц">
                                 <i class="fas fa-chevron-right" aria-hidden="true"></i>
                             </button>
                         </div>
                         <button type="button" id="exportMonthlyParticipants" class="button button-secondary monthly-export" aria-describedby="currentMonth" disabled>
-                            <i class="fas fa-download" aria-hidden="true"></i> CSV месяца
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV месяца">Month CSV</span>
                         </button>
                     </div>
 
-                    <div class="metric-band" aria-label="Сводка за месяц">
+                    <div class="metric-band" aria-label="Monthly summary" data-ru-aria-label="Сводка за месяц">
                         <div id="monthlyMessageCount" class="metric"></div>
-                        <div class="metric"><span class="metric-label">Участники</span><strong class="metric-value" id="monthlyParticipantCount">—</strong></div>
-                        <div class="metric"><span class="metric-label">Дни с перепиской</span><strong class="metric-value" id="monthlyActiveDayCount">—</strong></div>
+                        <div class="metric"><span class="metric-label" data-ru="Участники">Participants</span><strong class="metric-value" id="monthlyParticipantCount">—</strong></div>
+                        <div class="metric"><span class="metric-label" data-ru="Дни с перепиской">Active days</span><strong class="metric-value" id="monthlyActiveDayCount">—</strong></div>
                     </div>
 
                     <div class="charts-grid">
                         <section class="chart-card chart-feature">
                             <div class="chart-heading">
-                                <h3 id="dailyActivityChartLabel">Активность по дням</h3>
-                                <p>Количество сообщений за каждый день месяца</p>
+                                <h3 id="dailyActivityChartLabel" data-ru="Активность по дням">Daily activity</h3>
+                                <p data-ru="Количество сообщений за каждый день месяца">Messages on each day of the month</p>
                             </div>
                             <div class="chart-plot"><canvas id="dailyActivityChart" role="img" aria-labelledby="dailyActivityChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card chart-side">
                             <div class="chart-heading">
-                                <h3 id="monthlyMessageTypesChartLabel">Типы сообщений</h3>
-                                <p>Текст и медиа за месяц</p>
+                                <h3 id="monthlyMessageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
+                                <p data-ru="Текст и медиа за месяц">Text and media in the selected month</p>
                             </div>
                             <div class="chart-plot"><canvas id="monthlyMessageTypesChart" role="img" aria-labelledby="monthlyMessageTypesChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
-                            <div class="chart-heading"><h3 id="monthlyResponseTimeChartLabel">Время ответа</h3></div>
+                            <div class="chart-heading"><h3 id="monthlyResponseTimeChartLabel" data-ru="Время ответа">Reply times</h3></div>
                             <div class="chart-plot"><canvas id="monthlyResponseTimeChart" role="img" aria-labelledby="monthlyResponseTimeChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
-                            <div class="chart-heading"><h3 id="monthlyTimeOfDayChartLabel">Активность по часам</h3></div>
+                            <div class="chart-heading"><h3 id="monthlyTimeOfDayChartLabel" data-ru="Активность по часам">Activity by hour</h3></div>
                             <div class="chart-plot"><canvas id="monthlyTimeOfDayChart" role="img" aria-labelledby="monthlyTimeOfDayChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
-                            <div class="chart-heading"><h3 id="monthlyDayOfWeekChartLabel">Активность по дням недели</h3></div>
+                            <div class="chart-heading"><h3 id="monthlyDayOfWeekChartLabel" data-ru="Активность по дням недели">Activity by weekday</h3></div>
                             <div class="chart-plot"><canvas id="monthlyDayOfWeekChart" role="img" aria-labelledby="monthlyDayOfWeekChartLabel"></canvas></div>
                         </section>
                     </div>
 
                     <section class="detail-section" aria-labelledby="monthDetailsHeading">
-                        <div class="section-heading"><h2 id="monthDetailsHeading">Детали месяца</h2></div>
+                        <div class="section-heading"><h2 id="monthDetailsHeading" data-ru="Детали месяца">Monthly details</h2></div>
                         <div class="detail-grid">
                             <div id="monthlyParticipantStats" class="stat-box"></div>
                             <div id="monthlyAverageResponseDelayStats" class="stat-box"></div>

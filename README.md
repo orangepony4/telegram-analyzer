@@ -10,16 +10,16 @@ Analyze Telegram Desktop chat exports in your browser. See who participates, whe
 
 [Analyze my export](https://orangepony4.github.io/telegram-analyzer/?view=upload) · [Download the offline ZIP](https://github.com/orangepony4/telegram-analyzer/releases/latest) · [View source code](https://github.com/orangepony4/telegram-analyzer/tree/main)
 
-The app opens with a fictional three-month conversation. You can explore the charts and download a sample CSV right away. **Analyze my export** opens the upload view. Select **Демо-чат** (Demo chat) there to open the example. The interface currently uses Russian labels.
+The app opens with a fictional three-month conversation. Explore the charts and download a sample CSV right away. **Analyze my export** opens the upload view, where **Sample chat** opens the example. The interface starts in English. Use **RU** in the header to switch to Russian without reopening the report.
 
-![Telegram Analyzer showing monthly activity, response times, and message types for a fictional chat](docs/preview.webp)
+![Telegram Analyzer showing monthly activity and message types for a fictional chat](docs/preview.webp)
 
 ### Analyze your own chat
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
-2. Select **Открыть JSON** (Open JSON) or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
-3. If you open an account export containing chat history, select a chat and choose **Показать статистику** (Show statistics). The report and CSV cover that chat.
-4. Open **Обзор** (Overview) for the full chat or **По месяцам** (By month) for a specific month. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
+2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
+3. If you open an account export containing chat history, select a chat and choose **Analyze chat**. The report and CSV cover that chat.
+4. Open **Overview** for the full chat or **By month** for a specific month. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
 ### What the report measures
 
@@ -27,7 +27,7 @@ The app opens with a fictional three-month conversation. You can explore the cha
 - Response times measure the interval between consecutive messages from different participants and skip service events. Across a month boundary, the interval belongs to the month of the response. The long-response threshold is adjustable in minutes.
 - Modern exports use Unix timestamps or explicit offsets for response order and duration. Activity charts keep the calendar dates and times written in the export. Mixed legacy dates without offsets use an approximate wall-clock timeline for response intervals.
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
-- **CSV чата** (Chat CSV) exports the whole chat. **CSV месяца** (Month CSV) exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8.
+- **Chat CSV** exports the whole chat. **Month CSV** exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8. The column headers stay the same when you change the interface language.
 - Average message length counts grapheme clusters, so a compound emoji can count as one character. Browsers without `Intl.Segmenter` count Unicode code points.
 
 ### Offline use and privacy
@@ -61,6 +61,8 @@ Run `npm run package:offline` from a Git checkout to build `telegram-analyzer-of
 
 Telegram Analyzer показывает активность, участников и время ответа по экспорту из Telegram Desktop. Ссылка «Попробовать в браузере» открывает вымышленную переписку за три месяца. Можно сразу посмотреть графики и скачать пробный CSV. Ссылка «Проанализировать свой экспорт» ведёт на экран загрузки. Этот же пример там доступен через кнопку **«Демо-чат»**.
 
+Интерфейс открывается на английском. Нажмите **RU** в шапке, чтобы перейти на русский. Текущий отчёт останется открытым.
+
 ### Как открыть свою переписку
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
@@ -74,7 +76,7 @@ Telegram Analyzer показывает активность, участнико�
 - Время ответа — интервал между соседними сообщениями разных участников. Служебные события пропускаются. Если сообщения пришлись на разные месяцы, интервал относится к месяцу ответа. Порог долгого ответа можно задать в минутах.
 - В современных экспортах порядок сообщений и длительность ответов определяются по Unix-времени или явному смещению часового пояса. Графики сохраняют календарное время из экспорта. Для смешанных экспортов с датами без смещения длительность ответов рассчитывается приблизительно по календарному времени.
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
-- Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя.
+- Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя. Названия столбцов сохраняются при переключении языка.
 - Средняя длина считается по графемам. Например, составной эмодзи может считаться одним символом. В браузерах без `Intl.Segmenter` используются кодовые точки Unicode.
 
 ### Работа без интернета и приватность

@@ -6,8 +6,9 @@ const { test } = require('node:test');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
+const russianLocale = { getItem: key => key === 'telegramAnalyzerLocale' ? 'ru' : null };
 
-function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null }, intl = Intl, search = '' } = {}) {
+function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl = Intl, search = '' } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
@@ -121,8 +122,10 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
         }
     }
 
+    const documentElement = element('html');
     vm.runInNewContext(source, {
         document: {
+            documentElement,
             addEventListener(event, handler) { handler(); },
             getElementById: element,
             querySelector: element,
@@ -189,7 +192,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
     }
 
     return {
-        element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo,
+        element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo, documentElement,
         startupDemo: readers.length ? demoImport(readers[0]) : null,
         get focusedElement() { return focusedElement; },
     };
@@ -215,6 +218,47 @@ test('toggles the visible theme in both directions when saving preferences is bl
         assert.equal(body.classList.contains(initial), true);
         assert.equal(body.classList.contains(alternate), false);
     }
+});
+
+test('defaults to English and switches language without losing the report, month or series visibility', async () => {
+    const preferences = new Map();
+    const app = createAnalyzer({
+        storage: { getItem: key => preferences.get(key), setItem: (key, value) => preferences.set(key, value) },
+        search: '?view=upload',
+    });
+    const toggle = app.element('languageToggle');
+    assert.equal(app.documentElement.lang, 'en');
+
+    app.selectFile('two-months.json').complete({
+        name: 'Synthetic report',
+        messages: [
+            { id: 1, from: 'Алиса', date: '2026-10-01T12:00:00', text: 'Hi' },
+            { id: 2, from: 'Bob', date: '2026-11-01T12:00:00', text: 'Hi' },
+        ],
+    });
+    const trend = app.charts.get('monthlyChart');
+    app.element('monthlyChartSeries').children[0].click();
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    assert.match(app.element('currentMonth').textContent, /October/i);
+    app.element('exportMonthlyParticipants').click();
+    const before = await app.downloads.at(-1).blob.text();
+
+    toggle.focus();
+    toggle.click();
+    assert.equal(app.documentElement.lang, 'ru');
+    assert.equal(preferences.get('telegramAnalyzerLocale'), 'ru');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.match(app.element('currentMonth').textContent, /октябр/i);
+    assert.equal(app.focusedElement, toggle);
+    assert.equal(app.charts.get('monthlyChart').isDatasetVisible(0), false);
+    assert.equal(trend.data.datasets[0].label, 'Алиса');
+    app.element('exportMonthlyParticipants').click();
+    assert.equal(await app.downloads.at(-1).blob.text(), before);
+
+    toggle.click();
+    assert.equal(app.documentElement.lang, 'en');
+    assert.match(app.element('currentMonth').textContent, /October/i);
 });
 
 test('rejects unrelated JSON and malformed message entries', () => {

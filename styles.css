@@ -343,6 +343,9 @@ a { color: var(--accent); }
     font-size: 1rem;
 }
 
+.language-toggle { font-size: .75rem; letter-spacing: .04em; }
+.language-toggle[hidden] { display: none; }
+
 .button:disabled, .icon-button:disabled, .nav-btn:disabled, .tab-btn:disabled {
     opacity: .5;
     cursor: not-allowed;
@@ -995,6 +998,7 @@ a { color: var(--accent); }
 }
 
 @media (max-width: 520px) {
+    .header-tools { gap: 6px; }
     .privacy-indicator { display: none; }
     .source-privacy { display: flex; }
     .source-actions .button { gap: 5px; padding-inline: 7px; }
