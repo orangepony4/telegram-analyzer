@@ -1874,6 +1874,91 @@ test('classifies Telegram checklists without counting or exposing checklist cont
     }
 });
 
+test('counts exported reactions by message month without exposing reaction metadata', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const overview = app.element('overviewReactionSummary');
+    const monthly = app.element('monthlyReactionSummary');
+    const maximum = 4_294_967_295;
+    const england = '\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F}';
+    app.selectFile('reactions.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-10-01T00:00:00Z', text: 'First', reactions: [
+            { type: 'emoji', emoji: '👏', count: 2, recent: [{ from: 'Synthetic reactor', from_id: 'user9000' }] },
+            { type: 'custom_emoji', document_id: '123456789', count: 4 },
+            { type: 'paid', count: maximum },
+            { type: 'emoji', emoji: '👍', count: 0 },
+            { type: 'emoji', emoji: '👍', count: -1 },
+            { type: 'emoji', emoji: '👍', count: 1.5 },
+            { type: 'emoji', emoji: '👍', count: '4' },
+            { type: 'emoji', emoji: '👍', count: maximum + 1 },
+            { type: 'emoji', emoji: '🙂Synthetic metadata', count: 40 },
+            { type: 'emoji', emoji: '👍👍', count: 40 },
+            { type: 'emoji', emoji: '👍' + '\u200D👍'.repeat(70), count: 40 },
+            { type: 'emoji', emoji: '👍\u{E0061}\u{E007F}', count: 40 },
+            { type: 'emoji', emoji: '🏴\u{E0061}\u{E007F}', count: 40 },
+            null,
+        ] },
+        { id: 2, from: 'Bob', date: '2026-11-01T00:00:00Z', text: 'Second', reactions: [
+            { type: 'emoji', emoji: '👏', count: 1 },
+            { type: 'emoji', emoji: '❤️', count: 7 },
+            { type: 'emoji', emoji: '1️⃣', count: 1 },
+            { type: 'emoji', emoji: england, count: 1 },
+            { type: 'custom_emoji', document_id: '987654321', count: 5 },
+            { type: 'paid', count: maximum },
+            { type: 'empty', count: 100 },
+            { type: 'unknown', count: 100 },
+        ] },
+        { id: 3, date: '2026-11-02T00:00:00Z', reactions: [{ type: 'emoji', emoji: '🇷🇺', count: 2 }] },
+        { id: 4, from: 'Alice', reactions: [{ type: 'emoji', emoji: '👏', count: 6 }] },
+        { id: 5, from: 'Bob', date: '2026-12-01T00:00:00Z', reactions: { type: 'paid', count: 10 } },
+    ] });
+
+    const clean = text => text.replace(/[\s,]/g, '');
+    const counts = id => app.element(id).children.map(({ children: [heading, count] }) =>
+        [heading.textContent, clean(count.textContent)]);
+    assert.equal(overview.hidden, false);
+    assert.equal(monthly.hidden, true, 'the latest month contains no valid reactions');
+    assert.deepEqual(counts('overviewReactionRows'), [], 'collapsed tables are not rendered');
+    overview.open = true;
+    overview.toggle();
+    assert.deepEqual(counts('overviewReactionRows'), [
+        ['Платные реакции', '8589934590'], ['Пользовательские эмодзи', '9'], ['👏', '9'],
+        ['❤️', '7'], ['🇷🇺', '2'], ['1️⃣', '1'], [england, '1'],
+    ]);
+    assert.equal(clean(app.element('overviewReactionTotal').textContent), '8589934619');
+
+    app.monthlyTab.click();
+    const month = app.element('reportMonth');
+    month.value = '2026-11';
+    month.change();
+    assert.equal(monthly.hidden, false);
+    monthly.open = true;
+    monthly.toggle();
+    assert.deepEqual(counts('monthlyReactionRows'), [
+        ['Платные реакции', '4294967295'], ['❤️', '7'], ['Пользовательские эмодзи', '5'],
+        ['🇷🇺', '2'], ['1️⃣', '1'], [england, '1'], ['👏', '1'],
+    ]);
+    assert.equal(clean(app.element('monthlyReactionTotal').textContent), '4294967312');
+
+    app.element('languageToggle').click();
+    assert.equal(app.element('monthlyReactionTotal').textContent, '4,294,967,312');
+    assert.deepEqual(counts('monthlyReactionRows').slice(0, 3), [
+        ['Paid reactions', '4294967295'], ['❤️', '7'], ['Custom emoji', '5'],
+    ]);
+    app.element('prevMonth').click();
+    assert.deepEqual(counts('monthlyReactionRows'), [
+        ['Paid reactions', '4294967295'], ['Custom emoji', '4'], ['👏', '2'],
+    ]);
+    assert.equal(clean(app.element('monthlyReactionTotal').textContent), '4294967301');
+
+    app.element('clearLoadedData').click();
+    assert.equal(overview.hidden, true);
+    assert.equal(monthly.hidden, true);
+    assert.deepEqual(counts('overviewReactionRows'), []);
+    assert.deepEqual(counts('monthlyReactionRows'), []);
+    assert.equal(app.element('overviewReactionTotal').textContent, '');
+    assert.equal(app.element('monthlyReactionTotal').textContent, '');
+});
+
 test('counts games, invoices, giveaways and paid media without exposing their metadata', async () => {
     const app = createAnalyzer();
     const game = { game_title: 'Synthetic game title', game_link: 'https://example.com/synthetic-game' };

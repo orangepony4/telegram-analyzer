@@ -34,6 +34,16 @@ document.addEventListener('DOMContentLoaded', () => {
         weekdays: document.getElementById('monthlyWeekdayRows'),
         hours: document.getElementById('monthlyHourlyRows'),
     };
+    const overviewReactions = {
+        panel: document.getElementById('overviewReactionSummary'),
+        rows: document.getElementById('overviewReactionRows'),
+        total: document.getElementById('overviewReactionTotal'),
+    };
+    const monthlyReactions = {
+        panel: document.getElementById('monthlyReactionSummary'),
+        rows: document.getElementById('monthlyReactionRows'),
+        total: document.getElementById('monthlyReactionTotal'),
+    };
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
@@ -243,6 +253,21 @@ document.addEventListener('DOMContentLoaded', () => {
         : null;
     const dictionaryWordScripts = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
     const wordCharacter = /[\p{L}\p{N}]/u;
+    const reactionPictograph = String.raw`\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?`;
+    // These three Unicode tag sequences encode England, Scotland and Wales.
+    const subdivisionFlag = String.raw`\u{1F3F4}\u{E0067}\u{E0062}`
+        + String.raw`(?:\u{E0065}\u{E006E}\u{E0067}|\u{E0073}\u{E0063}\u{E0074}|\u{E0077}\u{E006C}\u{E0073})\u{E007F}`;
+    const reactionEmojiPattern = new RegExp(
+        String.raw`^(?:[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|${subdivisionFlag}|`
+        + String.raw`${reactionPictograph}(?:\u200D${reactionPictograph})*)$`,
+        'u'
+    );
+    // Telegram Desktop stores each exported reaction count as a uint32.
+    const maximumReactionCount = 4_294_967_295;
+    const reactionLabels = new Map([
+        ['custom_emoji', ['Custom emoji', 'Пользовательские эмодзи']],
+        ['paid', ['Paid reactions', 'Платные реакции']],
+    ]);
     const richTextDepthLimit = 64;
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
     const DARK_THEME_KEY = 'default';
@@ -347,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
     exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
+    overviewReactions.panel.addEventListener('toggle', refreshOverviewReactions);
+    monthlyReactions.panel.addEventListener('toggle', refreshMonthlyReactions);
 
     function selectReportMonth(index) {
         if (!monthsData[index] || index === currentMonthIndex) return;
@@ -555,10 +582,15 @@ document.addEventListener('DOMContentLoaded', () => {
             ['2025-03-08T16:27:00', 0, 'Всё работает. Маяк виден с самого причала!'],
         ];
         const directReplies = { 2: 1, 4: 2, 6: 5, 8: 7, 10: 7, 12: 11, 14: 11 };
+        const reactions = {
+            3: [{ type: 'emoji', emoji: '👍', count: 2 }],
+            10: [{ type: 'emoji', emoji: '👍', count: 1 }],
+            14: [{ type: 'emoji', emoji: '🎉', count: 2 }, { type: 'custom_emoji', count: 1 }],
+        };
         const messages = rows.map(([date, person, text, mediaType], index) => ({
             id: index + 1, type: 'message', date, from: people[person],
             from_id: `user${person + 1}`, text, media_type: mediaType,
-            reply_to_message_id: directReplies[index + 1],
+            reply_to_message_id: directReplies[index + 1], reactions: reactions[index + 1],
         }));
         const json = JSON.stringify({ name: 'Демонстрационный чат', messages });
         processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }), { isDemo: true });
@@ -1148,6 +1180,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshDailyActivity();
         refreshOverviewPatterns();
         refreshMonthlyPatterns();
+        refreshOverviewReactions();
+        refreshMonthlyReactions();
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
@@ -1543,6 +1577,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let timedReplies = 0;
         const replyTargets = findReplyTargets(timings);
         const participantTotals = new Map();
+        const reactionCounts = new Map();
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(timing => {
@@ -1556,7 +1591,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
                 addParticipantMessage(participantTotals, msg.from, textLength);
             }
-            if (!calendar) return;
+            if (!calendar) {
+                collectReactionCounts(msg.reactions, reactionCounts);
+                return;
+            }
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
             const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
             const monthKey = `${year}-${monthNumber}`;
@@ -1565,6 +1603,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 messageCount: 0,
                 unattributedCount: 0,
                 participantTotals: new Map(),
+                reactionCounts: new Map(),
                 messageTypes: Object.create(null),
                 timeOfDay: new Array(24).fill(0),
                 responseTimes: Object.create(null),
@@ -1578,6 +1617,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             month.messageCount++;
+            collectReactionCounts(msg.reactions, reactionCounts, month.reactionCounts);
             if (replyLink !== null) month.linkedReplies++;
             const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
@@ -1634,9 +1674,11 @@ document.addEventListener('DOMContentLoaded', () => {
             words: wordCounts,
             media: calculateMediaTypeUsage(messages),
             activity: allTimeData,
+            reactionCounts,
         };
         renderOverviewStatistics();
         refreshOverviewPatterns();
+        refreshOverviewReactions();
 
         // Создаем графики общей статистики
         createMonthlyChart(monthsData);
@@ -1690,6 +1732,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderOverviewStatistics();
         refreshOverviewPatterns();
+        refreshOverviewReactions();
         updateMonthlyStats({ rebuildCharts: false });
         for (const chart of renderedCharts.values()) {
             chartTranslations.get(chart)?.(chart.data);
@@ -1709,6 +1752,24 @@ document.addEventListener('DOMContentLoaded', () => {
     function recordResponse(responseTimes, sender, responder, seconds) {
         const responses = responseTimes[sender] ??= Object.create(null);
         (responses[responder] ??= []).push(seconds);
+    }
+
+    function collectReactionCounts(reactions, whole, month) {
+        if (!Array.isArray(reactions)) return;
+        for (const reaction of reactions) {
+            const { type, emoji, count } = reaction ?? {};
+            if (!Number.isInteger(count) || count <= 0 || count > maximumReactionCount) continue;
+            let key = type;
+            if (type === 'emoji') {
+                if (typeof emoji !== 'string' || emoji.length > 64 || !reactionEmojiPattern.test(emoji)) continue;
+                key = emoji;
+            } else if (!reactionLabels.has(type)) {
+                continue;
+            }
+            const amount = BigInt(count);
+            whole.set(key, (whole.get(key) ?? 0n) + amount);
+            if (month) month.set(key, (month.get(key) ?? 0n) + amount);
+        }
     }
 
     function calculateAllTimeStats(timings) {
@@ -1936,22 +1997,53 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderPatternRows(container, counts, label) {
-        counts.forEach((count, index) => {
-            const row = document.createElement('tr');
-            const heading = document.createElement('th');
-            heading.scope = 'row';
-            heading.textContent = label(index);
-            const records = document.createElement('td');
-            records.textContent = countFormat.format(count);
-            row.append(heading, records);
-            container.append(row);
+        counts.forEach((count, index) => appendCountRow(container, label(index), count));
+    }
+
+    function appendCountRow(container, label, count) {
+        const row = document.createElement('tr');
+        const heading = document.createElement('th');
+        heading.scope = 'row';
+        heading.textContent = label;
+        const records = document.createElement('td');
+        records.textContent = countFormat.format(count);
+        row.append(heading, records);
+        container.append(row);
+    }
+
+    function refreshOverviewReactions() {
+        renderReactionCounts(overviewReactions, overviewData?.reactionCounts);
+    }
+
+    function refreshMonthlyReactions() {
+        renderReactionCounts(monthlyReactions, monthsData[currentMonthIndex]?.data.reactionCounts);
+    }
+
+    function renderReactionCounts({ panel, rows, total }, counts) {
+        panel.hidden = !counts?.size;
+        if (panel.hidden) panel.open = false;
+        rows.replaceChildren();
+        total.textContent = '';
+        if (!panel.open || !counts?.size) return;
+
+        const ordered = [...counts].sort(([leftKey, leftCount], [rightKey, rightCount]) => {
+            if (leftCount !== rightCount) return leftCount > rightCount ? -1 : 1;
+            return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
         });
+        let sum = 0n;
+        for (const [key, count] of ordered) {
+            const label = reactionLabels.get(key)?.[language === 'ru' ? 1 : 0] ?? key;
+            appendCountRow(rows, label, count);
+            sum += count;
+        }
+        total.textContent = countFormat.format(sum);
     }
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
         if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
         refreshMonthlyPatterns();
+        refreshMonthlyReactions();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
             return;

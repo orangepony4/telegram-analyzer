@@ -1100,11 +1100,21 @@ a { color: var(--accent); }
     .source-actions .button { gap: 5px; padding-inline: 7px; }
     .report-toolbar { align-items: stretch; }
     .report-toolbar .tabs { flex: 1 1 100%; width: 100%; }
+    /* Keep native select labels visible when enlarged text needs another row. */
+    .reply-timing { display: flex; flex: 1 1 100%; flex-wrap: wrap; }
+    #replyTiming { flex: 1 0 auto; }
+    .reply-timing p { flex-basis: 100%; }
     .metric { padding: 9px 8px; }
     .chart-card:not(.chart-feature) { grid-column: 1 / -1; }
     .chart-card { padding: 12px; }
     .chart-feature::before { left: 12px; }
-    .month-selector { flex: 1 1 100%; }
+    .month-selector { flex: 1 1 100%; flex-wrap: wrap; }
+    #reportMonth { flex: 1 0 auto; width: auto; }
+    #nextMonth { margin-inline-start: auto; }
+}
+
+@media (max-width: 360px) {
+    #replyTiming { padding-inline: 4px; font-size: .75rem; }
 }
 
 @media (prefers-reduced-motion: reduce) {

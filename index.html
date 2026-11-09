@@ -235,6 +235,16 @@
                         </div>
                     </details>
 
+                    <details id="overviewReactionSummary" class="activity-data" hidden>
+                        <summary data-ru="Реакции на сообщения">Message reactions</summary>
+                        <table>
+                            <caption data-ru="Суммы реакций из экспорта по всем сообщениям">Exported reaction counts across all messages</caption>
+                            <thead><tr><th scope="col" data-ru="Реакция">Reaction</th><th scope="col" data-ru="Количество">Count</th></tr></thead>
+                            <tbody id="overviewReactionRows"></tbody>
+                            <tfoot><tr><th scope="row" data-ru="Всего реакций">Total reactions</th><td id="overviewReactionTotal"></td></tr></tfoot>
+                        </table>
+                    </details>
+
                     <section class="detail-section" aria-labelledby="allDetailsHeading">
                         <div class="section-heading">
                             <h2 id="allDetailsHeading" data-ru="Детали переписки">Chat details</h2>
@@ -333,6 +343,16 @@
                                 <tbody id="monthlyHourlyRows"></tbody>
                             </table>
                         </div>
+                    </details>
+
+                    <details id="monthlyReactionSummary" class="activity-data" hidden>
+                        <summary data-ru="Реакции на сообщения">Message reactions</summary>
+                        <table aria-describedby="currentMonth">
+                            <caption data-ru="Реакции на сообщения, отправленные в этом месяце. Реакции могли появиться позже.">Reactions to messages sent in this month. Some reactions may have been added later.</caption>
+                            <thead><tr><th scope="col" data-ru="Реакция">Reaction</th><th scope="col" data-ru="Количество">Count</th></tr></thead>
+                            <tbody id="monthlyReactionRows"></tbody>
+                            <tfoot><tr><th scope="row" data-ru="Всего реакций">Total reactions</th><td id="monthlyReactionTotal"></td></tr></tfoot>
+                        </table>
                     </details>
 
                     <section class="detail-section" aria-labelledby="monthDetailsHeading">
