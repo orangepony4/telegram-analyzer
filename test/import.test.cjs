@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
 
-function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null } } = {}) {
+function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null }, intl = Intl } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
@@ -132,6 +132,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
             body: element('body'),
         },
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
+        Intl: intl,
         localStorage: storage,
         Chart: chartsAvailable ? Chart : undefined,
         Blob,
@@ -759,6 +760,38 @@ test('exports participant totals with quoted, formula-safe names', async () => {
 
     app.selectFile('empty.json').complete({ messages: [] });
     assert.equal(button.disabled, true);
+});
+
+test('counts graphemes across Telegram text entities in report lengths and both CSV scopes', async () => {
+    const app = createAnalyzer();
+    const texts = ['😀', ['e', { type: 'bold', text: '\u0301' }], '👩‍👩‍👧‍👦', 'OK'];
+    app.selectFile('unicode.json').complete({ messages: texts.map((text, index) => ({
+        id: index + 1,
+        from: 'Alice',
+        date: `2026-${index === 3 ? '11' : '10'}-10T12:00:00`,
+        text,
+    })) });
+
+    assert.match(app.element('participantStats').innerHTML, /Средняя длина: 1\.3 символов/);
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    assert.match(app.element('monthlyParticipantStats').innerHTML, /Средняя длина: 1\.0 символов/);
+    app.element('exportMonthlyParticipants').click();
+    app.element('exportParticipants').click();
+    const [month, overall] = app.downloads;
+    assert.equal(month.name, 'telegram-analyzer-2026-10-participants.csv');
+    assert.match(await month.blob.text(), /"Alice",3,1\.0\r\n$/);
+    assert.equal(overall.name, 'telegram-analyzer-participants.csv');
+    assert.match(await overall.blob.text(), /"Alice",4,1\.3\r\n$/);
+});
+
+test('falls back to Unicode code points when grapheme segmentation is unavailable', () => {
+    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat } });
+    app.selectFile('unicode.json').complete({ messages: [
+        { id: 1, from: 'Alice', text: '😀' },
+        { id: 2, from: 'Alice', text: 'e\u0301' },
+    ] });
+    assert.match(app.element('participantStats').innerHTML, /Средняя длина: 1\.5 символов/);
 });
 
 test('exports the selected month and keeps the whole-chat CSV unchanged', async () => {

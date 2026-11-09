@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const placeholderTitle = document.getElementById('placeholderTitle');
     const placeholderText = document.getElementById('placeholderText');
     const countFormat = new Intl.NumberFormat('ru-RU');
+    const graphemeSegmenter = typeof Intl.Segmenter === 'function'
+        ? new Intl.Segmenter('ru-RU', { granularity: 'grapheme' })
+        : null;
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
     const DARK_THEME_KEY = 'default';
     const LIGHT_THEME_KEY = 'muted-light';
@@ -384,6 +387,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return typeof part?.text === 'string' ? part.text : '';
         }).join('');
+    }
+
+    function countTextCharacters(text) {
+        if (text.length < 2) return text.length;
+        let count = 0;
+        for (const _ of graphemeSegmenter?.segment(text) ?? text) {
+            count++;
+        }
+        return count;
     }
 
     function getMessageCategory({ media_type, photo, file }) {
@@ -1386,7 +1398,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalsByParticipant.set(message.from, totals);
             }
             totals.messageCount++;
-            totals.textLength += getMessageText(message.text).length;
+            totals.textLength += countTextCharacters(getMessageText(message.text));
         }
         return totalsByParticipant;
     }
