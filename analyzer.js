@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsContainer = document.querySelector('.stats-container');
     const monthlyChartLegend = document.getElementById('monthlyChartLegend');
     const monthlyChartSeries = document.getElementById('monthlyChartSeries');
+    const trendComparisonPanel = document.getElementById('trendComparisonPanel');
+    const trendComparisonSelect = document.getElementById('trendComparison');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const reportMonthSelect = document.getElementById('reportMonth');
     const monthlyActivity = document.getElementById('monthlyActivity');
@@ -116,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         chartMessages: ['Messages', 'Сообщений'],
         activity: ['Activity', 'Активность'],
         unattributed: ['Records without a sender', 'Записи без отправителя'],
+        noTrendComparison: ['No comparison', 'Без сравнения'],
         weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
         chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
         replyCoverage: [
@@ -220,6 +223,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentMonthIndex = 0;
     let monthsData = [];
     let allParticipants = new Set();
+    let trendComparison = null;
+    const fullTrendParticipantLimit = 20;
+    const leadingTrendParticipantCount = 12;
     let ignoredMessageThreshold = 3600; // Порог игнорирования по умолчанию: 1 час (в секундах)
     let chartTheme = {
         textColor: '#e4e6ea',
@@ -341,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyChartSeries.addEventListener('focusin', event => {
         event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
+    trendComparisonSelect.addEventListener('change', () => trendComparison?.select(trendComparisonSelect.value));
 
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -437,6 +444,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (languageToggleLabel) languageToggleLabel.textContent = next === 'ru' ? 'EN' : 'RU';
         updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
         refreshAccountChooserLabels();
+        refreshTrendComparisonLabels();
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshReportLanguage();
@@ -975,6 +983,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderedCharts.forEach(chart => chart.destroy());
         renderedCharts.clear();
         renderMonthlyChartLegend();
+        resetTrendComparison();
     }
 
     function showChartsUnavailable() {
@@ -1825,11 +1834,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function createMonthlyChart(monthsData) {
         const labels = monthsData.map(m => m.month);
         const participants = Array.from(allParticipants);
+        const leadingParticipants = participants.length > fullTrendParticipantLimit
+            ? selectLeadingTrendParticipants(participants, monthsData) : participants;
 
-        const datasets = participants.map((participant, index) => ({
+        const makeDataset = (participant, index) => ({
             ...lineAppearance(index),
+            participant,
             data: monthsData.map(m => m.data.participants[participant]?.length || 0)
-        }));
+        });
+        const datasets = leadingParticipants.map(makeDataset);
 
         const unattributed = monthsData.map(m => m.data.unattributedCount);
         if (unattributed.some(Boolean)) {
@@ -1843,15 +1856,77 @@ document.addEventListener('DOMContentLoaded', () => {
             type: 'line',
             data: { labels, datasets },
             localize(chartData) {
-                participants.forEach((participant, index) => {
-                    chartData.datasets[index].label = participantLabel(participant);
-                });
-                if (chartData.datasets.length > participants.length) {
-                    chartData.datasets[participants.length].label = translate('unattributed');
+                for (const dataset of chartData.datasets) {
+                    dataset.label = dataset.participant === undefined
+                        ? translate('unattributed') : participantLabel(dataset.participant);
                 }
             }
         });
         renderMonthlyChartLegend(chart);
+        resetTrendComparison();
+        if (chart && monthsData.length && leadingParticipants !== participants) {
+            const leading = new Set(leadingParticipants);
+            configureTrendComparison(chart, participants.filter(participant => !leading.has(participant)), makeDataset);
+        }
+    }
+
+    function selectLeadingTrendParticipants(participants, months) {
+        const counts = new Map();
+        for (const { data } of months) {
+            for (const [name, messages] of Object.entries(data.participants)) {
+                counts.set(name, (counts.get(name) ?? 0) + messages.length);
+            }
+        }
+        return participants.slice().sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
+            .slice(0, leadingTrendParticipantCount);
+    }
+
+    function resetTrendComparison() {
+        trendComparison = null;
+        trendComparisonPanel.hidden = true;
+        trendComparisonSelect.replaceChildren();
+    }
+
+    function configureTrendComparison(chart, choices, makeDataset) {
+        const index = chart.data.datasets.length;
+        trendComparison = {
+            choices,
+            select(value) {
+                const participant = value === '' ? undefined : choices[Number(value)];
+                chart.data.datasets.splice(index, 1);
+                if (participant !== undefined) {
+                    chart.data.datasets.push(makeDataset(participant, index));
+                    chart.setDatasetVisibility(index, true);
+                }
+                chartTranslations.get(chart)(chart.data);
+                chart.update('none');
+                renderMonthlyChartLegend(chart);
+            },
+        };
+
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = translate('noTrendComparison');
+        trendComparisonSelect.append(placeholder);
+        choices.forEach((participant, index) => {
+            const option = document.createElement('option');
+            option.value = String(index);
+            option.textContent = participantLabel(participant);
+            trendComparisonSelect.append(option);
+        });
+        trendComparisonSelect.value = '';
+        trendComparisonPanel.hidden = false;
+    }
+
+    function refreshTrendComparisonLabels() {
+        if (!trendComparison) return;
+        const options = trendComparisonSelect.children;
+        options[0].textContent = translate('noTrendComparison');
+        trendComparison.choices.forEach((participant, index) => {
+            const option = options[index + 1];
+            const label = participantLabel(participant);
+            if (option.textContent !== label) option.textContent = label;
+        });
     }
 
     function renderMonthlyChartLegend(chart) {

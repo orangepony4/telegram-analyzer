@@ -152,6 +152,11 @@
                                 <p data-ru="Количество сообщений по месяцам">Messages per month</p>
                             </div>
                             <div class="chart-plot"><canvas id="monthlyChart" role="img" aria-labelledby="monthlyChartLabel"></canvas></div>
+                            <div class="trend-comparison" id="trendComparisonPanel" hidden>
+                                <p id="trendComparisonHint" data-ru="График показывает 12 участников с наибольшим числом записей с датой. Можно добавить ещё одного для сравнения.">The chart shows the 12 participants with the most dated records. Add one more to compare.</p>
+                                <label for="trendComparison" data-ru="Участник для сравнения">Compare a participant</label>
+                                <select id="trendComparison" aria-describedby="trendComparisonHint"></select>
+                            </div>
                             <fieldset id="monthlyChartLegend" class="chart-series" hidden>
                                 <legend data-ru="Линии графика">Chart series</legend>
                                 <div id="monthlyChartSeries" class="chart-series-list"></div>

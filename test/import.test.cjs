@@ -1099,6 +1099,67 @@ test('exposes and toggles every trend series without replacing focused legend co
     assert.deepEqual(series.children, []);
 });
 
+test('bounds large trend datasets and keeps any other participant available for comparison', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { ...russianLocale, setItem() {} } });
+    const date = '2026-10-01T00:00:00';
+    const names = Array.from({ length: 24 }, (_, index) => 'Guest ' + (index + 1));
+    const messages = names.map((from, index) => ({ id: index + 1, from, date, text: 'X' }));
+    names.slice(12).forEach(from => messages.push({ id: messages.length + 1, from, date, text: 'X' }));
+    for (let index = 0; index < 3; index++) messages.push({ id: messages.length + 1, from: 'Guest 1', text: 'X' });
+    messages.push({ id: messages.length + 1, date, type: 'service' });
+    app.selectFile('large-group.json').complete({ messages });
+
+    const chart = app.charts.get('monthlyChart');
+    const panel = app.element('trendComparisonPanel');
+    const select = app.element('trendComparison');
+    const series = app.element('monthlyChartSeries');
+    const labels = () => Array.from(chart.data.datasets, dataset => dataset.label);
+    assert.equal(panel.hidden, false);
+    assert.deepEqual(labels(), [...names.slice(12), 'Записи без отправителя']);
+    assert.deepEqual(select.children.map(option => option.textContent), ['Без сравнения', ...names.slice(0, 12)]);
+    assert.equal(app.element('overviewParticipantCount').textContent, '24');
+    series.children[0].click();
+    select.value = '2';
+    select.change({ target: select });
+    assert.equal(labels().at(-1), 'Guest 3');
+    assert.equal(chart.data.datasets.at(-1).data[0], 1);
+    assert.equal(chart.isDatasetVisible(0), false);
+    assert.equal(series.children.length, 14);
+
+    select.focus();
+    const options = select.children;
+    app.element('languageToggle').click();
+    app.element('themeToggleBtn').click();
+    assert.equal(app.focusedElement, select);
+    assert.equal(select.children, options);
+    assert.equal(select.value, '2');
+    assert.equal(labels().at(-2), 'Records without a sender');
+    assert.equal(labels().at(-1), 'Guest 3');
+    assert.equal(chart.isDatasetVisible(0), false);
+    assert.equal(app.charts.get('monthlyChart'), chart);
+
+    series.children.at(-1).click();
+    select.value = '1';
+    select.change({ target: select });
+    assert.equal(labels().at(-1), 'Guest 2');
+    assert.equal(chart.isDatasetVisible(13), true);
+    select.value = '';
+    select.change({ target: select });
+    assert.equal(series.children.length, 13);
+    assert.equal(chart.isDatasetVisible(0), false);
+    app.element('exportParticipants').click();
+    assert.match(await app.downloads[0].blob.text(), /"Guest 1",4,1\.0/);
+    app.selectFile('small-group.json').complete({ messages: messages.slice(0, 20) });
+    assert.equal(panel.hidden, true);
+    assert.equal(select.children.length, 0);
+    assert.equal(app.charts.get('monthlyChart').data.datasets.length, 20);
+    app.selectFile('undated-group.json').complete({ messages: names.map(from => ({ from, text: 'X' })) });
+    assert.equal(panel.hidden, true);
+    assert.equal(select.children.length, 0);
+    assert.equal(app.monthlyTab.disabled, true);
+    assert.equal(app.element('overviewParticipantCount').textContent, '24');
+});
+
 test('includes dated rows without a sender in monthly activity and totals', async () => {
     const app = createAnalyzer();
     app.selectFile('chat.json').complete({ messages: [
