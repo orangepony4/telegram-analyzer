@@ -481,6 +481,76 @@ function chooseAccountChat(app, value) {
     select.change({ target: select });
 }
 
+test('filters account chats by part of a name without changing the open report or stable chat IDs', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const filter = app.element('accountChatSearch');
+    const select = app.element('accountChatSelect');
+    const matches = app.element('accountChatSearchStatus');
+    const analyze = app.element('analyzeAccountChat');
+    const values = () => select.children.map(option => option.value);
+    const search = value => {
+        filter.value = value;
+        filter.input();
+    };
+    app.selectFile('account.json').complete({
+        chats: { list: [
+            { name: 'Family notes', messages: [] },
+            { name: 'Café Alpha notes', messages: [{ id: 1, from: 'Ari', text: 'First' }] },
+            { type: 'saved_messages', messages: [] },
+        ] },
+        left_chats: { list: [{ name: 'Weekly Cafe\u0301 Alpha', messages: [{ id: 1, from: 'Bo', text: 'Second' }] }] },
+    });
+    assert.equal(app.element('accountChatSearchField').hidden, false);
+    assert.deepEqual(values(), ['', '0', '1', '2', '3']);
+    chooseAccountChat(app, '3');
+    analyze.click();
+    assert.match(app.element('reportTitle').textContent, /Weekly/);
+
+    search('  CAFÉ ALPHA  ');
+    assert.deepEqual(values(), ['', '1', '3']);
+    assert.match(matches.textContent, /2 из 4/);
+    assert.equal(select.value, '3');
+    assert.equal(analyze.disabled, false);
+    app.element('languageToggle').click();
+    assert.equal(filter.value, '  CAFÉ ALPHA  ');
+    assert.equal(select.value, '3');
+    assert.match(matches.textContent, /2 of 4/);
+    assert.match(select.children[2].textContent, /Left chat.*#4/);
+
+    search('notes');
+    assert.deepEqual(values(), ['', '0', '1']);
+    assert.equal(select.value, '');
+    assert.equal(analyze.disabled, true);
+    assert.match(app.element('reportTitle').textContent, /Weekly/);
+    chooseAccountChat(app, '1');
+    analyze.click();
+    assert.match(app.element('reportTitle').textContent, /Café Alpha notes/);
+
+    search('no match');
+    assert.deepEqual(values(), ['']);
+    assert.equal(select.disabled, true);
+    assert.equal(analyze.disabled, true);
+    assert.match(matches.textContent, /0 of 4/);
+    assert.match(app.element('reportTitle').textContent, /Café Alpha notes/);
+    search('saved');
+    assert.deepEqual(values(), ['', '2']);
+    assert.equal(select.disabled, false);
+    assert.equal(analyze.disabled, true);
+    search('');
+    assert.deepEqual(values(), ['', '0', '1', '2', '3']);
+
+    search('notes');
+    app.selectFile('invalid.json').completeRaw('{bad');
+    assert.equal(filter.value, 'notes');
+    assert.deepEqual(values(), ['', '0', '1']);
+    app.selectFile('replacement.json').complete({
+        chats: { list: [{ name: 'Single chat', messages: [] }] },
+    });
+    assert.equal(filter.value, '');
+    assert.equal(app.element('accountChatSearchField').hidden, true);
+    assert.deepEqual(values(), ['', '0']);
+});
+
 test('lists valid account chats safely and waits for an explicit analysis', () => {
     const app = createAnalyzer();
     const chooser = app.element('accountChatChooser');
@@ -1274,6 +1344,67 @@ test('classifies service and unsupported records separately from text and shared
     const [overall, month] = app.downloads;
     assert.equal(await overall.blob.text(), header + '"Bob",3,0.0\r\n');
     assert.equal(await month.blob.text(), header + '"Bob",2,0.0\r\n');
+});
+
+test('counts embedded rich media once per message without exposing attachment data', async () => {
+    const app = createAnalyzer();
+    const empty = { type: 'empty' };
+    const caption = { text: empty, credit: empty };
+    const photo = { type: 'photo', photo_id: '123', photo_skip_reason: 'file_type', caption };
+    const withRich = (...blocks) => ({ rich_message: { rtl: false, part: false, blocks } });
+    let deep = photo;
+    for (let depth = 0; depth < 70; depth++) deep = { type: 'cover', block: deep };
+    const fields = [
+        { text: 'Plain message' },
+        withRich({ type: 'paragraph', text: { type: 'plain', text: 'Formatted words' } }),
+        withRich({ ...photo, caption: { text: { type: 'plain', text: 'Photo caption' }, credit: empty } }),
+        withRich({ type: 'slideshow', items: [photo, {
+            type: 'video', document_id: '456', file: 'video_files/private.mp4', caption,
+        }], caption }),
+        withRich({ type: 'cover', block: photo }),
+        withRich({ type: 'details', title: empty, blocks: [
+            { type: 'audio', document_id: '789', file: 'audio_files/private.ogg', caption },
+        ] }),
+        withRich({ type: 'list', kind: 'unordered', items: [{ content: 'blocks', blocks: [
+            { type: 'file', document_id: '999', file: 'files/private.pdf', caption },
+        ] }] }),
+        withRich(null, { type: 'paragraph', blocks: [photo] }),
+        withRich(deep),
+        { media_type: 'sticker', ...withRich(photo) },
+        { photo: 'photos/private.jpg', ...withRich(photo) },
+        { type: 'service', ...withRich(photo) },
+    ];
+    const messages = fields.map((fields, index) => ({
+        id: index + 1, type: 'message', from: 'Synthetic sender', from_id: 'channel1',
+        date: '2026-11-01T12:00:00', ...fields,
+    }));
+    messages.push({ id: 13, type: 'unsupported', ...withRich(photo) });
+    app.selectFile('rich-media.json').complete({ messages });
+
+    const counts = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    const monthly = { Текст: 4, 'Медиа в форматированных постах': 5, Стикеры: 1, Фото: 1, 'Служебные события': 1 };
+    assert.deepEqual(counts('messageTypesChart'), { ...monthly, 'Неподдерживаемые записи': 1 });
+    assert.deepEqual(counts('monthlyMessageTypesChart'), monthly);
+    assert.match(app.element('wordCountStats').innerHTML, /Synthetic sender<\/strong>: 6 слов/);
+    assert.match(app.element('monthlyWordCountStats').innerHTML, /Synthetic sender<\/strong>: 6 слов/);
+    app.element('languageToggle').click();
+    const english = { Text: 4, 'Rich media': 5, Stickers: 1, Photos: 1, 'Service events': 1 };
+    assert.deepEqual(counts('messageTypesChart'), { ...english, 'Unsupported records': 1 });
+    assert.deepEqual(counts('monthlyMessageTypesChart'), english);
+    for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Rich media: 5/);
+        assert.match(html, /Photos: 1/);
+        assert.doesNotMatch(html, /private\.|file_type|Photo caption|Service events|Unsupported records/);
+    }
+    app.element('exportParticipants').click();
+    app.element('exportMonthlyParticipants').click();
+    for (const { blob } of app.downloads) {
+        assert.match(await blob.text(), /"Synthetic sender",12,3\.4\r\n$/);
+    }
 });
 
 test('classifies shared polls, contacts and locations without exposing their contents', () => {

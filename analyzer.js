@@ -2,6 +2,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
     const demoButton = document.getElementById('loadDemoChat');
     const accountChatChooser = document.getElementById('accountChatChooser');
+    const accountChatSearchField = document.getElementById('accountChatSearchField');
+    const accountChatSearch = document.getElementById('accountChatSearch');
+    const accountChatSearchStatus = document.getElementById('accountChatSearchStatus');
     const accountChatSelect = document.getElementById('accountChatSelect');
     const analyzeAccountChatButton = document.getElementById('analyzeAccountChat');
     const accountChatStatus = document.getElementById('accountChatStatus');
@@ -64,6 +67,11 @@ document.addEventListener('DOMContentLoaded', () => {
         unknownParticipant: ['Unknown participant', 'Неизвестный участник'],
         selectChat: ['Choose a chat', 'Выберите чат'],
         selectChatStatus: ['Choose a chat to see its statistics.', 'Выберите чат, чтобы увидеть его статистику.'],
+        noMatchingChats: ['No matching chats', 'Подходящих чатов нет'],
+        accountSearchMatches: [
+            (shown, total) => `${shown} of ${total} chats`,
+            (shown, total) => `Найдено ${shown} из ${total}`,
+        ],
         accountOption: [
             (name, suffix, count, number) => `${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'} · #${number}`,
             (name, suffix, count, number) => `${name}${suffix} · ${count} сообщ. · #${number}`,
@@ -166,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ['poll', ['Polls', 'Опросы']], ['contact', ['Contacts', 'Контакты']], ['location', ['Locations', 'Геопозиции']],
         ['service', ['Service events', 'Служебные события']],
         ['unsupported', ['Unsupported records', 'Неподдерживаемые записи']],
+        ['rich_media', ['Rich media', 'Медиа в форматированных постах']],
     ]);
     const translatedAttributes = ['aria-label', 'title', 'placeholder'];
     const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
@@ -335,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     demoButton?.addEventListener('click', loadDemoChat);
+    accountChatSearch.addEventListener('input', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
         analyzeAccountChatButton.disabled = selectedAccountChat() === undefined;
     });
@@ -443,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (languageToggleLabel) languageToggleLabel.textContent = next === 'ru' ? 'EN' : 'RU';
         updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
-        refreshAccountChooserLabels();
+        refreshAccountChooser();
         refreshTrendComparisonLabels();
         refreshReportMonthOptions();
         refreshMonthlyActivity();
@@ -804,8 +814,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return typeof value === 'string' && value.trim() !== '';
     }
 
+    function hasRichMediaBlocks(blocks, depth = 0) {
+        return depth < richTextDepthLimit && Array.isArray(blocks)
+            && blocks.some(block => hasRichMediaBlock(block, depth));
+    }
+
+    function hasRichMediaBlock(block, depth) {
+        if (depth >= richTextDepthLimit || !block || typeof block !== 'object' || Array.isArray(block)) return false;
+        const nestedDepth = depth + 1;
+        switch (block.type) {
+            case 'photo':
+            case 'video':
+            case 'audio':
+            case 'file':
+                // The typed block survives when Telegram skips the attachment download.
+                return true;
+            case 'cover':
+                return hasRichMediaBlock(block.block, nestedDepth);
+            case 'quote':
+            case 'details':
+            case 'embed_post':
+                return hasRichMediaBlocks(block.blocks, nestedDepth);
+            case 'collage':
+            case 'slideshow':
+                return hasRichMediaBlocks(block.items, nestedDepth);
+            case 'list':
+                return Array.isArray(block.items) && block.items.some(item =>
+                    item?.content === 'blocks' && hasRichMediaBlocks(item.blocks, nestedDepth));
+            default:
+                return false;
+        }
+    }
+
     function getMessageCategory({
-        type: recordType, media_type, photo, file, poll, contact_information, location_information, place_name,
+        type: recordType, media_type, photo, file, poll, contact_information, location_information, place_name, rich_message,
     }) {
         // Service records can carry metadata such as the new group photo.
         if (recordType === 'service' || recordType === 'unsupported') return recordType;
@@ -826,6 +868,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // Telegram can export a venue name even when its coordinates are unavailable.
         if (isNonEmptyString(place_name)) return 'location';
+        if (hasRichMediaBlocks(rich_message?.blocks)) return 'rich_media';
         return 'text';
     }
 
@@ -871,18 +914,50 @@ document.addEventListener('DOMContentLoaded', () => {
         return translate('accountOption', resolveText(chat.name), suffix, chat.messages.length, chat.number);
     }
 
-    function refreshAccountChooserLabels() {
+    function chatSearchText(text) {
+        return text.normalize('NFC').toLowerCase().trim();
+    }
+
+    function refreshAccountChooser() {
         if (!accountChats.length) return;
+        const query = chatSearchText(accountChatSearch.value);
+        const matches = query
+            ? accountChats.filter(chat => chatSearchText(resolveText(chat.name)).includes(query))
+            : accountChats;
+        const selected = accountChatSelect.value;
         const options = accountChatSelect.children;
-        options[0].textContent = translate('selectChat');
-        accountChats.forEach((chat, index) => {
-            options[index + 1].textContent = accountChatLabel(chat);
+        if (options.length !== matches.length + 1
+            || matches.some((chat, index) => options[index + 1].value !== String(chat.number - 1))) {
+            const placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.disabled = true;
+            accountChatSelect.replaceChildren(placeholder);
+            for (const chat of matches) {
+                const option = document.createElement('option');
+                option.value = String(chat.number - 1);
+                accountChatSelect.append(option);
+            }
+        }
+        accountChatSelect.children[0].textContent = translate(matches.length ? 'selectChat' : 'noMatchingChats');
+        matches.forEach((chat, index) => {
+            const option = accountChatSelect.children[index + 1];
+            const label = accountChatLabel(chat);
+            if (option.textContent !== label) option.textContent = label;
         });
+        const stillSelected = matches.some(chat => String(chat.number - 1) === selected);
+        accountChatSelect.value = stillSelected ? selected : '';
+        accountChatSelect.disabled = matches.length === 0;
+        analyzeAccountChatButton.disabled = !stillSelected;
+        accountChatSearchStatus.textContent = translate('accountSearchMatches',
+            countFormat.format(matches.length), countFormat.format(accountChats.length));
     }
 
     function resetAccountChooser() {
         accountChats = [];
         accountChatChooser.hidden = true;
+        accountChatSearchField.hidden = true;
+        accountChatSearch.value = '';
+        accountChatSearchStatus.textContent = '';
         accountChatSelect.replaceChildren();
         analyzeAccountChatButton.disabled = true;
         setLocalizedText(accountChatStatus, '');
@@ -890,23 +965,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function showAccountChooser(chats) {
         accountChats = chats;
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        accountChatSelect.append(placeholder);
-        accountChats.forEach((chat, index) => {
-            const option = document.createElement('option');
-            option.value = String(index);
-            accountChatSelect.append(option);
-        });
-        refreshAccountChooserLabels();
-        accountChatSelect.value = '';
+        accountChatSearchField.hidden = chats.length < 2;
+        refreshAccountChooser();
         accountChatChooser.hidden = false;
         setLocalizedText(accountChatStatus, translated('selectChatStatus'));
     }
 
     function selectedAccountChat() {
         const value = accountChatSelect.value;
-        return value === '' ? undefined : accountChats[Number(value)];
+        return accountChatSelect.disabled || value === '' ? undefined : accountChats[Number(value)];
     }
 
     function renderMessages(messages, { name, isDemo = false, preserveNames = false }) {
@@ -2064,14 +2131,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
             '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076',
-            '#796958', '#567388'];
+            '#796958', '#567388', '#87575e'];
         return colors[index % colors.length];
     }
 
     function messageTypeColorIndex(label = '') {
         const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
             'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location',
-            'service', 'unsupported'];
+            'service', 'unsupported', 'rich_media'];
         const index = knownTypes.indexOf(label);
         if (index >= 0) return index;
 

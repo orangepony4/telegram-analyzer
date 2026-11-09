@@ -18,7 +18,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
 2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
-3. If you open an account export containing chat history, select a chat and choose **Analyze chat**. With the picker focused, type the first letter of a chat name to jump to a match. The report and CSV cover the selected chat.
+3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. Select a chat and choose **Analyze chat**. The report and CSV cover the selected chat.
 4. Open **Overview** for the full chat or **By month** to jump to any month with records. Use the arrows to move between months with records. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
 ### What the report measures
@@ -28,6 +28,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
+- A formatted post with an embedded photo, video, audio track, or file counts once as rich media, even if the export skipped the attachment.
 - **Reply timing** defaults to **Adjacent messages**, which estimates delays between consecutive messages from different participants. Choose **Direct replies** to measure the elapsed time from each explicitly replied-to message to its reply. Direct mode uses pairs with known times and distinct senders in the same export. Both modes skip service events and assign an interval to the month of the reply. The setting applies to the reply charts, participant details, and adjustable long-response threshold.
 - Below **Reply timing**, the report shows how many direct reply links could be timed in the current view. The total includes links to missing messages or other chats, so an incomplete export can show fewer measured replies than links.
 - Activity charts keep the dates and times written in the export. Direct replies use Unix timestamps or explicit offsets whenever both messages have them. When legacy dates without offsets are mixed in, adjacent-message timing and direct pairs without two exact timestamps use the written times where both messages have one.
@@ -72,7 +73,7 @@ Telegram Analyzer показывает активность, участнико�
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
 2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Рядом с источником появится статус чтения.
-3. Если вы открыли экспорт аккаунта с историей чатов, выберите переписку и нажмите **«Показать статистику»**. Когда фокус на списке, наберите первую букву названия, чтобы перейти к совпадению. Отчёт и CSV будут относиться к выбранному чату.
+3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Выберите переписку и нажмите **«Показать статистику»**. Отчёт и CSV будут относиться к выбранному чату.
 4. Во вкладке **«Обзор»** видна статистика за всё время. Во вкладке **«По месяцам»** можно сразу выбрать любой месяц с записями или перейти к соседнему месяцу с записями стрелками. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
 ### Что считает анализатор
@@ -82,6 +83,7 @@ Telegram Analyzer показывает активность, участнико�
 - Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
+- Форматированный пост с фотографией, видео, аудио или файлом учитывается как одна запись с медиа, даже если само вложение не скачали.
 - В меню **«Замер ответов»** по умолчанию выбраны **«Соседние сообщения»**. Этот режим оценивает паузы между соседними сообщениями разных участников. Выберите **«Прямые ответы»**, чтобы измерять время от исходного сообщения до ответа, связанного с ним в Telegram. Подходят пары из одной переписки с известным временем и разными отправителями. Служебные события пропускаются. В обоих режимах интервал относится к месяцу ответа, а настройка применяется к графикам, деталям по участникам и порогу долгого ответа.
 - Под меню видно, сколько прямых ответов удалось замерить в открытой сводке. В общее число входят ссылки на отсутствующие сообщения и другие чаты. В неполном экспорте замеров может быть меньше, чем ссылок.
 - Графики сохраняют даты и время из экспорта. Для прямых ответов используется Unix-время или явное смещение часового пояса, если точное время есть у обоих сообщений. Если в экспорте есть старые даты без смещения, интервалы между соседними сообщениями и прямые ответы без пары точных меток считаются по времени из экспорта, когда оно есть у обоих сообщений.

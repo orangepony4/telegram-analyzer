@@ -80,6 +80,11 @@
             </div>
 
             <div class="account-chat-chooser" id="accountChatChooser" hidden>
+                <div class="account-chat-field account-chat-search" id="accountChatSearchField" hidden>
+                    <label for="accountChatSearch" data-ru="Найти чат по названию">Find a chat by name</label>
+                    <input type="search" id="accountChatSearch" aria-controls="accountChatSelect" aria-describedby="accountChatSearchStatus" autocomplete="off" spellcheck="false">
+                    <p id="accountChatSearchStatus" class="account-chat-status" role="status"></p>
+                </div>
                 <div class="account-chat-controls">
                     <div class="account-chat-field">
                         <label for="accountChatSelect" data-ru="Чат из экспорта аккаунта">Chat from account export</label>
