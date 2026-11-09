@@ -21,7 +21,8 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
             const classes = new Set();
             const attributes = new Map();
             elements.set(id, {
-                style: {},
+                style: { setProperty(name, value) { this[name] = value; } },
+                dataset: {},
                 children: [],
                 append(...children) {
                     this.children.push(...children);
@@ -76,7 +77,14 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
             this.options = config.options;
             this.data = config.data;
             this.id = id;
+            this.hiddenDatasets = new Set();
             charts.set(id, this);
+        }
+
+        isDatasetVisible(index) { return !this.hiddenDatasets.has(index); }
+        setDatasetVisibility(index, visible) {
+            if (visible) this.hiddenDatasets.delete(index);
+            else this.hiddenDatasets.add(index);
         }
 
         update() {}
@@ -127,6 +135,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
                 if (tag === 'a') {
                     return { click() { downloads.push({ name: this.download, blob: downloadedBlob }); } };
                 }
+                if (tag === 'button' || tag === 'span') return element(Symbol(tag));
                 return { get innerHTML() { return this.textContent; } };
             },
             body: element('body'),
@@ -665,6 +674,46 @@ test('shows only calendar days in the selected month', () => {
         assert.equal(datasets[0].data.at(-1), 1);
         app.element('prevMonth').click();
     }
+});
+
+test('exposes and toggles every trend series without replacing focused legend controls', () => {
+    const app = createAnalyzer();
+    const messages = Array.from({ length: 20 }, (_, index) => ({
+        id: index + 1,
+        from: `Participant ${index + 1}`,
+        date: index % 2 ? '2026-11-01T12:00:00' : '2026-10-01T12:00:00',
+    }));
+    messages.push({ id: 21, date: '2026-11-02T12:00:00' });
+    app.selectFile('large-group.json').complete({ messages });
+
+    const legend = app.element('monthlyChartLegend');
+    const series = app.element('monthlyChartSeries');
+    const chart = app.charts.get('monthlyChart');
+    assert.equal(legend.hidden, false);
+    assert.equal(chart.options.plugins.legend.display, false);
+    assert.deepEqual(series.children.map(button => button.children[1].textContent),
+        Array.from(chart.data.datasets, dataset => dataset.label));
+    const unattributed = series.children.at(-1);
+    assert.equal(unattributed.children[1].textContent, 'Записи без отправителя');
+    assert.equal(unattributed.children[0].dataset.dashed, 'true');
+
+    unattributed.focus();
+    unattributed.click();
+    assert.equal(chart.isDatasetVisible(20), false);
+    assert.equal(unattributed.getAttribute('aria-pressed'), 'false');
+    assert.equal(app.focusedElement, unattributed);
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    app.allTab.click();
+    assert.equal(series.children.at(-1), unattributed);
+    assert.equal(chart.isDatasetVisible(20), false);
+    unattributed.click();
+    assert.equal(chart.isDatasetVisible(20), true);
+    assert.equal(unattributed.getAttribute('aria-pressed'), 'true');
+
+    app.selectFile('empty.json').complete({ messages: [] });
+    assert.equal(legend.hidden, true);
+    assert.deepEqual(series.children, []);
 });
 
 test('includes dated rows without a sender in monthly activity and totals', async () => {

@@ -6,6 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const analyzeAccountChatButton = document.getElementById('analyzeAccountChat');
     const accountChatStatus = document.getElementById('accountChatStatus');
     const statsContainer = document.querySelector('.stats-container');
+    const monthlyChartLegend = document.getElementById('monthlyChartLegend');
+    const monthlyChartSeries = document.getElementById('monthlyChartSeries');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
@@ -171,6 +173,9 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadParticipantSummary(overallParticipantTotals, 'telegram-analyzer-participants.csv');
     });
     exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
+    monthlyChartSeries.addEventListener('focusin', event => {
+        event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
 
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -524,6 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statsContainer.style.display = 'none';
         renderedCharts.forEach(chart => chart.destroy());
         renderedCharts.clear();
+        renderMonthlyChartLegend();
         overallResponseTimes = null;
         overallParticipantTotals = new Map();
         monthsData = [];
@@ -1180,7 +1186,7 @@ document.addEventListener('DOMContentLoaded', () => {
             interaction: type === 'line' ? { mode: 'index', intersect: false } : undefined,
             plugins: {
                 legend: {
-                    display: doughnut || canvasId === 'monthlyChart',
+                    display: doughnut,
                     position: 'bottom',
                     labels: {
                         color: () => chartTheme.textColor,
@@ -1236,7 +1242,9 @@ document.addEventListener('DOMContentLoaded', () => {
             };
         }
 
-        renderedCharts.set(canvasId, new Chart(ctx, { type, data, options }));
+        const chart = new Chart(ctx, { type, data, options });
+        renderedCharts.set(canvasId, chart);
+        return chart;
     }
 
     function createMonthlyCharts(monthData) {
@@ -1271,7 +1279,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 borderDash: [4, 4]
             });
         }
-        createChart('monthlyChart', { type: 'line', data: { labels, datasets } });
+        const chart = createChart('monthlyChart', { type: 'line', data: { labels, datasets } });
+        renderMonthlyChartLegend(chart);
+    }
+
+    function renderMonthlyChartLegend(chart) {
+        const datasets = chart?.data.datasets ?? [];
+        monthlyChartSeries.replaceChildren();
+        monthlyChartLegend.hidden = datasets.length === 0;
+        for (const [index, dataset] of datasets.entries()) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'chart-series-toggle';
+            button.setAttribute('aria-pressed', String(chart.isDatasetVisible(index)));
+
+            const swatch = document.createElement('span');
+            swatch.className = 'chart-series-swatch';
+            swatch.setAttribute('aria-hidden', 'true');
+            swatch.dataset.point = dataset.pointStyle;
+            swatch.dataset.dashed = String(Boolean(dataset.borderDash?.length));
+            // The primary series uses the theme accent, which the CSS also supplies.
+            if (typeof dataset.borderColor === 'string') {
+                swatch.style.setProperty('--series-color', dataset.borderColor);
+            }
+            const label = document.createElement('span');
+            label.textContent = dataset.label;
+            button.append(swatch, label);
+            button.addEventListener('click', () => {
+                const visible = !chart.isDatasetVisible(index);
+                chart.setDatasetVisibility(index, visible);
+                chart.update('none');
+                button.setAttribute('aria-pressed', String(visible));
+            });
+            monthlyChartSeries.append(button);
+        }
     }
 
     function createResponseTimeChart(responseTimes, canvasId = 'responseTimeChart') {
