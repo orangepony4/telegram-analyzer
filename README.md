@@ -27,6 +27,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
 - Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records.
 - Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
+- Message-type charts and shared-content summaries count each Telegram checklist as one record.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
 - A formatted post with an embedded photo, video, audio track, or file counts once as rich media, even if the export skipped the attachment.
@@ -35,6 +36,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Activity charts keep the dates and times written in the export. Direct replies use Unix timestamps or explicit offsets whenever both messages have them. When legacy dates without offsets are mixed in, adjacent-message timing and direct pairs without two exact timestamps use the written times where both messages have one.
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
 - **Chat CSV** exports the whole chat. **Month CSV** exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8. The column headers stay the same when you change the interface language.
+- **Replies CSV** exports the current report period and timing method. Each sender–responder pair has a count, an average in seconds, and the number of replies longer than the current threshold. The filename includes the method and, in the monthly view, the month.
 - Average message length counts grapheme clusters, so a compound emoji can count as one character. Browsers without `Intl.Segmenter` count Unicode code points.
 
 ### Offline use and privacy
@@ -83,6 +85,7 @@ Telegram Analyzer показывает активность, участнико�
 - В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.
 - В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей.
 - Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
+- В графиках типов сообщений и сводках по вложениям каждый список задач Telegram учитывается как одна запись.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
 - Форматированный пост с фотографией, видео, аудио или файлом учитывается как одна запись с медиа, даже если само вложение не скачали.
@@ -91,6 +94,7 @@ Telegram Analyzer показывает активность, участнико�
 - Графики сохраняют даты и время из экспорта. Для прямых ответов используется Unix-время или явное смещение часового пояса, если точное время есть у обоих сообщений. Если в экспорте есть старые даты без смещения, интервалы между соседними сообщениями и прямые ответы без пары точных меток считаются по времени из экспорта, когда оно есть у обоих сообщений.
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
 - Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя. Названия столбцов сохраняются при переключении языка.
+- Кнопка **«CSV ответов»** выгружает данные за открытый период с выбранным методом замера. Для каждой пары участников файл содержит число ответов, среднее время в секундах и число ответов дольше текущего порога. В имени файла указан метод замера, а в помесячном отчёте также указан месяц.
 - Средняя длина считается по графемам. Например, составной эмодзи может считаться одним символом. В браузерах без `Intl.Segmenter` используются кодовые точки Unicode.
 
 ### Работа без интернета и приватность

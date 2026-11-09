@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const replyTimingSelect = document.getElementById('replyTiming');
     const directRepliesOption = document.getElementById('directRepliesOption');
     const replyTimingHint = document.getElementById('replyTimingHint');
+    const exportReplyTimingButton = document.getElementById('exportReplyTiming');
     const languageToggle = document.getElementById('languageToggle');
     const languageToggleLabel = document.getElementById('languageToggleLabel');
     const LOCALE_STORAGE_KEY = 'telegramAnalyzerLocale';
@@ -188,6 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ['service', ['Service events', 'Служебные события']],
         ['unsupported', ['Unsupported records', 'Неподдерживаемые записи']],
         ['rich_media', ['Rich media', 'Медиа в форматированных постах']],
+        ['todo_list', ['Checklists', 'Списки задач']],
     ]);
     const translatedAttributes = ['aria-label', 'title', 'placeholder'];
     const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
@@ -259,6 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     initializeLanguage();
     initializeTheme();
+    updateReplyTimingControls();
     if (typeof Chart === 'undefined') {
         showChartsUnavailable();
     }
@@ -277,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.tabIndex = active ? 0 : -1;
             document.getElementById(tab.dataset.tab).classList.toggle('active', active);
         }
-        updateReplyTimingHint();
+        updateReplyTimingControls();
     }
 
     function handleStatsTabKey(tab, event) {
@@ -346,6 +349,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!overallResponseStats || mode === replyTimingMode) return;
         if (mode !== 'adjacent' && (mode !== 'direct' || directRepliesOption.disabled)) return;
         replyTimingMode = mode;
+        updateReplyTimingControls();
         renderOverviewStatistics();
         createResponseTimeChart(selectedResponseTimes(overallResponseStats));
         const month = monthsData[currentMonthIndex];
@@ -370,6 +374,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadParticipantSummary(overallParticipantTotals, 'telegram-analyzer-participants.csv');
     });
     exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
+    exportReplyTimingButton.addEventListener('click', downloadReplyTiming);
     monthlyChartSeries.addEventListener('focusin', event => {
         event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
@@ -869,6 +874,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function getMessageCategory({
         type: recordType, media_type, photo, file, poll, contact_information, location_information, place_name, rich_message,
+        todo_list,
     }) {
         // Service records can carry metadata such as the new group photo.
         if (recordType === 'service' || recordType === 'unsupported') return recordType;
@@ -890,6 +896,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Telegram can export a venue name even when its coordinates are unavailable.
         if (isNonEmptyString(place_name)) return 'location';
         if (hasRichMediaBlocks(rich_message?.blocks)) return 'rich_media';
+        if (Array.isArray(todo_list?.answers) && getMessageText(todo_list.title).trim()) return 'todo_list';
         return 'text';
     }
 
@@ -1066,6 +1073,7 @@ document.addEventListener('DOMContentLoaded', () => {
         syntheticNames.clear();
         monthsData = [];
         currentMonthIndex = -1;
+        updateReplyTimingControls();
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshDailyActivity();
@@ -1559,10 +1567,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return replyTimingMode === 'direct' ? directResponses : responseTimes;
     }
 
-    function updateReplyTimingHint() {
-        if (!overallResponseStats) return;
-        const currentMonth = monthlyStatsTab.classList.contains('active') ? monthsData[currentMonthIndex] : null;
-        const { linkedReplies, timedReplies } = currentMonth?.data ?? overallResponseStats;
+    function selectedReplyMonth() {
+        return monthlyStatsTab.classList.contains('active') ? monthsData[currentMonthIndex] : undefined;
+    }
+
+    function updateReplyTimingControls() {
+        const responseStats = selectedReplyMonth()?.data ?? overallResponseStats;
+        exportReplyTimingButton.disabled = !responseStats || Object.keys(selectedResponseTimes(responseStats)).length === 0;
+        if (!responseStats) return;
+        const { linkedReplies, timedReplies } = responseStats;
         const hint = linkedReplies
             ? () => translate('replyCoverage', countFormat.format(timedReplies), countFormat.format(linkedReplies))
             : translated('noReplyLinks');
@@ -1795,7 +1808,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
-        if (rebuildCharts) updateReplyTimingHint();
+        if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
@@ -2228,14 +2241,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
             '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076',
-            '#796958', '#567388', '#87575e'];
+            '#796958', '#567388', '#87575e', '#7f5f92'];
         return colors[index % colors.length];
     }
 
     function messageTypeColorIndex(label = '') {
         const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
             'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location',
-            'service', 'unsupported', 'rich_media'];
+            'service', 'unsupported', 'rich_media', 'todo_list'];
         const index = knownTypes.indexOf(label);
         if (index >= 0) return index;
 
@@ -2301,16 +2314,38 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadCsv(rows, 'telegram-analyzer-monthly-activity.csv');
     }
 
+    function downloadReplyTiming() {
+        if (exportReplyTimingButton.disabled || statsContainer.style.display !== 'block') return;
+        const month = selectedReplyMonth();
+        const responseTimes = selectedResponseTimes(month?.data ?? overallResponseStats);
+        const rows = ['sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds'];
+        for (const [sender, responders] of Object.entries(responseTimes)) {
+            const senderField = csvParticipantName(sender);
+            for (const [responder, times] of Object.entries(responders)) {
+                const total = times.reduce((sum, seconds) => sum + seconds, 0);
+                const longReplies = times.filter(seconds => seconds > ignoredMessageThreshold).length;
+                rows.push([senderField, csvParticipantName(responder), times.length,
+                    (total / times.length).toFixed(3), longReplies, ignoredMessageThreshold].join(','));
+            }
+        }
+        const period = month ? `${month.month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-replies.csv`);
+    }
+
     function downloadParticipantSummary(participantTotals, filename) {
         if (participantTotals.size === 0) return;
         const rows = ['Участник,Сообщения,Средняя длина сообщения'];
         for (const [participant, { messageCount, textLength }] of participantTotals) {
-            const name = String(participant);
-            // Prevent spreadsheet programs from treating an imported name as a formula.
-            const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
-            rows.push(`"${safeName.replaceAll('"', '""')}",${messageCount},${(textLength / messageCount).toFixed(1)}`);
+            rows.push(`${csvParticipantName(participant)},${messageCount},${(textLength / messageCount).toFixed(1)}`);
         }
         downloadCsv(rows, filename);
+    }
+
+    function csvParticipantName(participant) {
+        const name = String(participant);
+        // Prevent spreadsheet programs from treating an imported name as a formula.
+        const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
+        return `"${safeName.replaceAll('"', '""')}"`;
     }
 
     function downloadCsv(rows, filename) {

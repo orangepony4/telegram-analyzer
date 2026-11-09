@@ -816,6 +816,63 @@ test('lists every day of the selected month without charts, including leap day a
     assert.equal(rows.children.length, 0);
 });
 
+test('exports reply timing for the active report scope and method with formula-safe CSV names', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const button = app.element('exportReplyTiming');
+    const mode = app.element('replyTiming');
+    const unsafe = '=A,"quoted"';
+    const name = `"'=A,""quoted"""`;
+    assert.equal(button.disabled, true);
+    app.selectFile('replies.json').complete({ messages: [
+        { id: 1, from: unsafe, date: '2026-01-31T23:58:00Z', text: 'Question' },
+        { id: 2, from: 'Eve', date: '2026-01-31T23:59:00Z', text: 'Other' },
+        { id: 3, from: 'Bob', date: '2026-02-01T00:00:00Z', reply_to_message_id: 1, text: 'Reply' },
+        { id: 4, from: 'Bob', date: '2026-02-01T00:00:01Z', text: 'More' },
+        { id: 5, from: unsafe, date: '2026-02-01T00:00:30Z', text: 'Question' },
+        { id: 6, from: 'Bob', date: '2026-02-01T00:01:30Z', reply_to_message_id: 5, text: 'Reply' },
+    ] });
+    const threshold = app.element('ignoredThreshold');
+    threshold.valueAsNumber = 1;
+    threshold.change({ target: threshold });
+    assert.equal(button.disabled, false);
+    button.click();
+
+    app.monthlyTab.click();
+    button.click();
+    mode.value = 'direct';
+    mode.change({ target: mode });
+    button.click();
+    app.element('languageToggle').click();
+    button.click();
+
+    app.element('prevMonth').click();
+    assert.equal(button.disabled, true);
+    button.click();
+    assert.equal(app.downloads.length, 4);
+    mode.value = 'adjacent';
+    mode.change({ target: mode });
+    assert.equal(button.disabled, false);
+    button.click();
+
+    const files = await Promise.all(app.downloads.map(async ({ name, blob }) => ({
+        name, csv: Buffer.from(await blob.arrayBuffer()).toString('utf8'),
+    })));
+    const heading = '\uFEFFsender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    assert.equal(files[0].name, 'telegram-analyzer-adjacent-replies.csv');
+    assert.ok(files[0].csv.includes(`${name},"Eve",1,60.000,0,60\r\n`));
+    assert.equal(files[1].name, 'telegram-analyzer-2026-02-adjacent-replies.csv');
+    assert.ok(files[1].csv.includes(`"Bob",${name},1,29.000,0,60\r\n`));
+    assert.doesNotMatch(files[1].csv, /"Eve",1,60\.000/);
+    assert.equal(files[2].name, 'telegram-analyzer-2026-02-direct-replies.csv');
+    assert.equal(files[2].csv, heading + `${name},"Bob",2,90.000,1,60\r\n`);
+    assert.deepEqual(files[3], files[2]);
+    assert.equal(files[4].name, 'telegram-analyzer-2026-01-adjacent-replies.csv');
+    assert.equal(files[4].csv, heading + `${name},"Eve",1,60.000,0,60\r\n`);
+
+    app.selectFile('empty.json').complete({ messages: [] });
+    assert.equal(button.disabled, true);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
@@ -1594,6 +1651,66 @@ test('classifies shared polls, contacts and locations without exposing their con
     checkReport({ Текст: 4, Опросы: 1, Контакты: 1, Геопозиции: 3, Стикеры: 1, Фото: 1, Файлы: 1 }, 'Текст');
     app.element('languageToggle').click();
     checkReport({ Text: 4, Polls: 1, Contacts: 1, Locations: 3, Stickers: 1, Photos: 1, Files: 1 }, 'Text');
+});
+
+test('classifies Telegram checklists without counting or exposing checklist contents', async () => {
+    const app = createAnalyzer();
+    const checklist = {
+        title: ['Synthetic ', { type: 'bold', text: 'checklist title' }],
+        others_can_append: true,
+        others_can_complete: false,
+        answers: [{ id: 1, text: ['Synthetic ', { type: 'italic', text: 'checklist item' }] }],
+    };
+    const records = [
+        { from: 'Alice', text: 'Hello Bob' },
+        { from: 'Bob', todo_list: checklist, reply_to_message_id: 1 },
+        { from: 'Bob', todo_list: { ...checklist, title: 'Synthetic plain checklist' }, text: 'Visible caption' },
+        { from: 'Bob', todo_list: { title: [' ', { text: 42 }], answers: [] } },
+        { from: 'Bob', todo_list: { title: 'Synthetic invalid checklist', answers: {} } },
+        { from: 'Bob', todo_list: 'Synthetic malformed checklist' },
+        { from: 'Bob', media_type: 'sticker', todo_list: checklist },
+        { type: 'service', actor: 'Synthetic moderator', todo_list: checklist },
+        { type: 'unsupported', todo_list: checklist },
+    ];
+    app.selectFile('checklists.json').complete({
+        messages: records.map((record, index) => ({
+            id: index + 1, type: 'message', date: `2026-11-01T12:0${index}:00`, text: '', ...record,
+        })),
+    });
+
+    const chartCounts = id => {
+        const { labels, datasets } = app.charts.get(id).data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    for (const id of ['messageTypesChart', 'monthlyMessageTypesChart']) {
+        assert.deepEqual(chartCounts(id), {
+            Текст: 4, 'Списки задач': 2, Стикеры: 1, 'Служебные события': 1, 'Неподдерживаемые записи': 1,
+        });
+    }
+    assert.deepEqual(chartCounts('responseTimeChart'), { 'Alice -> Bob': 1 });
+    assert.deepEqual(chartCounts('monthlyResponseTimeChart'), { 'Alice -> Bob': 1 });
+    const timing = app.element('replyTiming');
+    timing.value = 'direct';
+    timing.change();
+    assert.deepEqual(chartCounts('responseTimeChart'), { 'Alice -> Bob': 1 });
+    assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 2 слов/);
+
+    app.element('languageToggle').click();
+    for (const id of ['messageTypesChart', 'monthlyMessageTypesChart']) {
+        assert.deepEqual(chartCounts(id), {
+            Text: 4, Checklists: 2, Stickers: 1, 'Service events': 1, 'Unsupported records': 1,
+        });
+    }
+    for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Checklists: 2/);
+        assert.doesNotMatch(html, /Synthetic|Visible caption|Service events|Unsupported records/);
+    }
+    app.element('exportParticipants').click();
+    app.element('exportMonthlyParticipants').click();
+    for (const { blob } of app.downloads) {
+        assert.equal(await blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n"Alice",1,9.0\r\n"Bob",6,2.5\r\n');
+    }
 });
 
 test('exports participant totals with quoted, formula-safe names', async () => {
