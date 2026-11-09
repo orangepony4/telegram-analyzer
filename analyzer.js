@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
         selectChat: ['Choose a chat', 'Выберите чат'],
         selectChatStatus: ['Choose a chat to see its statistics.', 'Выберите чат, чтобы увидеть его статистику.'],
         noMatchingChats: ['No matching chats', 'Подходящих чатов нет'],
+        accountSearchGroup: ['Available chats', 'Доступные чаты'],
         accountSearchMatches: [
             (shown, total) => `${shown} of ${total} chats`,
             (shown, total) => `Найдено ${shown} из ${total}`,
@@ -945,22 +946,27 @@ document.addEventListener('DOMContentLoaded', () => {
             ? accountChats.filter(chat => normalizeSearchText(resolveText(chat.name)).includes(query))
             : accountChats;
         const selected = accountChatSelect.value;
-        const options = accountChatSelect.children;
-        if (options.length !== matches.length + 1
-            || matches.some((chat, index) => options[index + 1].value !== String(chat.number - 1))) {
+        const currentOptions = accountChatSelect.options;
+        if (currentOptions.length !== matches.length + 1
+            || matches.some((chat, index) => currentOptions[index + 1].value !== String(chat.number - 1))) {
             const placeholder = document.createElement('option');
             placeholder.value = '';
             placeholder.disabled = true;
-            accountChatSelect.replaceChildren(placeholder);
+            // Replace the matching choices as one group, even for large account exports.
+            const group = document.createElement('optgroup');
             for (const chat of matches) {
                 const option = document.createElement('option');
                 option.value = String(chat.number - 1);
-                accountChatSelect.append(option);
+                group.append(option);
             }
+            if (matches.length) accountChatSelect.replaceChildren(placeholder, group);
+            else accountChatSelect.replaceChildren(placeholder);
         }
-        accountChatSelect.children[0].textContent = translate(matches.length ? 'selectChat' : 'noMatchingChats');
+        const options = accountChatSelect.options;
+        options[0].textContent = translate(matches.length ? 'selectChat' : 'noMatchingChats');
+        if (matches.length) accountChatSelect.lastElementChild.label = translate('accountSearchGroup');
         matches.forEach((chat, index) => {
-            const option = accountChatSelect.children[index + 1];
+            const option = options[index + 1];
             const label = accountChatLabel(chat);
             if (option.textContent !== label) option.textContent = label;
         });
@@ -968,8 +974,9 @@ document.addEventListener('DOMContentLoaded', () => {
         accountChatSelect.value = stillSelected ? selected : '';
         accountChatSelect.disabled = matches.length === 0;
         analyzeAccountChatButton.disabled = !stillSelected;
-        accountChatSearchStatus.textContent = translate('accountSearchMatches',
+        const status = translate('accountSearchMatches',
             countFormat.format(matches.length), countFormat.format(accountChats.length));
+        if (accountChatSearchStatus.textContent !== status) accountChatSearchStatus.textContent = status;
     }
 
     function resetAccountChooser() {

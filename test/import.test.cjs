@@ -498,7 +498,7 @@ test('filters account chats by part of a name without changing the open report o
     const select = app.element('accountChatSelect');
     const matches = app.element('accountChatSearchStatus');
     const analyze = app.element('analyzeAccountChat');
-    const values = () => select.children.map(option => option.value);
+    const values = () => select.options.map(option => option.value);
     const search = value => {
         filter.value = value;
         filter.input();
@@ -526,7 +526,7 @@ test('filters account chats by part of a name without changing the open report o
     assert.equal(filter.value, '  CAFÉ ALPHA  ');
     assert.equal(select.value, '3');
     assert.match(matches.textContent, /2 of 4/);
-    assert.match(select.children[2].textContent, /Left chat.*#4/);
+    assert.match(select.options[2].textContent, /Left chat.*#4/);
 
     search('notes');
     assert.deepEqual(values(), ['', '0', '1']);
@@ -582,8 +582,9 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.equal(chooser.hidden, false);
     assert.equal(select.value, '');
     assert.equal(analyze.disabled, true);
-    assert.deepEqual(select.children.map(option => option.value), ['', '0', '1', '2', '3']);
-    const labels = select.children.slice(1).map(option => option.textContent);
+    assert.deepEqual(select.options.map(option => option.value), ['', '0', '1', '2', '3']);
+    assert.equal(select.lastElementChild.label, 'Доступные чаты');
+    const labels = select.options.slice(1).map(option => option.textContent);
     assert.deepEqual(labels, [
         'Shared title · 2 сообщ. · #1',
         hostileName + ' · 0 сообщ. · #2',
@@ -605,7 +606,8 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     app.element('languageToggle').click();
     assert.equal(select.children, choices);
     assert.equal(select.value, '0');
-    assert.deepEqual(select.children.map(option => [option.value, option.textContent]), [
+    assert.equal(select.lastElementChild.label, 'Available chats');
+    assert.deepEqual(select.options.map(option => [option.value, option.textContent]), [
         ['', 'Choose a chat'],
         ['0', 'Shared title · 2 messages · #1'],
         ['1', hostileName + ' · 0 messages · #2'],
@@ -823,7 +825,7 @@ test('ignores malformed account groups and hides stale choosers on single or dem
         left_chats: { list: [data.left_chats.list[0]] },
     });
     assert.equal(chooser.hidden, false);
-    assert.deepEqual(app.element('accountChatSelect').children.map(option => option.value), ['', '0']);
+    assert.deepEqual(app.element('accountChatSelect').options.map(option => option.value), ['', '0']);
 
     const stale = app.selectFile('stale-account.json');
     app.selectFile('single.json').complete({
