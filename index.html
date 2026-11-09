@@ -159,6 +159,9 @@
                             <div class="chart-plot"><canvas id="monthlyChart" role="img" aria-labelledby="monthlyChartLabel"></canvas></div>
                             <div class="trend-comparison" id="trendComparisonPanel" hidden>
                                 <p id="trendComparisonHint" data-ru="График показывает 12 участников с наибольшим числом записей с датой. Можно добавить ещё одного для сравнения.">The chart shows the 12 participants with the most dated records. Add one more to compare.</p>
+                                <label for="trendComparisonSearch" data-ru="Найти участника по имени">Find a participant by name</label>
+                                <input type="search" id="trendComparisonSearch" aria-controls="trendComparison" aria-describedby="trendComparisonSearchStatus" autocomplete="off" spellcheck="false">
+                                <p id="trendComparisonSearchStatus" role="status"></p>
                                 <label for="trendComparison" data-ru="Участник для сравнения">Compare a participant</label>
                                 <select id="trendComparison" aria-describedby="trendComparisonHint"></select>
                             </div>
@@ -196,6 +199,9 @@
 
                     <details id="monthlyActivity" class="activity-data" hidden>
                         <summary data-ru="Активность по месяцам в таблице">Monthly activity table</summary>
+                        <button type="button" id="exportMonthlyActivity" class="button button-secondary activity-export" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV активности">Activity CSV</span>
+                        </button>
                         <table>
                             <caption data-ru="Выберите месяц, чтобы открыть его отчёт. В таблице учтены все записи с датой.">Select a month to open its report. Counts include all dated records.</caption>
                             <thead>
@@ -275,6 +281,20 @@
                             <div class="chart-plot"><canvas id="monthlyDayOfWeekChart" role="img" aria-labelledby="monthlyDayOfWeekChartLabel"></canvas></div>
                         </section>
                     </div>
+
+                    <details id="dailyActivity" class="activity-data" hidden>
+                        <summary data-ru="Активность по дням в таблице">Daily activity table</summary>
+                        <table aria-describedby="currentMonth">
+                            <caption data-ru="Число записей за каждый день выбранного месяца.">Records on each day of the selected month.</caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col" data-ru="День">Day</th>
+                                    <th scope="col" data-ru="Записи">Records</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyActivityRows"></tbody>
+                        </table>
+                    </details>
 
                     <section class="detail-section" aria-labelledby="monthDetailsHeading">
                         <div class="section-heading"><h2 id="monthDetailsHeading" data-ru="Детали месяца">Monthly details</h2></div>

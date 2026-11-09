@@ -23,8 +23,9 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 ### What the report measures
 
-- Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records and lets you add one other participant. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
-- Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month in the table to open its report.
+- Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records. Search for another participant by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
+- Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
+- Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records.
 - Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
@@ -78,8 +79,9 @@ Telegram Analyzer показывает активность, участнико�
 
 ### Что считает анализатор
 
-- Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой и позволяет добавить ещё одного для сравнения. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
-- В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт.
+- Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
+- В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.
+- В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей.
 - Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.

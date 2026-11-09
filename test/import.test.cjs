@@ -28,6 +28,12 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
                 append(...children) {
                     this.children.push(...children);
                 },
+                get lastElementChild() {
+                    return this.children.at(-1);
+                },
+                get options() {
+                    return this.children.flatMap(child => child.tagName === 'OPTGROUP' ? child.children : [child]);
+                },
                 replaceChildren(...children) {
                     this.children = children;
                     this.value = children[0]?.value ?? '';
@@ -137,6 +143,11 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
             createElement(tag) {
                 if (tag === 'a') {
                     return { click() { downloads.push({ name: this.download, blob: downloadedBlob }); } };
+                }
+                if (tag === 'optgroup') {
+                    const group = element(Symbol(tag));
+                    group.tagName = 'OPTGROUP';
+                    return group;
                 }
                 if (['button', 'span', 'tr', 'th', 'td'].includes(tag)) return element(Symbol(tag));
                 return { get innerHTML() { return this.textContent; } };
@@ -737,6 +748,72 @@ test('opens dated activity as a localized table without charts and jumps to its 
     assert.equal(rows.children.length, 0);
 });
 
+test('exports dated monthly activity as stable CSV without charts or participant names', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const activity = app.element('monthlyActivity');
+    const exportActivity = app.element('exportMonthlyActivity');
+    assert.equal(exportActivity.disabled, true);
+    exportActivity.click();
+    assert.deepEqual(app.downloads, []);
+
+    app.selectFile('activity.json').complete({ messages: [
+        { id: 2, from: 'Synthetic name', date: '2026-10-02T23:55:00-07:00', text: 'One' },
+        { id: 3, from: 'Synthetic name', date: '2026-10-02T23:58:00-07:00', text: 'Two' },
+        { id: 1, type: 'service', date: '2024-02-29T12:00:00Z', action: 'pin_message' },
+        { id: 4, type: 'service', date: '2026-10-03T00:10:00-07:00', action: 'pin_message' },
+        { id: 5, type: 'unsupported' },
+    ] });
+    activity.open = true;
+    activity.toggle();
+    assert.equal(exportActivity.disabled, false);
+    exportActivity.click();
+    app.element('languageToggle').click();
+    exportActivity.click();
+    const expected = '\uFEFFmonth,records,active_days\r\n2024-02,1,1\r\n2026-10,3,2\r\n';
+    assert.equal(app.downloads.length, 2);
+    for (const { name, blob } of app.downloads) {
+        assert.equal(name, 'telegram-analyzer-monthly-activity.csv');
+        assert.equal(Buffer.from(await blob.arrayBuffer()).toString('utf8'), expected);
+    }
+    app.selectFile('undated.json').complete({ messages: [{ id: 6, type: 'unsupported' }] });
+    assert.equal(activity.hidden, true);
+    assert.equal(exportActivity.disabled, true);
+    exportActivity.click();
+    assert.equal(app.downloads.length, 2);
+});
+
+test('lists every day of the selected month without charts, including leap day and zero counts', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const table = app.element('dailyActivity');
+    const rows = app.element('dailyActivityRows');
+    app.selectFile('days.json').complete({ messages: [
+        { id: 1, from: 'Ari', date: '2024-02-29T23:59:00-08:00', text: 'Leap day' },
+        { id: 2, type: 'service', date: '2024-02-29T01:30:00Z', action: 'pin_message' },
+        { id: 3, from: 'Bo', date: '2024-04-02T00:01:00Z', text: 'April' },
+    ] });
+    app.monthlyTab.click();
+    assert.equal(table.hidden, false);
+    assert.equal(rows.children.length, 0);
+    table.open = true;
+    table.toggle();
+    assert.equal(rows.children.length, 30);
+    assert.equal(rows.children[1].children[1].textContent, '1');
+    app.element('prevMonth').click();
+    assert.equal(rows.children.length, 29);
+    assert.equal(rows.children[0].children[1].textContent, '0');
+    assert.equal(rows.children.at(-1).children[1].textContent, '2');
+    const lastDay = () => rows.children.at(-1).children[0].children[0];
+    assert.equal(lastDay().dateTime, '2024-02-29');
+    assert.match(lastDay().textContent, /29 фев/i);
+    app.element('languageToggle').click();
+    assert.equal(table.open, true);
+    assert.match(lastDay().textContent, /Feb 29/i);
+    app.selectFile('undated.json').complete({ messages: [] });
+    assert.equal(table.hidden, true);
+    assert.equal(table.open, false);
+    assert.equal(rows.children.length, 0);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
@@ -1186,7 +1263,7 @@ test('bounds large trend datasets and keeps any other participant available for 
     const labels = () => Array.from(chart.data.datasets, dataset => dataset.label);
     assert.equal(panel.hidden, false);
     assert.deepEqual(labels(), [...names.slice(12), 'Записи без отправителя']);
-    assert.deepEqual(select.children.map(option => option.textContent), ['Без сравнения', ...names.slice(0, 12)]);
+    assert.deepEqual(select.options.map(option => option.textContent), ['Без сравнения', ...names.slice(0, 12)]);
     assert.equal(app.element('overviewParticipantCount').textContent, '24');
     series.children[0].click();
     select.value = '2';
@@ -1228,6 +1305,70 @@ test('bounds large trend datasets and keeps any other participant available for 
     assert.equal(select.children.length, 0);
     assert.equal(app.monthlyTab.disabled, true);
     assert.equal(app.element('overviewParticipantCount').textContent, '24');
+});
+
+test('filters comparison participants by substring while preserving the selected chart series', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const names = Array.from({ length: 24 }, (_, index) => 'Guest ' + (index + 1));
+    names[12] = 'North Cafe\u0301 notes';
+    names[13] = 'Other Café group';
+    app.selectFile('comparison-search.json').complete({ messages: names.map((from, index) => ({
+        id: index + 1, from, date: '2026-10-01T00:00:00', text: 'X',
+    })) });
+    const chart = app.charts.get('monthlyChart');
+    const series = app.element('monthlyChartSeries');
+    const search = app.element('trendComparisonSearch');
+    const select = app.element('trendComparison');
+    const status = app.element('trendComparisonSearchStatus');
+    const options = () => select.options.map(option => [option.value, option.textContent]);
+    const filter = value => {
+        search.value = value;
+        search.input();
+    };
+    const choose = value => {
+        select.value = value;
+        select.change({ target: select });
+    };
+
+    filter('  CAFÉ  ');
+    assert.deepEqual(options(), [['', 'Без сравнения'], ['0', names[12]], ['1', names[13]]]);
+    assert.equal(status.textContent, 'Найдено 2 из 12');
+    choose('0');
+    series.children[0].click();
+    search.focus();
+    let updates = 0;
+    chart.update = () => { updates++; };
+    filter('group');
+    assert.equal(updates, 0);
+    assert.equal(select.value, '0');
+    assert.deepEqual(options(), [['', 'Без сравнения'], ['0', names[12] + ' · текущее сравнение'], ['1', names[13]]]);
+    assert.equal(chart.data.datasets.at(-1).label, names[12]);
+    assert.equal(chart.isDatasetVisible(0), false);
+    assert.equal(status.textContent, 'Найдено 1 из 12');
+
+    filter('not present');
+    assert.equal(updates, 0);
+    assert.deepEqual(options(), [['', 'Без сравнения'], ['0', names[12] + ' · текущее сравнение']]);
+    assert.equal(status.textContent, 'Подходящих участников нет · Найдено 0 из 12');
+    app.element('languageToggle').click();
+    assert.equal(app.focusedElement, search);
+    assert.equal(search.value, 'not present');
+    assert.equal(select.value, '0');
+    assert.equal(options()[1][1], names[12] + ' · current comparison');
+    assert.equal(status.textContent, 'No matching participants · 0 of 12 participants');
+
+    filter('group');
+    choose('1');
+    assert.deepEqual(options(), [['', 'No comparison'], ['1', names[13]]]);
+    assert.equal(chart.data.datasets.at(-1).label, names[13]);
+    filter('');
+    assert.equal(options().length, 13);
+    assert.equal(select.value, '1');
+    assert.equal(chart.isDatasetVisible(0), false);
+    app.selectFile('new-chat.json').complete({ messages: [{ from: 'New sender' }] });
+    assert.equal(search.value, '');
+    assert.equal(status.textContent, '');
+    assert.equal(app.element('trendComparisonPanel').hidden, true);
 });
 
 test('includes dated rows without a sender in monthly activity and totals', async () => {

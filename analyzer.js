@@ -12,11 +12,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyChartLegend = document.getElementById('monthlyChartLegend');
     const monthlyChartSeries = document.getElementById('monthlyChartSeries');
     const trendComparisonPanel = document.getElementById('trendComparisonPanel');
+    const trendComparisonSearch = document.getElementById('trendComparisonSearch');
+    const trendComparisonSearchStatus = document.getElementById('trendComparisonSearchStatus');
     const trendComparisonSelect = document.getElementById('trendComparison');
     const currentMonthDisplay = document.getElementById('currentMonth');
     const reportMonthSelect = document.getElementById('reportMonth');
     const monthlyActivity = document.getElementById('monthlyActivity');
     const monthlyActivityRows = document.getElementById('monthlyActivityRows');
+    const exportMonthlyActivityButton = document.getElementById('exportMonthlyActivity');
+    const dailyActivity = document.getElementById('dailyActivity');
+    const dailyActivityRows = document.getElementById('dailyActivityRows');
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
@@ -127,6 +132,13 @@ document.addEventListener('DOMContentLoaded', () => {
         activity: ['Activity', 'Активность'],
         unattributed: ['Records without a sender', 'Записи без отправителя'],
         noTrendComparison: ['No comparison', 'Без сравнения'],
+        currentTrendComparison: [name => `${name} · current comparison`, name => `${name} · текущее сравнение`],
+        noMatchingTrendParticipants: ['No matching participants', 'Подходящих участников нет'],
+        trendSearchGroup: ['Available participants', 'Доступные участники'],
+        trendSearchMatches: [
+            (shown, total) => `${shown} of ${total} participants`,
+            (shown, total) => `Найдено ${shown} из ${total}`,
+        ],
         weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
         chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
         replyCoverage: [
@@ -193,6 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let language = 'en';
     let countFormat;
     let monthFormat;
+    let dayFormat;
     const graphemeSegmenter = typeof Intl.Segmenter === 'function'
         ? new Intl.Segmenter('ru-RU', { granularity: 'grapheme' })
         : null;
@@ -300,6 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         selectReportMonth(monthsData.findIndex(({ month }) => month === reportMonthSelect.value));
     });
     monthlyActivity.addEventListener('toggle', refreshMonthlyActivity);
+    exportMonthlyActivityButton.addEventListener('click', downloadMonthlyActivity);
+    dailyActivity.addEventListener('toggle', refreshDailyActivity);
 
     function selectReportMonth(index) {
         if (!monthsData[index] || index === currentMonthIndex) return;
@@ -357,7 +372,11 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyChartSeries.addEventListener('focusin', event => {
         event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
-    trendComparisonSelect.addEventListener('change', () => trendComparison?.select(trendComparisonSelect.value));
+    trendComparisonSearch.addEventListener('input', refreshTrendComparisonOptions);
+    trendComparisonSelect.addEventListener('change', () => {
+        trendComparison?.select(trendComparisonSelect.value);
+        refreshTrendComparisonOptions();
+    });
 
     if (dropZone) {
         ['dragenter', 'dragover'].forEach(eventName => {
@@ -430,6 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const locale = next === 'ru' ? 'ru-RU' : 'en';
         countFormat = new Intl.NumberFormat(locale);
         monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
+        dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
 
         for (const { element, english, russian, attributes } of staticTranslations) {
             if (russian != null && !localizedText.has(element)) {
@@ -454,7 +474,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (languageToggleLabel) languageToggleLabel.textContent = next === 'ru' ? 'EN' : 'RU';
         updateThemeToggleState(bodyElement.classList.contains(LIGHT_THEME_CLASS) ? LIGHT_THEME_KEY : DARK_THEME_KEY);
         refreshAccountChooser();
-        refreshTrendComparisonLabels();
+        refreshTrendComparisonOptions();
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshReportLanguage();
@@ -914,15 +934,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return translate('accountOption', resolveText(chat.name), suffix, chat.messages.length, chat.number);
     }
 
-    function chatSearchText(text) {
+    function normalizeSearchText(text) {
         return text.normalize('NFC').toLowerCase().trim();
     }
 
     function refreshAccountChooser() {
         if (!accountChats.length) return;
-        const query = chatSearchText(accountChatSearch.value);
+        const query = normalizeSearchText(accountChatSearch.value);
         const matches = query
-            ? accountChats.filter(chat => chatSearchText(resolveText(chat.name)).includes(query))
+            ? accountChats.filter(chat => normalizeSearchText(resolveText(chat.name)).includes(query))
             : accountChats;
         const selected = accountChatSelect.value;
         const options = accountChatSelect.children;
@@ -1041,6 +1061,7 @@ document.addEventListener('DOMContentLoaded', () => {
         currentMonthIndex = -1;
         refreshReportMonthOptions();
         refreshMonthlyActivity();
+        refreshDailyActivity();
         allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
@@ -1700,8 +1721,13 @@ document.addEventListener('DOMContentLoaded', () => {
         reportMonthSelect.disabled = monthsData.length < 2;
     }
 
+    function countActiveDays({ dailyActivity }) {
+        return dailyActivity.filter(Boolean).length;
+    }
+
     function refreshMonthlyActivity() {
         monthlyActivity.hidden = monthsData.length === 0;
+        exportMonthlyActivityButton.disabled = monthlyActivity.hidden;
         if (monthlyActivity.hidden) monthlyActivity.open = false;
         monthlyActivityRows.replaceChildren();
         if (!monthlyActivity.open) return;
@@ -1723,14 +1749,47 @@ document.addEventListener('DOMContentLoaded', () => {
             const records = document.createElement('td');
             records.textContent = countFormat.format(data.messages.length);
             const activeDays = document.createElement('td');
-            activeDays.textContent = countFormat.format(data.dailyActivity.filter(Boolean).length);
+            activeDays.textContent = countFormat.format(countActiveDays(data));
             row.append(heading, records, activeDays);
             monthlyActivityRows.append(row);
         }
     }
 
+    function daysInReportMonth(month) {
+        const end = new Date(`${month}-01T00:00:00Z`);
+        end.setUTCMonth(end.getUTCMonth() + 1, 0);
+        return end.getUTCDate();
+    }
+
+    function refreshDailyActivity() {
+        const monthData = monthsData[currentMonthIndex];
+        dailyActivity.hidden = !monthData;
+        if (dailyActivity.hidden) dailyActivity.open = false;
+        dailyActivityRows.replaceChildren();
+        if (!dailyActivity.open || !monthData) return;
+
+        const { month, data } = monthData;
+        const date = new Date(`${month}-01T00:00:00Z`);
+        const days = daysInReportMonth(month);
+        for (let day = 1; day <= days; day++) {
+            date.setUTCDate(day);
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.scope = 'row';
+            const time = document.createElement('time');
+            time.dateTime = `${month}-${String(day).padStart(2, '0')}`;
+            time.textContent = dayFormat.format(date);
+            heading.append(time);
+            const records = document.createElement('td');
+            records.textContent = countFormat.format(data.dailyActivity[day - 1]);
+            row.append(heading, records);
+            dailyActivityRows.append(row);
+        }
+    }
+
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
         if (rebuildCharts) updateReplyTimingHint();
+        refreshDailyActivity();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
             return;
@@ -1754,7 +1813,7 @@ document.addEventListener('DOMContentLoaded', () => {
         exportMonthlyParticipantsButton.disabled = participantTotals.size === 0;
         setMessageMetric(monthlyMessageCountElement, data.messages.length);
         document.getElementById('monthlyParticipantCount').textContent = countFormat.format(participantTotals.size);
-        document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(data.dailyActivity.filter(Boolean).length);
+        document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(countActiveDays(data));
 
         // Use helper functions for monthly stats display
         monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals);
@@ -1887,9 +1946,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createMonthlyCharts(monthData) {
         const { data } = monthData;
-        const endOfMonth = new Date(`${monthData.month}-01T00:00:00Z`);
-        endOfMonth.setUTCMonth(endOfMonth.getUTCMonth() + 1, 0);
-        const dayCount = endOfMonth.getUTCDate();
+        const dayCount = daysInReportMonth(monthData.month);
         const days = Array.from({ length: dayCount }, (_, index) => index + 1);
         createBarChart('dailyActivityChart', () => days, data.dailyActivity.slice(0, dayCount), 'chartMessages');
         createTimeOfDayChart(data.timeOfDay, 'monthlyTimeOfDayChart');
@@ -1951,6 +2008,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetTrendComparison() {
         trendComparison = null;
         trendComparisonPanel.hidden = true;
+        trendComparisonSearch.value = '';
+        trendComparisonSearchStatus.textContent = '';
         trendComparisonSelect.replaceChildren();
     }
 
@@ -1971,29 +2030,60 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         };
 
-        const placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = translate('noTrendComparison');
-        trendComparisonSelect.append(placeholder);
-        choices.forEach((participant, index) => {
-            const option = document.createElement('option');
-            option.value = String(index);
-            option.textContent = participantLabel(participant);
-            trendComparisonSelect.append(option);
-        });
-        trendComparisonSelect.value = '';
+        refreshTrendComparisonOptions();
         trendComparisonPanel.hidden = false;
     }
 
-    function refreshTrendComparisonLabels() {
+    function refreshTrendComparisonOptions() {
         if (!trendComparison) return;
-        const options = trendComparisonSelect.children;
-        options[0].textContent = translate('noTrendComparison');
-        trendComparison.choices.forEach((participant, index) => {
-            const option = options[index + 1];
+        const { choices } = trendComparison;
+        const query = normalizeSearchText(trendComparisonSearch.value);
+        const selected = trendComparisonSelect.value;
+        const rows = [{ value: '', label: translate('noTrendComparison') }];
+        let selectedMatches = false;
+        choices.forEach((participant, index) => {
             const label = participantLabel(participant);
-            if (option.textContent !== label) option.textContent = label;
+            if (query && !normalizeSearchText(label).includes(query)) return;
+            const value = String(index);
+            rows.push({ value, label });
+            if (value === selected) selectedMatches = true;
         });
+        const matchCount = rows.length - 1;
+        const selectedParticipant = selected === '' ? undefined : choices[Number(selected)];
+        if (selectedParticipant !== undefined && !selectedMatches) {
+            const label = participantLabel(selectedParticipant);
+            rows.splice(1, 0, { value: selected, label: translate('currentTrendComparison', label) });
+        }
+
+        const options = trendComparisonSelect.options;
+        const lastChild = trendComparisonSelect.lastElementChild;
+        const displayedMatches = lastChild?.tagName === 'OPTGROUP' ? lastChild.children.length : 0;
+        if (displayedMatches !== matchCount || options.length !== rows.length
+            || rows.some(({ value }, index) => options[index].value !== value)) {
+            // Swap the matched choices as a group so filtering does not remove thousands of sibling options.
+            const group = document.createElement('optgroup');
+            const standalone = [];
+            const matchingStart = rows.length - matchCount;
+            rows.forEach(({ value, label }, index) => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = label;
+                if (index < matchingStart) standalone.push(option);
+                else group.append(option);
+            });
+            if (matchCount) standalone.push(group);
+            trendComparisonSelect.replaceChildren(...standalone);
+            trendComparisonSelect.value = selected;
+        } else {
+            rows.forEach(({ label }, index) => {
+                if (options[index].textContent !== label) options[index].textContent = label;
+            });
+        }
+        if (matchCount) trendComparisonSelect.lastElementChild.label = translate('trendSearchGroup');
+
+        const count = translate('trendSearchMatches', countFormat.format(matchCount), countFormat.format(choices.length));
+        const status = matchCount ? count : `${translate('noMatchingTrendParticipants')} · ${count}`;
+        if (trendComparisonSearchStatus.textContent !== status) trendComparisonSearchStatus.textContent = status;
     }
 
     function renderMonthlyChartLegend(chart) {
@@ -2195,6 +2285,15 @@ document.addEventListener('DOMContentLoaded', () => {
         );
     }
 
+    function downloadMonthlyActivity() {
+        if (exportMonthlyActivityButton.disabled || statsContainer.style.display !== 'block') return;
+        const rows = ['month,records,active_days'];
+        for (const { month, data } of monthsData) {
+            rows.push(`${month},${data.messages.length},${countActiveDays(data)}`);
+        }
+        downloadCsv(rows, 'telegram-analyzer-monthly-activity.csv');
+    }
+
     function downloadParticipantSummary(participantTotals, filename) {
         if (participantTotals.size === 0) return;
         const rows = ['Участник,Сообщения,Средняя длина сообщения'];
@@ -2204,6 +2303,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
             rows.push(`"${safeName.replaceAll('"', '""')}",${messageCount},${(textLength / messageCount).toFixed(1)}`);
         }
+        downloadCsv(rows, filename);
+    }
+
+    function downloadCsv(rows, filename) {
         const blob = new Blob(['\uFEFF', rows.join('\r\n'), '\r\n'], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
