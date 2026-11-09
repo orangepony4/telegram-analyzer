@@ -227,7 +227,9 @@ test('defaults to English and switches language without losing the report, month
         search: '?view=upload',
     });
     const toggle = app.element('languageToggle');
+    const toggleLabel = app.element('languageToggleLabel');
     assert.equal(app.documentElement.lang, 'en');
+    assert.ok(toggle.getAttribute('aria-label').startsWith(toggleLabel.textContent));
 
     app.selectFile('two-months.json').complete({
         name: 'Synthetic report',
@@ -247,6 +249,7 @@ test('defaults to English and switches language without losing the report, month
     toggle.focus();
     toggle.click();
     assert.equal(app.documentElement.lang, 'ru');
+    assert.ok(toggle.getAttribute('aria-label').startsWith(toggleLabel.textContent));
     assert.equal(preferences.get('telegramAnalyzerLocale'), 'ru');
     assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
     assert.match(app.element('currentMonth').textContent, /октябр/i);
@@ -947,6 +950,46 @@ test('counts graphemes across Telegram text entities in report lengths and both 
     assert.match(await month.blob.text(), /"Alice",3,1\.0\r\n$/);
     assert.equal(overall.name, 'telegram-analyzer-participants.csv');
     assert.match(await overall.blob.text(), /"Alice",4,1\.3\r\n$/);
+});
+
+test('counts words in unspaced scripts and ignores standalone punctuation and emoji', async () => {
+    const app = createAnalyzer();
+    const date = '2026-10-10T12:00:00';
+    app.selectFile('words.json').complete({ messages: [
+        { id: 1, from: 'Punctuation', date, text: '… ! ?' },
+        { id: 2, from: 'Emoji', date, text: '👩‍💻 1️⃣ 🇺🇳' },
+        { id: 3, from: 'Chinese', date, text: ['你好', { type: 'bold', text: '世界' }] },
+        { id: 4, from: 'Russian', date, text: ['При', { type: 'bold', text: 'вет' }, ', мир!'] },
+        { id: 5, from: 'Russian', text: 'Без даты' },
+    ] });
+
+    const overview = app.element('wordCountStats');
+    const month = app.element('monthlyWordCountStats');
+    for (const report of [overview, month]) {
+        assert.match(report.innerHTML, /Punctuation<\/strong>: 0 слов/);
+        assert.match(report.innerHTML, /Emoji<\/strong>: 0 слов/);
+        assert.match(report.innerHTML, /Chinese<\/strong>: 2 слов/);
+    }
+    assert.match(overview.innerHTML, /Russian<\/strong>: 4 слов/);
+    assert.match(month.innerHTML, /Russian<\/strong>: 2 слов/);
+    app.element('languageToggle').click();
+    assert.match(overview.innerHTML, /Chinese<\/strong>: 2 words/);
+    assert.match(month.innerHTML, /Emoji<\/strong>: 0 words/);
+
+    app.element('exportMonthlyParticipants').click();
+    const [{ blob }] = app.downloads;
+    assert.equal(await blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n'
+        + '"Punctuation",1,5.0\r\n"Emoji",1,5.0\r\n"Chinese",1,4.0\r\n"Russian",1,12.0\r\n');
+});
+
+test('falls back to letter and number tokens when word segmentation is unavailable', () => {
+    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat } });
+    const date = '2026-10-10T12:00:00';
+    app.selectFile('words.json').complete({ messages: [
+        { id: 1, from: 'Alice', date, text: '… 🐈 2️⃣ 你好世界 follow-up e\u0301 7' },
+    ] });
+    assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 4 слов/);
+    assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 4 слов/);
 });
 
 test('falls back to Unicode code points when grapheme segmentation is unavailable', () => {

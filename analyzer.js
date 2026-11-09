@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const languageToggleLabel = document.getElementById('languageToggleLabel');
     const LOCALE_STORAGE_KEY = 'telegramAnalyzerLocale';
     const copy = {
-        switchLanguage: ['Switch language to Russian', 'Переключить язык на английский'],
+        switchLanguage: ['RU · Switch to Russian', 'EN · Переключить на английский'],
         darkTheme: ['Switch to dark theme', 'Переключить на тёмную тему'],
         lightTheme: ['Switch to light theme', 'Переключить на светлую тему'],
         demoReport: ['Demo report', 'Демо-отчёт'],
@@ -168,6 +168,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const graphemeSegmenter = typeof Intl.Segmenter === 'function'
         ? new Intl.Segmenter('ru-RU', { granularity: 'grapheme' })
         : null;
+    // Keep word counts independent of the current interface language.
+    const wordSegmenter = typeof Intl.Segmenter === 'function'
+        ? new Intl.Segmenter('en', { granularity: 'word' })
+        : null;
+    const dictionaryWordScripts = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+    const wordCharacter = /[\p{L}\p{N}]/u;
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
     const DARK_THEME_KEY = 'default';
     const LIGHT_THEME_KEY = 'muted-light';
@@ -625,6 +631,27 @@ document.addEventListener('DOMContentLoaded', () => {
         let count = 0;
         for (const _ of graphemeSegmenter?.segment(text) ?? text) {
             count++;
+        }
+        return count;
+    }
+
+    function countWords(text) {
+        if (!text) return 0;
+        // Digits displayed as keycap emoji do not represent a number in the text.
+        if (text.includes('\u20E3')) text = text.replace(/[0-9]\uFE0F?\u20E3/g, ' ');
+        const useSegmenter = wordSegmenter && dictionaryWordScripts.test(text);
+        const tokens = text.match(/\S+/g) ?? [];
+        let count = 0;
+        for (const token of tokens) {
+            if (!wordCharacter.test(token)) continue;
+            if (useSegmenter && dictionaryWordScripts.test(token)) {
+                for (const { isWordLike } of wordSegmenter.segment(token)) {
+                    if (isWordLike) count++;
+                }
+            } else {
+                // Preserve one count for common compounds, URLs, and other spaced terms.
+                count++;
+            }
         }
         return count;
     }
@@ -1147,8 +1174,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Подготовка данных по месяцам
         const messagesByMonth = {};
         const responseTimes = Object.create(null);
+        const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(({ message: msg, calendar, time }) => {
+            const words = msg.from ? countWords(getMessageText(msg.text)) : 0;
+            if (msg.from) wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
             if (!calendar) return;
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
             const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
@@ -1184,8 +1214,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
 
-            const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
-            month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words.length;
+            month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words;
 
             if (msg.type !== 'service' && Number.isFinite(time)) {
                 if (previousMessage && previousMessage.sender !== msg.from) {
@@ -1208,7 +1237,7 @@ document.addEventListener('DOMContentLoaded', () => {
         overallParticipantTotals = getParticipantTotals(messages);
         overviewData = {
             messageCount: messages.length,
-            words: calculateTotalWordCounts(messages),
+            words: wordCounts,
             media: calculateMediaTypeUsage(messages),
         };
         renderOverviewStatistics();
@@ -1334,18 +1363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayAverageResponseDelayStats(avgDelayStats) {
         const title = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('meanDelay')}`;
         averageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(avgDelayStats, title);
-    }
-
-    function calculateTotalWordCounts(messages) {
-        const wordCounts = Object.create(null);
-        allParticipants.forEach(p => wordCounts[p] = 0);
-        messages.forEach(msg => {
-            if (msg.from) {
-                const words = getMessageText(msg.text).split(/\s+/).filter(Boolean);
-                wordCounts[msg.from] += words.length;
-            }
-        });
-        return wordCounts;
     }
 
     function displayWordCountStats(wordCounts) {
