@@ -18,7 +18,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
 2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
-3. If you open an account export containing chat history, select a chat and choose **Analyze chat**. The report and CSV cover that chat.
+3. If you open an account export containing chat history, select a chat and choose **Analyze chat**. With the picker focused, type the first letter of a chat name to jump to a match. The report and CSV cover the selected chat.
 4. Open **Overview** for the full chat or **By month** for a specific month. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
 ### What the report measures
@@ -27,6 +27,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
 - **Reply timing** defaults to **Adjacent messages**, which estimates delays between consecutive messages from different participants. Choose **Direct replies** to measure the elapsed time from each explicitly replied-to message to its reply. Direct mode uses pairs with known times and distinct senders in the same export. Both modes skip service events and assign an interval to the month of the reply. The setting applies to the reply charts, participant details, and adjustable long-response threshold.
+- Below **Reply timing**, the report shows how many direct reply links could be timed in the current view. The total includes links to missing messages or other chats, so an incomplete export can show fewer measured replies than links.
 - Modern exports use Unix timestamps or explicit offsets for response order and duration. Activity charts keep the calendar dates and times written in the export. Mixed legacy dates without offsets use an approximate wall-clock timeline for response intervals.
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
 - **Chat CSV** exports the whole chat. **Month CSV** exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8. The column headers stay the same when you change the interface language.
@@ -69,7 +70,7 @@ Telegram Analyzer показывает активность, участнико�
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
 2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Рядом с источником появится статус чтения.
-3. Если вы открыли экспорт аккаунта с историей чатов, выберите переписку и нажмите **«Показать статистику»**. Отчёт и CSV будут относиться к этому чату.
+3. Если вы открыли экспорт аккаунта с историей чатов, выберите переписку и нажмите **«Показать статистику»**. Когда фокус на списке, наберите первую букву названия, чтобы перейти к совпадению. Отчёт и CSV будут относиться к выбранному чату.
 4. Во вкладке **«Обзор»** видна статистика за всё время, во вкладке **«По месяцам»** — за выбранный месяц. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
 ### Что считает анализатор
@@ -78,6 +79,7 @@ Telegram Analyzer показывает активность, участнико�
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
 - В меню **«Замер ответов»** по умолчанию выбраны **«Соседние сообщения»**. Этот режим оценивает паузы между соседними сообщениями разных участников. Выберите **«Прямые ответы»**, чтобы измерять время от исходного сообщения до ответа, связанного с ним в Telegram. Подходят пары из одной переписки с известным временем и разными отправителями. Служебные события пропускаются. В обоих режимах интервал относится к месяцу ответа, а настройка применяется к графикам, деталям по участникам и порогу долгого ответа.
+- Под меню видно, сколько прямых ответов удалось замерить в открытой сводке. В общее число входят ссылки на отсутствующие сообщения и другие чаты. В неполном экспорте замеров может быть меньше, чем ссылок.
 - В современных экспортах порядок сообщений и длительность ответов определяются по Unix-времени или явному смещению часового пояса. Графики сохраняют календарное время из экспорта. Для смешанных экспортов с датами без смещения длительность ответов рассчитывается приблизительно по календарному времени.
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
 - Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя. Названия столбцов сохраняются при переключении языка.

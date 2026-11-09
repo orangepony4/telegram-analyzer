@@ -60,8 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
         selectChat: ['Choose a chat', 'Выберите чат'],
         selectChatStatus: ['Choose a chat to see its statistics.', 'Выберите чат, чтобы увидеть его статистику.'],
         accountOption: [
-            (number, name, suffix, count) => `${number}. ${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'}`,
-            (number, name, suffix, count) => `${number}. ${name}${suffix} · ${count} сообщ.`,
+            (name, suffix, count, number) => `${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'} · #${number}`,
+            (name, suffix, count, number) => `${name}${suffix} · ${count} сообщ. · #${number}`,
         ],
         selectedChat: [label => `Showing statistics for chat ${label}`, label => `Статистика открыта для чата ${label}`],
         accountInstructions: [
@@ -115,13 +115,13 @@ document.addEventListener('DOMContentLoaded', () => {
         unattributed: ['Records without a sender', 'Записи без отправителя'],
         weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
         chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
-        directRepliesAvailable: [
-            'Direct replies use links to messages in this export.',
-            'Прямые ответы определяются по ссылкам на сообщения в экспорте.',
+        replyCoverage: [
+            (timed, linked) => `Direct replies timed · ${timed} of ${linked}`,
+            (timed, linked) => `Замерено прямых ответов · ${timed} из ${linked}`,
         ],
-        directRepliesUnavailable: [
-            'No direct replies with an original message in this export.',
-            'В экспорте нет прямых ответов с исходным сообщением.',
+        noReplyLinks: [
+            'No direct reply links in this view.',
+            'В этой сводке нет ссылок на прямые ответы.',
         ],
         participantStats: ['Participant statistics', 'Статистика по участникам:'],
         participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
@@ -244,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tab.tabIndex = active ? 0 : -1;
             document.getElementById(tab.dataset.tab).classList.toggle('active', active);
         }
+        updateReplyTimingHint();
     }
 
     function handleStatsTabKey(tab, event) {
@@ -568,17 +569,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return Number.isSafeInteger(value) && value !== 0 ? value : null;
     }
 
-    function replyTargetId(message) {
-        // Telegram omits reply_to_peer_id when the original is in this chat.
-        if (message.type === 'service' || message.reply_to_peer_id != null) return null;
-        return numericMessageId(message.reply_to_message_id);
+    function replyLinkId(message) {
+        return message.type === 'service' ? null : numericMessageId(message.reply_to_message_id);
     }
 
     function findReplyTargets(timings) {
         const targets = new Map();
         for (const { message } of timings) {
-            const id = replyTargetId(message);
-            if (id !== null) targets.set(id, null);
+            const id = replyLinkId(message);
+            // Telegram omits reply_to_peer_id when the original is in this chat.
+            if (id !== null && message.reply_to_peer_id == null) targets.set(id, null);
         }
         if (targets.size === 0) return targets;
 
@@ -591,8 +591,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return targets;
     }
 
-    function originalForReply(message, time, targets) {
-        const targetId = replyTargetId(message);
+    function originalForReply(message, time, targetId, targets) {
+        if (message.reply_to_peer_id != null) return null;
         const original = targets.get(targetId);
         if (!original || !original.message.from || original.message.type === 'service'
             || original.message.from === message.from || !Number.isFinite(original.time)
@@ -840,7 +840,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function accountChatLabel(chat) {
         const suffix = chat.left ? ' · ' + translate('leftChat') : '';
-        return translate('accountOption', chat.number, resolveText(chat.name), suffix, chat.messages.length);
+        // The native picker matches typed characters against the start of the option label.
+        return translate('accountOption', resolveText(chat.name), suffix, chat.messages.length, chat.number);
     }
 
     function refreshAccountChooserLabels() {
@@ -1300,10 +1301,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const messagesByMonth = {};
         const responseTimes = Object.create(null);
         const directResponses = Object.create(null);
+        let linkedReplies = 0;
+        let timedReplies = 0;
         const replyTargets = findReplyTargets(timings);
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(({ message: msg, calendar, time }) => {
+            const replyLink = replyLinkId(msg);
+            if (replyLink !== null) linkedReplies++;
             const words = msg.from ? countWords(getReportMessageText(msg)) : 0;
             if (msg.from) wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
             if (!calendar) return;
@@ -1319,6 +1324,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 timeOfDay: new Array(24).fill(0),
                 responseTimes: Object.create(null),
                 directResponses: Object.create(null),
+                linkedReplies: 0,
+                timedReplies: 0,
                 wordCounts: Object.create(null),
                 mediaTypesStats: Object.create(null),
                 dayOfWeekActivity: new Array(7).fill(0),
@@ -1326,6 +1333,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
 
             month.messages.push(msg);
+            if (replyLink !== null) month.linkedReplies++;
             const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
             month.timeOfDay[calendar.getUTCHours()]++;
@@ -1351,13 +1359,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     recordResponse(responseTimes, sender, msg.from, seconds);
                     recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
-                if (replyTargets.size) {
-                    const original = originalForReply(msg, time, replyTargets);
-                    if (original) {
-                        const seconds = (time - original.time) / 1000;
-                        recordResponse(directResponses, original.message.from, msg.from, seconds);
-                        recordResponse(month.directResponses, original.message.from, msg.from, seconds);
-                    }
+                const original = replyLink === null ? null : originalForReply(msg, time, replyLink, replyTargets);
+                if (original) {
+                    const seconds = (time - original.time) / 1000;
+                    recordResponse(directResponses, original.message.from, msg.from, seconds);
+                    recordResponse(month.directResponses, original.message.from, msg.from, seconds);
+                    timedReplies++;
+                    month.timedReplies++;
                 }
                 previousMessage = { sender: msg.from, time };
             }
@@ -1369,13 +1377,12 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(([month, data]) => ({ month, data }));
 
         // Показываем общую статистику
-        overallResponseStats = { responseTimes, directResponses };
-        const hasDirectReplies = Object.keys(directResponses).length > 0;
+        overallResponseStats = { responseTimes, directResponses, linkedReplies, timedReplies };
+        const hasDirectReplies = timedReplies > 0;
         directRepliesOption.disabled = !hasDirectReplies;
         replyTimingSelect.disabled = !hasDirectReplies;
         if (!hasDirectReplies) replyTimingMode = 'adjacent';
         replyTimingSelect.value = replyTimingMode;
-        setLocalizedText(replyTimingHint, translated(hasDirectReplies ? 'directRepliesAvailable' : 'directRepliesUnavailable'));
         overallParticipantTotals = getParticipantTotals(messages);
         overviewData = {
             messageCount: messages.length,
@@ -1413,6 +1420,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function selectedResponseTimes({ responseTimes, directResponses }) {
         return replyTimingMode === 'direct' ? directResponses : responseTimes;
+    }
+
+    function updateReplyTimingHint() {
+        if (!overallResponseStats) return;
+        const currentMonth = monthlyStatsTab.classList.contains('active') ? monthsData[currentMonthIndex] : null;
+        const { linkedReplies, timedReplies } = currentMonth?.data ?? overallResponseStats;
+        const hint = linkedReplies
+            ? () => translate('replyCoverage', countFormat.format(timedReplies), countFormat.format(linkedReplies))
+            : translated('noReplyLinks');
+        setLocalizedText(replyTimingHint, hint);
     }
 
     function refreshReportLanguage() {
@@ -1556,6 +1573,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
+        if (rebuildCharts) updateReplyTimingHint();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;
             return;

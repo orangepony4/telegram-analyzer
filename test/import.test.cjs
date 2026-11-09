@@ -347,7 +347,7 @@ test('does not guess direct reply pairs for duplicate, foreign, missing, future 
     assert.equal(app.element('directRepliesOption').disabled, true);
     assert.equal(app.element('replyTiming').disabled, true);
     assert.equal(app.element('replyTiming').value, 'adjacent');
-    assert.match(app.element('replyTimingHint').textContent, /нет прямых ответов/);
+    assert.equal(app.element('replyTimingHint').textContent, 'Замерено прямых ответов · 0 из 8');
     assert.ok(app.charts.get('responseTimeChart').data.labels.length > 0);
 });
 
@@ -367,6 +367,33 @@ test('matches direct replies in migrated Telegram history with negative message 
     const { labels, datasets } = app.charts.get('responseTimeChart').data;
     assert.deepEqual(Array.from(labels), ['Alice -> Bob', 'Bob -> Alice']);
     assert.deepEqual(Array.from(datasets[0].data), [0, 0]);
+});
+
+test('shows timed replies out of recorded links for the current report scope and language', () => {
+    const app = createAnalyzer({ storage: { getItem: () => null, setItem() {} }, search: '?view=upload' });
+    const row = (id, from, day, extra) => ({ id, from, date: `${day}T12:00:00`, ...extra });
+    app.selectFile('partial-replies.json').complete({ messages: [
+        row(1, 'Alice', '2026-01-01'),
+        row(2, 'Bob', '2026-02-01', { reply_to_message_id: 1 }),
+        row(3, 'Casey', '2026-02-02', { reply_to_message_id: 999 }),
+        row(4, 'Casey', '2026-01-02', { reply_to_message_id: 1, reply_to_peer_id: 'channel42' }),
+        row(5, null, '2026-02-03', { reply_to_message_id: 1 }),
+        { id: 6, from: 'Casey', reply_to_message_id: 1 },
+        row(7, 'Casey', '2026-03-01', { reply_to_message_id: 1, type: 'service' }),
+        row(8, 'Alice', '2026-03-02'),
+    ] });
+    const hint = app.element('replyTimingHint');
+    assert.equal(hint.textContent, 'Direct replies timed · 1 of 5');
+    app.monthlyTab.click();
+    assert.equal(hint.textContent, 'No direct reply links in this view.');
+    app.element('prevMonth').click();
+    assert.equal(hint.textContent, 'Direct replies timed · 1 of 3');
+    app.element('languageToggle').click();
+    assert.equal(hint.textContent, 'Замерено прямых ответов · 1 из 3');
+    app.element('prevMonth').click();
+    assert.equal(hint.textContent, 'Замерено прямых ответов · 0 из 1');
+    app.allTab.click();
+    assert.equal(hint.textContent, 'Замерено прямых ответов · 1 из 5');
 });
 
 test('rejects unrelated JSON and malformed message entries', () => {
@@ -441,11 +468,12 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.equal(analyze.disabled, true);
     assert.deepEqual(select.children.map(option => option.value), ['', '0', '1', '2', '3']);
     const labels = select.children.slice(1).map(option => option.textContent);
-    assert.match(labels[0], /^1\b.*Shared title/);
-    assert.match(labels[1], /^2\b/);
-    assert.ok(labels[1].includes(hostileName));
-    assert.match(labels[2], /^3\b.*Shared title/);
-    assert.match(labels[3], /^4\b/);
+    assert.deepEqual(labels, [
+        'Shared title · 2 сообщ. · #1',
+        hostileName + ' · 0 сообщ. · #2',
+        'Shared title · Покинутый чат · 2 сообщ. · #3',
+        'Чат без названия · Покинутый чат · 0 сообщ. · #4',
+    ]);
     assert.doesNotMatch(labels.join(' '), /Bad row|Bad sender field|Missing messages/);
     assert.equal(app.element('.stats-container').style.display, 'none');
     assert.equal(app.element('exportParticipants').disabled, true);
@@ -457,6 +485,17 @@ test('lists valid account chats safely and waits for an explicit analysis', () =
     assert.equal(analyze.disabled, false);
     assert.equal(app.element('.stats-container').style.display, 'none');
     assert.equal(app.charts.size, 0);
+    const choices = select.children;
+    app.element('languageToggle').click();
+    assert.equal(select.children, choices);
+    assert.equal(select.value, '0');
+    assert.deepEqual(select.children.map(option => [option.value, option.textContent]), [
+        ['', 'Choose a chat'],
+        ['0', 'Shared title · 2 messages · #1'],
+        ['1', hostileName + ' · 0 messages · #2'],
+        ['2', 'Shared title · Left chat · 2 messages · #3'],
+        ['3', 'Untitled chat · Left chat · 0 messages · #4'],
+    ]);
     analyze.click();
     assert.equal(app.element('.stats-container').style.display, 'block');
     assert.match(app.element('messageCount').innerHTML, /class="metric-value">2<\/strong>/);
