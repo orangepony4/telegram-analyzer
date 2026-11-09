@@ -198,7 +198,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    loadDemoChat();
+    const view = new URLSearchParams(location.search).getAll('view');
+    if (view.length !== 1 || view[0] !== 'upload') {
+        loadDemoChat();
+    }
 
     function handleFileSelect(event) {
         const file = event.target.files?.[0];

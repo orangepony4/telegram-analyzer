@@ -1,131 +1,99 @@
 # Telegram Analyzer
 
-[![Tests](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml/badge.svg)](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml)
+**[English](#english) · [Русский](#русский)**
 
-**Telegram Analyzer** — это бесплатный и открытый инструмент для анализа переписок Telegram. Программа визуализирует статистику по сообщениям, участникам, времени ответа, активности и многому другому прямо в вашем браузере.
+## English
 
-[Открыть Telegram Analyzer в браузере](https://orangepony4.github.io/telegram-analyzer/)
+Analyze Telegram Desktop chat exports in your browser. See who participates, when the conversation is most active, and how long responses take.
 
-![Графики вымышленной переписки за три месяца с динамикой сообщений, временем ответа, почасовой активностью и типами сообщений](docs/preview.webp)
+**[Try in browser →](https://orangepony4.github.io/telegram-analyzer/)**
 
----
+[Analyze my export](https://orangepony4.github.io/telegram-analyzer/?view=upload) · [Download the offline ZIP](https://github.com/orangepony4/telegram-analyzer/releases/latest) · [View source code](https://github.com/orangepony4/telegram-analyzer/tree/main)
 
-## 🚀 Быстрый старт
+The app opens with a fictional three-month conversation. You can explore the charts and download a sample CSV right away. **Analyze my export** opens the upload view. Select **Демо-чат** (Demo chat) there to open the example. The interface currently uses Russian labels.
 
-### 1. Экспортируйте данные из Telegram
+![Telegram Analyzer showing monthly activity, response times, and message types for a fictional chat](docs/preview.webp)
 
-> **Важно:** Поддерживается только экспорт в формате **JSON** через Telegram Desktop.
+### Analyze your own chat
 
-1. Откройте **Telegram Desktop** на компьютере.
-2. Перейдите в нужный чат (личный, групповой или канал).
-3. Нажмите на имя чата вверху, выберите пункт **«Экспорт истории чата»**.
-4. В появившемся окне:
-    - Убедитесь, что выбран формат **JSON** (НЕ HTML!).
-    - Уберите все галочки.
-    - Нажмите **Экспорт**.
-5. После завершения экспорта скачайте архив и извлеките из него файл, который обычно называется `result.json`.
+1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
+2. Select **Открыть JSON** (Open JSON) or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
+3. If you open an account export containing chat history, select a chat and choose **Показать статистику** (Show statistics). The report and CSV cover that chat.
+4. Open **Обзор** (Overview) for the full chat or **По месяцам** (By month) for a specific month. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
-Подойдёт и общий JSON-экспорт аккаунта Telegram Desktop, если в него включены чаты. Анализатор покажет доступные переписки и предложит выбрать одну для отдельного анализа.
+### What the report measures
 
----
+- Activity charts show messages by month, time of day, and day of the week. Participant details include message counts, word counts, average message length, and attachment types. The JSON records are enough to count photos and other attachments, even if the files were skipped during export.
+- Response times measure the interval between consecutive messages from different participants and skip service events. Across a month boundary, the interval belongs to the month of the response. The long-response threshold is adjustable in minutes.
+- Modern exports use Unix timestamps or explicit offsets for response order and duration. Activity charts keep the calendar dates and times written in the export. Mixed legacy dates without offsets use an approximate wall-clock timeline for response intervals.
+- Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
+- **CSV чата** (Chat CSV) exports the whole chat. **CSV месяца** (Month CSV) exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8.
+- Average message length counts grapheme clusters, so a compound emoji can count as one character. Browsers without `Intl.Segmenter` count Unicode code points.
 
-### 2. Откройте Telegram Analyzer
+### Offline use and privacy
 
-- **Без установки.** Скачайте ZIP из [последнего релиза](https://github.com/orangepony4/telegram-analyzer/releases/latest), распакуйте архив и откройте `index.html` в браузере.
-- **Через локальный сервер.** Если у вас установлены Node.js и npm, выполните команды из папки проекта:
+Use a modern browser and a Telegram Desktop JSON export to analyze your own data. HTML exports use a different structure. If your import fails, check that you chose the Telegram JSON file.
 
-  ```sh
-  npm ci
-  npm start
-  ```
+To work offline, extract the [latest release ZIP](https://github.com/orangepony4/telegram-analyzer/releases/latest) and open `index.html`. Keep the `vendor` folder next to it. Charts, icons, and CSV export work offline. Chat data stays in the browser. The app serves its scripts, styles, and chart library locally, and its content security policy blocks connections made by `fetch` and `XMLHttpRequest`.
 
-  Откройте [localhost:3000](http://localhost:3000).
+### Development
 
-Локальная копия работает без интернета, включая графики, значки и экспорт CSV. При распаковке сохраните папку `vendor` рядом с `index.html`.
+Install the dependencies and start the server from a source checkout with Node.js and npm.
 
----
+```sh
+npm ci
+npm start
+```
 
-### 3. Загрузите ваш JSON-файл
+Open [localhost:3000](http://localhost:3000). Run `npm test` to check import, month navigation, and response time calculations. The tests use Node's built-in test runner. [Test workflow](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml)
 
-- Нажмите **«Открыть JSON»** и выберите `result.json` или перетащите файл в область импорта.
-- Если открыт экспорт аккаунта, выберите нужную переписку из списка и нажмите **«Показать статистику»**. Графики и CSV будут относиться к выбранному чату.
-- Во время обработки рядом с источником виден статус чтения. Анализ происходит в браузере.
-- При первом открытии сразу показан отчёт по вымышленной переписке за три месяца. Кнопка **«Демо-чат»** возвращает этот пример.
+Run `npm run package:offline` from a Git checkout to build `telegram-analyzer-offline.zip` from the tracked app files, documentation, and licenses in the current commit. To choose a destination, run `npm run package:offline -- ./offline-build.zip`.
 
----
-
-### 4. Изучайте статистику
-
-- После анализа появятся вкладки:
-    - **Обзор** — суммарные данные по всему чату.
-    - **По месяцам** — подробная статистика за каждый месяц, с возможностью переключения.
-- Вы увидите:
-    - Количество сообщений и участников.
-    - Графики активности по времени суток, дням недели, месяцам.
-    - Статистику по каждому участнику (сколько сообщений, средняя длина и т.д.).
-    - Анализ времени ответа между участниками.
-    - Статистику по медиафайлам (фото, видео, стикеры и др.).
-    - Количество «долгих» ответов (вы можете настроить порог в минутах).
-
-Для расчёта времени ответа анализатор берёт интервал между соседними сообщениями разных участников и пропускает служебные события. Если сообщения пришлись на разные месяцы, интервал относится к месяцу ответа.
-
-В современных экспортах порядок сообщений и длительность ответа рассчитываются по Unix-времени или явному смещению часового пояса. Графики по месяцам, дням и часам сохраняют календарное время, записанное в экспорте. Если часть сообщений содержит только дату и время без смещения, длительность ответа рассчитывается приблизительно по календарному времени всего файла.
-
-Если в экспорте есть идентификаторы отправителей, анализатор сохраняет статистику участника при смене имени и различает людей с одинаковыми именами. Для совпадающих имён он добавляет номера. В отчёте и CSV отображаются имена без идентификаторов.
-
-Записи с датой, но без отправителя, учитываются в общей активности за месяц. На графике динамики они показаны отдельной линией. В статистику участников и CSV входят записи, которые удалось связать с отправителем.
-
-Фотографии и обычные вложения учитываются по записям из экспорта. Для подсчёта достаточно JSON, даже если вложения не были скачаны.
-
-Кнопка **«Скачать сводку CSV»** выгружает список участников всего чата, количество сообщений и среднюю длину сообщения. Во вкладке **«По месяцам»** можно скачать отдельную сводку за выбранный месяц. Оба файла создаются в браузере в кодировке UTF-8 с запятой в качестве разделителя.
-
-Для средней длины анализатор считает графемы. Например, составной эмодзи учитывается как один символ. В браузерах без `Intl.Segmenter` анализатор считает кодовые точки Unicode.
+[Report an issue or suggest an improvement](https://github.com/orangepony4/telegram-analyzer/issues) · [MIT license](LICENSE)
 
 ---
 
-## ⚙️ Требования
+## Русский
 
-- Современный браузер (Google Chrome, Firefox, Edge, Opera и др.).
-- Файл чата Telegram в формате **JSON** (экспорт через Telegram Desktop).
+**[Попробовать в браузере →](https://orangepony4.github.io/telegram-analyzer/)**
 
----
+[Проанализировать свой экспорт](https://orangepony4.github.io/telegram-analyzer/?view=upload) · [Скачать ZIP для работы без интернета](https://github.com/orangepony4/telegram-analyzer/releases/latest) · [Исходный код](https://github.com/orangepony4/telegram-analyzer/tree/main) · [English](#english)
 
-## 🔒 Безопасность
+Telegram Analyzer показывает активность, участников и время ответа по экспорту из Telegram Desktop. Ссылка «Попробовать в браузере» открывает вымышленную переписку за три месяца. Можно сразу посмотреть графики и скачать пробный CSV. Ссылка «Проанализировать свой экспорт» ведёт на экран загрузки. Этот же пример там доступен через кнопку **«Демо-чат»**.
 
-- **Ваши данные никуда не отправляются!** Весь анализ происходит только в вашем браузере.
-- Скрипты, стили и библиотека графиков загружаются из файлов приложения. Политика страницы блокирует запросы через `fetch` и `XMLHttpRequest`.
-- Исходный код открыт и прозрачен — вы можете проверить его самостоятельно.
+### Как открыть свою переписку
 
+1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
+2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Рядом с источником появится статус чтения.
+3. Если вы открыли экспорт аккаунта с историей чатов, выберите переписку и нажмите **«Показать статистику»**. Отчёт и CSV будут относиться к этому чату.
+4. Во вкладке **«Обзор»** видна статистика за всё время, во вкладке **«По месяцам»** — за выбранный месяц. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
-## ❓ Часто задаваемые вопросы (FAQ)
+### Что считает анализатор
 
-**Q:** Почему не работает с HTML-файлом экспорта?  
-**A:** Программа поддерживает только JSON-экспорт Telegram. HTML-экспорт не содержит нужной структуры данных.
+- Графики показывают активность по месяцам, времени суток и дням недели. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы вложений. Для подсчёта фотографий и других вложений достаточно JSON, даже если сами файлы не были скачаны.
+- Время ответа — интервал между соседними сообщениями разных участников. Служебные события пропускаются. Если сообщения пришлись на разные месяцы, интервал относится к месяцу ответа. Порог долгого ответа можно задать в минутах.
+- В современных экспортах порядок сообщений и длительность ответов определяются по Unix-времени или явному смещению часового пояса. Графики сохраняют календарное время из экспорта. Для смешанных экспортов с датами без смещения длительность ответов рассчитывается приблизительно по календарному времени.
+- Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
+- Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя.
+- Средняя длина считается по графемам. Например, составной эмодзи может считаться одним символом. В браузерах без `Intl.Segmenter` используются кодовые точки Unicode.
 
-**Q:** Мои данные куда-то отправляются?  
-**A:** Нет, все вычисления происходят только в вашем браузере. Файл не загружается на сервер.
+### Работа без интернета и приватность
 
-**Q:** Как сменить тему оформления?  
-**A:** Используйте кнопку с иконкой палитры в правом верхнем углу страницы.
+Для своего чата нужен современный браузер и JSON-экспорт Telegram Desktop. У HTML-экспорта другая структура. Если файл не открывается, проверьте формат экспорта.
 
-**Q:** Можно ли анализировать групповые чаты и каналы?  
-**A:** Да, поддерживаются любые чаты, экспортированные через Telegram Desktop.
+Распакуйте [ZIP из последнего релиза](https://github.com/orangepony4/telegram-analyzer/releases/latest) и откройте `index.html`. Оставьте папку `vendor` рядом с ним. Графики, значки и выгрузки CSV работают без интернета. Данные переписки обрабатываются в браузере. Скрипты, стили и библиотека графиков входят в приложение, а политика безопасности блокирует подключения через `fetch` и `XMLHttpRequest`.
 
-**Q:** Почему не отображается статистика?  
-**A:** Проверьте, что вы загрузили именно JSON-файл экспорта Telegram. Если проблема не решается — создайте issue на GitHub.
+### Разработка
 
----
+Для локального запуска нужны Node.js и npm. Выполните команды в папке с исходным кодом.
 
-## 💡 Вклад в проект
+```sh
+npm ci
+npm start
+```
 
-- Запустите `npm test`, чтобы проверить импорт, переключение месяцев и расчёт времени ответа. Для этих тестов нужен только Node.js с поддержкой `node --test`.
+Откройте [localhost:3000](http://localhost:3000). Команда `npm test` проверяет импорт, переходы между месяцами и расчёт времени ответа с помощью встроенного тестового раннера Node.js. [Проверки на GitHub](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml)
 
-- Соберите офлайн-архив из Git-копии командой `npm run package:offline`. В `telegram-analyzer-offline.zip` попадут только зафиксированные в текущем коммите файлы приложения, документация и лицензии. Чтобы записать архив по другому пути, передайте его после `--`, например `npm run package:offline -- ./offline-build.zip`.
+Команда `npm run package:offline` собирает `telegram-analyzer-offline.zip` из файлов приложения, документации и лицензий, зафиксированных в текущем коммите Git. Чтобы указать другой путь, запустите `npm run package:offline -- ./offline-build.zip`.
 
-- Приветствуются pull request, баг-репорты и предложения по улучшению!
-- Если вы нашли ошибку или хотите предложить новую функцию — создайте issue или напишите мне.
-
----
-
-**P.S.** Если у вас остались вопросы — смело открывайте issue на GitHub! 
-
+[Сообщить об ошибке или предложить улучшение](https://github.com/orangepony4/telegram-analyzer/issues) · [Лицензия MIT](LICENSE)

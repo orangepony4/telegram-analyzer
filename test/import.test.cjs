@@ -7,7 +7,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
 
-function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null }, intl = Intl } = {}) {
+function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => null }, intl = Intl, search = '' } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
@@ -141,11 +141,13 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
             body: element('body'),
         },
         getComputedStyle: () => ({ getPropertyValue: () => '' }),
+        location: { search },
         Intl: intl,
         localStorage: storage,
         Chart: chartsAvailable ? Chart : undefined,
         Blob,
         File,
+        URLSearchParams,
         URL: {
             createObjectURL(blob) {
                 downloadedBlob = blob;
@@ -188,7 +190,7 @@ function createAnalyzer({ chartsAvailable = true, storage = { getItem: () => nul
 
     return {
         element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo,
-        startupDemo: demoImport(readers[0]),
+        startupDemo: readers.length ? demoImport(readers[0]) : null,
         get focusedElement() { return focusedElement; },
     };
 }
@@ -545,6 +547,29 @@ test('keeps the last upload and disables monthly statistics for an empty export'
 
     app.selectFile('restored.json').complete({ messages });
     assert.equal(app.monthlyTab.disabled, false);
+});
+
+test('starts on the upload view only for an explicit query and lets a newer upload replace the demo', async () => {
+    for (const search of ['', '?view', '?view=demo', '?view=UPLOAD', '?View=upload',
+        '?view=upload&view=demo', '?view=upload&view=upload']) {
+        const app = createAnalyzer({ search });
+        assert.equal(app.startupDemo.file.name, 'demo-chat.json', search);
+    }
+    const upload = createAnalyzer({ search: '?source=profile&view=upload' });
+    assert.equal(upload.startupDemo, null);
+    assert.equal(upload.charts.size, 0);
+
+    const app = createAnalyzer();
+    const demo = app.startupDemo;
+    assert.equal(demo.file.name, 'demo-chat.json');
+    app.selectFile('newest.json').complete({
+        name: 'Newest chat',
+        messages: [{ id: 1, from: 'Synthetic sender', date: '2026-11-01T12:00:00', text: 'Hello' }],
+    });
+    await demo.complete();
+    assert.equal(app.element('reportTitle').textContent, 'Newest chat');
+    assert.equal(app.element('dropFileName').textContent, 'newest.json');
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2026-11');
 });
 
 test('loads the fictional demo through normal file import and keeps the newest selection', async () => {
