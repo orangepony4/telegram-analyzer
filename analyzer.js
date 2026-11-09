@@ -174,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
         : null;
     const dictionaryWordScripts = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
     const wordCharacter = /[\p{L}\p{N}]/u;
+    const richTextDepthLimit = 64;
     const THEME_STORAGE_KEY = 'telegramAnalyzerTheme';
     const DARK_THEME_KEY = 'default';
     const LIGHT_THEME_KEY = 'muted-light';
@@ -624,6 +625,59 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             return typeof part?.text === 'string' ? part.text : '';
         }).join('');
+    }
+
+    function getReportMessageText({ text, rich_message: richMessage }) {
+        if (typeof text === 'string' || Array.isArray(text)) return getMessageText(text);
+        if (!Array.isArray(richMessage?.blocks)) return '';
+
+        const paragraphs = [];
+        for (const block of richMessage.blocks) appendRichBlock(block, paragraphs, 0);
+        return paragraphs.join('\n');
+    }
+
+    function appendRichBlock(block, paragraphs, depth) {
+        if (depth >= richTextDepthLimit || !block || typeof block !== 'object' || Array.isArray(block)) return;
+
+        appendRichParagraph(block.text, paragraphs);
+        appendRichParagraph(block.title, paragraphs);
+        // These are the nested content fields used by Telegram Desktop, not arbitrary metadata.
+        for (const children of [block.blocks, block.items]) {
+            if (!Array.isArray(children)) continue;
+            for (const child of children) appendRichBlock(child, paragraphs, depth + 1);
+        }
+        if (block.type === 'cover') appendRichBlock(block.block, paragraphs, depth + 1);
+        if (block.type === 'table' && Array.isArray(block.rows)) {
+            for (const row of block.rows) {
+                if (!Array.isArray(row?.cells)) continue;
+                for (const cell of row.cells) appendRichParagraph(cell?.text, paragraphs);
+            }
+        }
+        if (block.type === 'quote') {
+            appendRichParagraph(block.caption, paragraphs);
+        } else {
+            appendRichParagraph(block.caption?.text, paragraphs);
+            appendRichParagraph(block.caption?.credit, paragraphs);
+        }
+    }
+
+    function appendRichParagraph(value, paragraphs) {
+        if (!value) return;
+        const parts = [];
+        appendRichInline(value, parts, 0);
+        const text = parts.join('');
+        if (text) paragraphs.push(text);
+    }
+
+    function appendRichInline(value, parts, depth) {
+        if (depth >= richTextDepthLimit) return;
+        if (typeof value === 'string') {
+            parts.push(value);
+        } else if (Array.isArray(value)) {
+            for (const child of value) appendRichInline(child, parts, depth + 1);
+        } else if (value && typeof value === 'object') {
+            appendRichInline(value.text, parts, depth + 1);
+        }
     }
 
     function countTextCharacters(text) {
@@ -1177,7 +1231,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(({ message: msg, calendar, time }) => {
-            const words = msg.from ? countWords(getMessageText(msg.text)) : 0;
+            const words = msg.from ? countWords(getReportMessageText(msg)) : 0;
             if (msg.from) wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
             if (!calendar) return;
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
@@ -1761,7 +1815,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 totalsByParticipant.set(message.from, totals);
             }
             totals.messageCount++;
-            totals.textLength += countTextCharacters(getMessageText(message.text));
+            totals.textLength += countTextCharacters(getReportMessageText(message));
         }
         return totalsByParticipant;
     }

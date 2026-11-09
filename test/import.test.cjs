@@ -952,6 +952,64 @@ test('counts graphemes across Telegram text entities in report lengths and both 
     assert.match(await overall.blob.text(), /"Alice",4,1\.3\r\n$/);
 });
 
+test('counts formatted Telegram Desktop rich text in both report scopes and CSVs', async () => {
+    const app = createAnalyzer();
+    const plain = text => ({ type: 'plain', text });
+    const blocks = [
+        { type: 'heading', level: 1, text: plain('Hello') },
+        { type: 'paragraph', text: { type: 'concat', text: [
+            { type: 'bold', text: plain('Wor') },
+            plain('ld'),
+            { type: 'url', href: 'https://example.com/private', text: plain(' again') },
+        ] } },
+        { type: 'list', kind: 'unordered', items: [
+            { content: 'text', text: plain('One') },
+            { content: 'blocks', blocks: [{ type: 'paragraph', text: plain('Two') }] },
+        ] },
+        { type: 'table', title: plain('Numbers'), rows: [{ cells: [{ text: plain('Three') }, null] }] },
+        { type: 'photo', photo: 'photos/private.jpg', caption: { text: plain('Caption'), credit: { type: 'empty' } } },
+        { type: 'details', title: plain('More'), blocks: [{ type: 'paragraph', text: plain('Text') }] },
+        { type: 'embed', url: 'https://example.com/private', html: '<b>ignored</b>' },
+        null,
+    ];
+    const rich = { rtl: false, part: false, blocks };
+    let tooDeep = plain('Deep');
+    for (let depth = 0; depth < 1000; depth++) tooDeep = { type: 'bold', text: tooDeep };
+    const date = '2026-10-10T12:00:00';
+    const messages = [
+        { id: 1, type: 'message', from: 'Rich', date, rich_message: rich },
+        { id: 2, type: 'message', from: 'Legacy', date, text: 'Old text', rich_message: rich },
+        { id: 3, type: 'message', from: 'Malformed', date, rich_message: { blocks: 'not an array' } },
+        { id: 4, type: 'message', from: 'Deep', date, rich_message: { blocks: [{ type: 'paragraph', text: tooDeep }] } },
+    ];
+    app.selectFile('rich-account.json').complete({ chats: { list: [{ name: 'Synthetic rich chat', messages }] } });
+    chooseAccountChat(app, '0');
+    app.element('analyzeAccountChat').click();
+
+    for (const id of ['wordCountStats', 'monthlyWordCountStats']) {
+        const html = app.element(id).innerHTML;
+        assert.match(html, /Rich<\/strong>: 10 слов/);
+        assert.match(html, /Legacy<\/strong>: 2 слов/);
+        assert.match(html, /Malformed<\/strong>: 0 слов/);
+        assert.match(html, /Deep<\/strong>: 0 слов/);
+    }
+    const text = 'Hello\nWorld again\nOne\nTwo\nNumbers\nThree\nCaption\nMore\nText';
+    const expectedLength = text.length.toFixed(1);
+    for (const id of ['participantStats', 'monthlyParticipantStats']) {
+        const html = app.element(id).innerHTML;
+        assert.ok(html.includes('Средняя длина: ' + expectedLength + ' символов'));
+        assert.doesNotMatch(html, /example\.com|private\.jpg|World again|ignored/);
+    }
+    app.element('exportParticipants').click();
+    app.element('exportMonthlyParticipants').click();
+    assert.deepEqual(app.downloads.map(({ name }) => name), [
+        'telegram-analyzer-participants.csv', 'telegram-analyzer-2026-10-participants.csv',
+    ]);
+    const expectedCsv = 'Участник,Сообщения,Средняя длина сообщения\r\n'
+        + '"Rich",1,' + expectedLength + '\r\n"Legacy",1,8.0\r\n"Malformed",1,0.0\r\n"Deep",1,0.0\r\n';
+    for (const { blob } of app.downloads) assert.equal(await blob.text(), expectedCsv);
+});
+
 test('counts words in unspaced scripts and ignores standalone punctuation and emoji', async () => {
     const app = createAnalyzer();
     const date = '2026-10-10T12:00:00';
