@@ -23,6 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportMonthlyActivityButton = document.getElementById('exportMonthlyActivity');
     const dailyActivity = document.getElementById('dailyActivity');
     const dailyActivityRows = document.getElementById('dailyActivityRows');
+    const exportDailyActivityButton = document.getElementById('exportDailyActivity');
     const overviewPatterns = {
         panel: document.getElementById('overviewActivityPatterns'),
         weekdays: document.getElementById('overviewWeekdayRows'),
@@ -343,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyActivity.addEventListener('toggle', refreshMonthlyActivity);
     exportMonthlyActivityButton.addEventListener('click', downloadMonthlyActivity);
     dailyActivity.addEventListener('toggle', refreshDailyActivity);
+    exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
 
@@ -1883,9 +1885,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return end.getUTCDate();
     }
 
+    function reportDayKey(month, day) {
+        return `${month}-${String(day).padStart(2, '0')}`;
+    }
+
     function refreshDailyActivity() {
         const monthData = monthsData[currentMonthIndex];
         dailyActivity.hidden = !monthData;
+        exportDailyActivityButton.disabled = !monthData;
         if (dailyActivity.hidden) dailyActivity.open = false;
         dailyActivityRows.replaceChildren();
         if (!dailyActivity.open || !monthData) return;
@@ -1899,7 +1906,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const heading = document.createElement('th');
             heading.scope = 'row';
             const time = document.createElement('time');
-            time.dateTime = `${month}-${String(day).padStart(2, '0')}`;
+            time.dateTime = reportDayKey(month, day);
             time.textContent = dayFormat.format(date);
             heading.append(time);
             const records = document.createElement('td');
@@ -2442,6 +2449,19 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.push(`${month},${data.messageCount},${countActiveDays(data)}`);
         }
         downloadCsv(rows, 'telegram-analyzer-monthly-activity.csv');
+    }
+
+    function downloadDailyActivity() {
+        const selected = monthsData[currentMonthIndex];
+        if (exportDailyActivityButton.disabled || !selected || !monthlyStatsTab.classList.contains('active')
+            || statsContainer.style.display !== 'block') return;
+        const { month, data } = selected;
+        const rows = ['date,records'];
+        const days = daysInReportMonth(month);
+        for (let day = 1; day <= days; day++) {
+            rows.push(`${reportDayKey(month, day)},${data.dailyActivity[day - 1]}`);
+        }
+        downloadCsv(rows, `telegram-analyzer-${month}-daily-activity.csv`);
     }
 
     function downloadReplyTiming() {

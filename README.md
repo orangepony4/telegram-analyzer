@@ -25,7 +25,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 - Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records. Search for another participant by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
 - Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
-- Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records.
+- Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records. Use **Daily CSV** to download those same counts for the selected month with `YYYY-MM-DD` dates.
 - Open **Activity by weekday and hour** in either report to read the same counts as the charts, including zero values. The counts follow the calendar time written in the export.
 - Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
 - Message-type charts and shared-content summaries count each Telegram checklist as one record.
@@ -87,7 +87,7 @@ Telegram Analyzer показывает активность, участнико�
 
 - Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
 - В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.
-- В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей.
+- В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей. Кнопка **«CSV по дням»** сохраняет те же значения за выбранный месяц с датами в формате `YYYY-MM-DD`.
 - Раздел **«Активность по дням недели и часам»** есть в обоих отчётах. Таблицы показывают те же значения, что и графики, включая нулевые, по календарному времени из экспорта.
 - Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
 - В графиках типов сообщений и сводках по вложениям каждый список задач Telegram учитывается как одна запись.

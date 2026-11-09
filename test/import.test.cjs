@@ -993,6 +993,47 @@ test('shows written-hour and weekday counts in both scopes without charts', () =
     assert.equal(month.hidden, true);
 });
 
+test('exports every date in the selected month without names and includes leap day', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const exportDay = app.element('exportDailyActivity');
+    app.selectFile('activity.json').complete({ messages: [
+        { id: 1, from: 'Synthetic name', date: '2024-02-29T23:59:00-08:00' },
+        { id: 2, type: 'service', date: '2024-02-29T01:00:00Z' },
+        { id: 3, from: 'Other name', date: '2024-04-02T00:00:00Z' },
+        { id: 4, type: 'unsupported' },
+    ] });
+    app.monthlyTab.click();
+    exportDay.click();
+    app.element('prevMonth').click();
+    exportDay.click();
+    app.element('languageToggle').click();
+    exportDay.click();
+
+    const files = await Promise.all(app.downloads.map(async ({ name, blob }) => [
+        name, Buffer.from(await blob.arrayBuffer()).toString('utf8'),
+    ]));
+    const april = files[0][1].split('\r\n');
+    const february = files[1][1].split('\r\n');
+    assert.equal(files[0][0], 'telegram-analyzer-2024-04-daily-activity.csv');
+    assert.equal(april.length, 32);
+    assert.equal(april[2], '2024-04-02,1');
+    assert.equal(files[1][0], 'telegram-analyzer-2024-02-daily-activity.csv');
+    assert.equal(february[0], '\uFEFFdate,records');
+    assert.equal(february.length, 31);
+    assert.equal(february[1], '2024-02-01,0');
+    assert.equal(february[29], '2024-02-29,2');
+    assert.deepEqual(files[2], files[1]);
+    assert.doesNotMatch(files[1][1], /Synthetic name|Other name/);
+
+    app.allTab.click();
+    exportDay.click();
+    assert.equal(app.downloads.length, 3);
+    app.selectFile('undated.json').complete({ messages: [{ type: 'unsupported' }] });
+    assert.equal(exportDay.disabled, true);
+    exportDay.click();
+    assert.equal(app.downloads.length, 3);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
