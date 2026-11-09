@@ -119,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
         delayFor: [name => `Average response delay for ${name}`, name => `Средняя задержка ответа ${name}:`],
         totalWords: ['Total word count', 'Общее количество слов:'],
         monthWords: ['Word count', 'Количество слов:'],
-        mediaUsage: ['Attachments by participant', 'Использование медиафайлов:'],
+        mediaUsage: ['Shared content by participant', 'Вложения и другие материалы по участникам:'],
         longResponses: [
             minutes => `Responses after more than ${minutes} min`,
             minutes => `Количество сообщений с ответом > ${minutes} мин:`,
@@ -146,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ['voice_message', ['Voice messages', 'Голосовые']], ['sticker', ['Stickers', 'Стикеры']],
         ['animation', ['Animations', 'Анимации']], ['audio_file', ['Audio', 'Аудио']],
         ['video_message', ['Video messages', 'Видеосообщения']], ['file', ['Files', 'Файлы']],
+        ['poll', ['Polls', 'Опросы']], ['contact', ['Contacts', 'Контакты']], ['location', ['Locations', 'Геопозиции']],
     ]);
     const translatedAttributes = ['aria-label', 'title', 'placeholder'];
     const staticTranslations = [...document.querySelectorAll('[data-ru], [data-ru-aria-label], [data-ru-title], [data-ru-placeholder]')]
@@ -628,12 +629,28 @@ document.addEventListener('DOMContentLoaded', () => {
         return count;
     }
 
-    function getMessageCategory({ media_type, photo, file }) {
+    function isNonEmptyString(value) {
+        return typeof value === 'string' && value.trim() !== '';
+    }
+
+    function getMessageCategory({ media_type, photo, file, poll, contact_information, location_information, place_name }) {
         const type = typeof media_type === 'string' ? media_type.trim() : '';
         if (type) return type;
         // Telegram keeps these fields even when the attachment was not downloaded.
-        if (typeof photo === 'string' && photo.trim()) return 'photo';
-        if (typeof file === 'string' && file.trim()) return 'file';
+        if (isNonEmptyString(photo)) return 'photo';
+        if (isNonEmptyString(file)) return 'file';
+        if (poll && getMessageText(poll.question).trim()) return 'poll';
+        if (contact_information) {
+            const { first_name, last_name, phone_number } = contact_information;
+            if ([first_name, last_name, phone_number].some(isNonEmptyString)) return 'contact';
+        }
+        if (location_information) {
+            const { latitude, longitude } = location_information;
+            if (Number.isFinite(latitude) && Math.abs(latitude) <= 90
+                && Number.isFinite(longitude) && Math.abs(longitude) <= 180) return 'location';
+        }
+        // Telegram can export a venue name even when its coordinates are unavailable.
+        if (isNonEmptyString(place_name)) return 'location';
         return 'text';
     }
 
@@ -1698,13 +1715,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
-            '#74854b', '#5a8890', '#bd775d', '#817a9f'];
+            '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076'];
         return colors[index % colors.length];
     }
 
     function messageTypeColorIndex(label = '') {
         const knownTypes = ['text', 'photo', 'video_file', 'voice_message',
-            'sticker', 'animation', 'audio_file', 'video_message'];
+            'sticker', 'animation', 'audio_file', 'video_message', 'file', 'poll', 'contact', 'location'];
         const index = knownTypes.indexOf(label);
         if (index >= 0) return index;
 

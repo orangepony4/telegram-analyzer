@@ -857,6 +857,52 @@ test('classifies Telegram photos and file attachments in both reports without ex
     }
 });
 
+test('classifies shared polls, contacts and locations without exposing their contents', () => {
+    const app = createAnalyzer();
+    const poll = { question: ['Private ', { type: 'bold', text: 'poll' }], answers: [] };
+    const contact = { first_name: 'Private contact', last_name: '', phone_number: '+000000000' };
+    const pin = { latitude: 12.34, longitude: -56.78 };
+    const fields = [
+        { text: 'Plain text' },
+        { poll },
+        { contact_information: contact },
+        { location_information: pin },
+        { place_name: 'Private venue', address: 'Fictional street', location_information: pin },
+        { place_name: 'Venue without coordinates', address: 'Fictional address' },
+        { poll: { question: [true, { text: 42 }] }, contact_information: 'Private malformed', location_information: null },
+        { poll: [], contact_information: {}, location_information: { latitude: '12.34', longitude: -56.78 }, place_name: [] },
+        { location_information: { latitude: 91, longitude: 0 }, place_name: ' ' },
+        { media_type: 'sticker', poll },
+        { photo: 'photos/private.jpg', contact_information: contact },
+        { file: 'files/private.pdf', location_information: pin },
+    ];
+    app.selectFile('shared-content.json').complete({
+        messages: fields.map((fields, index) => ({
+            id: index + 1, type: 'message', from: 'Fixture sender', from_id: 'user1',
+            date: '2026-11-01T12:00:00', text: '', ...fields,
+        })),
+    });
+
+    function checkReport(expected, textLabel) {
+        for (const id of ['messageTypesChart', 'monthlyMessageTypesChart']) {
+            const { labels, datasets } = app.charts.get(id).data;
+            assert.deepEqual(Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]])), expected);
+        }
+        for (const id of ['mediaTypeStats', 'monthlyMediaTypeStats']) {
+            const html = app.element(id).innerHTML;
+            assert.match(html, /Fixture sender/);
+            for (const [label, count] of Object.entries(expected)) {
+                if (label !== textLabel) assert.ok(html.includes(`${label}: ${count}`));
+            }
+            assert.doesNotMatch(html, /Private|Fictional|000000000|12\.34|56\.78|private\.(?:jpg|pdf)/i);
+        }
+    }
+
+    checkReport({ Текст: 4, Опросы: 1, Контакты: 1, Геопозиции: 3, Стикеры: 1, Фото: 1, Файлы: 1 }, 'Текст');
+    app.element('languageToggle').click();
+    checkReport({ Text: 4, Polls: 1, Contacts: 1, Locations: 3, Stickers: 1, Photos: 1, Files: 1 }, 'Text');
+});
+
 test('exports participant totals with quoted, formula-safe names', async () => {
     const app = createAnalyzer();
     const from = '=1+1, "quoted"';

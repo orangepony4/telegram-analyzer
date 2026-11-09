@@ -23,7 +23,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 ### What the report measures
 
-- Activity charts show messages by month, time of day, and day of the week. Participant details include message counts, word counts, average message length, and attachment types. The JSON records are enough to count photos and other attachments, even if the files were skipped during export.
+- Activity charts show messages by month, time of day, and day of the week. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
 - Response times measure the interval between consecutive messages from different participants and skip service events. Across a month boundary, the interval belongs to the month of the response. The long-response threshold is adjustable in minutes.
 - Modern exports use Unix timestamps or explicit offsets for response order and duration. Activity charts keep the calendar dates and times written in the export. Mixed legacy dates without offsets use an approximate wall-clock timeline for response intervals.
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
@@ -72,7 +72,7 @@ Telegram Analyzer показывает активность, участнико�
 
 ### Что считает анализатор
 
-- Графики показывают активность по месяцам, времени суток и дням недели. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы вложений. Для подсчёта фотографий и других вложений достаточно JSON, даже если сами файлы не были скачаны.
+- Графики показывают активность по месяцам, времени суток и дням недели. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
 - Время ответа — интервал между соседними сообщениями разных участников. Служебные события пропускаются. Если сообщения пришлись на разные месяцы, интервал относится к месяцу ответа. Порог долгого ответа можно задать в минутах.
 - В современных экспортах порядок сообщений и длительность ответов определяются по Unix-времени или явному смещению часового пояса. Графики сохраняют календарное время из экспорта. Для смешанных экспортов с датами без смещения длительность ответов рассчитывается приблизительно по календарному времени.
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
