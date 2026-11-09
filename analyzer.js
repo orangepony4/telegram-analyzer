@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
     const demoButton = document.getElementById('loadDemoChat');
+    const clearLoadedDataButton = document.getElementById('clearLoadedData');
     const accountChatChooser = document.getElementById('accountChatChooser');
     const accountChatSearchField = document.getElementById('accountChatSearchField');
     const accountChatSearch = document.getElementById('accountChatSearch');
@@ -62,6 +63,14 @@ document.addEventListener('DOMContentLoaded', () => {
         demoFile: ['Built-in example', 'Встроенный пример'],
         demoData: ['Demo data', 'Демо-данные'],
         report: ['Chat report', 'Отчёт по чату'],
+        emptyReportTitle: ['Chat analysis', 'Анализ переписки'],
+        emptyReportMeta: ['Message and participant statistics', 'Статистика сообщений и участников'],
+        emptyReportHeading: ['Choose a JSON file', 'Выберите JSON-файл'],
+        emptyReportIntro: ['Open a Telegram Desktop export or explore the sample chat.',
+            'Откройте экспорт из Telegram Desktop или посмотрите демо-чат.'],
+        noSourceFile: ['No file selected', 'Файл не выбран'],
+        sourceFileFormat: ['Telegram Desktop JSON', 'JSON из Telegram Desktop'],
+        reportCleared: ['Report cleared.', 'Отчёт очищен.'],
         telegramSource: ['Telegram export', 'Экспорт Telegram'],
         accountExport: ['Account export', 'Экспорт аккаунта'],
         localFile: ['File on this device', 'Файл на устройстве'],
@@ -364,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     demoButton?.addEventListener('click', loadDemoChat);
+    clearLoadedDataButton.addEventListener('click', clearLoadedData);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
         analyzeAccountChatButton.disabled = selectedAccountChat() === undefined;
@@ -605,11 +615,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (difference) return difference;
             // Undated rows sort last and preserve their input order.
             if (Number.isNaN(difference)) return 0;
-            const firstId = typeof a.message.id === 'number' ? a.message.id : 0;
-            const secondId = typeof b.message.id === 'number' ? b.message.id : 0;
-            return firstId - secondId;
+            return compareMessageIds(a.message, b.message);
         });
         return timings;
+    }
+
+    function compareMessageIds(first, second) {
+        const firstId = typeof first.id === 'number' ? first.id : 0;
+        const secondId = typeof second.id === 'number' ? second.id : 0;
+        return firstId - secondId;
     }
 
     function numericMessageId(value) {
@@ -672,7 +686,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const actualNames = new Set();
         const nameOnly = new Set();
 
-        for (const { message, time, calendar } of timings) {
+        for (const timing of timings) {
+            const { message, time, absoluteTime, calendar } = timing;
             const id = getSenderId(message);
             const name = typeof message.from === 'string' && message.from.trim() ? message.from : null;
             if (name) actualNames.add(name);
@@ -683,7 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             let sender = senders.get(id);
             if (!sender) {
-                sender = { name: null, nameTime: -Infinity };
+                sender = { name: null, nameTime: -Infinity, exactName: null, hasCivilName: false };
                 senders.set(id, sender);
             }
             if (!name) continue;
@@ -697,6 +712,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 sender.name = name;
                 sender.nameTime = nameTime;
             }
+            if (Number.isFinite(absoluteTime)) {
+                const previous = sender.exactName;
+                if (!previous || absoluteTime > previous.absoluteTime
+                    || (absoluteTime === previous.absoluteTime && compareMessageIds(message, previous.message) >= 0)) {
+                    sender.exactName = timing;
+                }
+            } else if (calendar) {
+                sender.hasCivilName = true;
+            }
         }
         if (senders.size === 0) return;
 
@@ -705,6 +729,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const nextSuffixByName = new Map();
         const unnamedLabels = [];
         for (const sender of senders.values()) {
+            // A legacy date elsewhere in the chat does not make this sender's exact dates ambiguous.
+            if (!sender.hasCivilName && sender.exactName) sender.name = sender.exactName.message.from;
             const baseName = sender.name ?? copy.unknownParticipant[1];
             let label = baseName;
             if (usedLabels.has(label) || (!sender.name && actualNames.has(label))) {
@@ -1089,6 +1115,29 @@ document.addEventListener('DOMContentLoaded', () => {
         resetTrendComparison();
     }
 
+    function clearLoadedData() {
+        const reader = activeImport?.reader;
+        activeImport = null;
+        if (reader?.readyState === FileReader.LOADING) reader.abort();
+        resetAccountChooser();
+        clearReport();
+        selectStatsTab(allStatsTab);
+        for (const element of document.querySelectorAll('.detail-grid > .stat-box, .metric-band .metric-value')) {
+            element.replaceChildren();
+        }
+        setLocalizedText(currentMonthDisplay, '');
+        setLocalizedText(replyTimingHint, '');
+        updateSelectedFileName(translated('noSourceFile'));
+        setLocalizedText(sourceFileType, translated('sourceFileFormat'));
+        setReportHeader(translated('report'), translated('emptyReportTitle'), translated('emptyReportMeta'));
+        setReportPlaceholder(translated('emptyReportHeading'), translated('emptyReportIntro'));
+        showFileError('');
+        hideLoadingIndicator(translated('reportCleared'));
+        clearFileInput();
+        clearLoadedDataButton.hidden = true;
+        fileInput?.focus();
+    }
+
     function showChartsUnavailable() {
         clearRenderedCharts();
         statsContainer.classList.add('charts-unavailable');
@@ -1129,6 +1178,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) {
             return;
         }
+        clearLoadedDataButton.hidden = false;
 
         if (!isJsonFile(file)) {
             showFileError(translated('chooseJson'));

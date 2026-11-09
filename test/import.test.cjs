@@ -873,6 +873,52 @@ test('exports reply timing for the active report scope and method with formula-s
     assert.equal(button.disabled, true);
 });
 
+test('clears the report and account data and aborts a pending replacement without losing language', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const clear = app.element('clearLoadedData');
+    const chooser = app.element('accountChatChooser');
+    app.selectFile('account.json').complete({
+        chats: { list: [
+            { name: 'Synthetic open chat', messages: [
+                { id: 1, from: 'Synthetic participant', date: '2026-10-01T00:00:00Z', text: 'Test' },
+            ] },
+            { name: 'Synthetic other chat', messages: [] },
+        ] },
+    });
+    chooseAccountChat(app, '0');
+    app.element('analyzeAccountChat').click();
+    assert.equal(clear.hidden, false);
+    assert.equal(chooser.hidden, false);
+    assert.equal(app.element('reportTitle').textContent, 'Synthetic open chat');
+
+    const pending = app.selectFile('slow.json');
+    clear.click();
+    assert.equal(pending.aborted, true);
+    pending.complete({ name: 'Old callback', messages: [] });
+    pending.fail();
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+    assert.equal(app.element('fileError').hidden, true);
+    assert.equal(app.element('reportTitle').textContent, 'Анализ переписки');
+    assert.equal(app.element('placeholderTitle').textContent, 'Выберите JSON-файл');
+    assert.equal(app.element('dropFileName').textContent, 'Файл не выбран');
+    assert.equal(app.element('reportPlaceholder').hidden, false);
+    assert.equal(app.element('.stats-container').style.display, 'none');
+    assert.equal(app.element('exportParticipants').disabled, true);
+    assert.equal(app.element('exportReplyTiming').disabled, true);
+    assert.equal(chooser.hidden, true);
+    assert.equal(app.element('accountChatSelect').children.length, 0);
+    assert.equal(clear.hidden, true);
+    assert.equal(app.focusedElement, app.element('jsonFile'));
+    assert.equal(app.charts.size, 0);
+    assert.equal(app.documentElement.lang, 'ru');
+    assert.equal(app.element('importStatus').textContent, 'Отчёт очищен.');
+    app.element('languageToggle').click();
+    assert.equal(app.element('reportTitle').textContent, 'Chat analysis');
+    app.selectFile('new.json').complete({ name: 'Fresh report', messages: [] });
+    assert.equal(app.element('reportTitle').textContent, 'Fresh report');
+    assert.equal(clear.hidden, false);
+});
+
 test('ignores malformed account groups and hides stale choosers on single or demo imports', async () => {
     const app = createAnalyzer();
     const { data } = accountFixture();
@@ -2122,6 +2168,42 @@ test('chooses the latest sender name across mixed date styles without changing r
     assert.match(csv, /"Current name",3,/);
     assert.match(csv, /"Stable name",3,/);
     assert.doesNotMatch(csv, /Old civil name|Stale Unix name|Undated name/);
+});
+
+test('uses exact times for a sender\'s latest alias despite an unrelated legacy date', async () => {
+    const app = createAnalyzer();
+    app.selectFile('sender-dst.json').complete({
+        messages: [
+            { id: 5, date: '2025-11-02T01:05:00', date_unixtime: '1762063500', from: 'Latest alias', from_id: 'user1' },
+            { id: 3, date: '2025-11-02T01:55:00', date_unixtime: '1762062900', from: 'Old alias', from_id: 'user1' },
+            { id: 4, date: '2025-11-02T01:05:00', date_unixtime: '1762063500', from: 'Earlier ID alias', from_id: 'user1' },
+            { id: 6, date: '2025-11-02T01:15:00', date_unixtime: '1762064100', from: 'Responder', from_id: 'user3',
+                reply_to_message_id: 5 },
+            { id: 7, from: 'Undated alias', from_id: 'user1' },
+            { id: 1, date: '2025-10-01T16:00:00', from: 'Unrelated legacy', from_id: 'user2' },
+        ],
+    });
+
+    const trend = app.charts.get('monthlyChart').data;
+    assert.equal(trend.labels.join(), '2025-10,2025-11');
+    assert.equal(trend.datasets.map(series => series.label).join(), 'Unrelated legacy,Latest alias,Responder');
+    assert.equal(trend.datasets[1].data.join(), '0,3');
+    const summary = app.element('participantStats').innerHTML;
+    assert.match(summary, /Latest alias/);
+    assert.doesNotMatch(summary, /Old alias|Earlier ID alias|Undated alias/);
+    const replyChart = () => {
+        const { labels, datasets } = app.charts.get('responseTimeChart').data;
+        return Object.fromEntries(labels.map((label, index) => [label, datasets[0].data[index]]));
+    };
+    assert.equal(replyChart()['Responder -> Latest alias'], 40);
+    const timing = app.element('replyTiming');
+    timing.value = 'direct';
+    timing.change();
+    assert.deepEqual(replyChart(), { 'Latest alias -> Responder': 10 });
+    app.element('exportParticipants').click();
+    const csv = await app.downloads[0].blob.text();
+    assert.match(csv, /"Latest alias",4,0\.0\r\n/);
+    assert.doesNotMatch(csv, /Old alias|Earlier ID alias|Undated alias/);
 });
 
 test('matches old numeric sender IDs and keeps the latest dated name', async () => {

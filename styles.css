@@ -422,6 +422,8 @@ a { color: var(--accent); }
     gap: 8px;
 }
 
+.source-clear { justify-self: start; }
+
 .source-file {
     display: flex;
     align-items: center;
