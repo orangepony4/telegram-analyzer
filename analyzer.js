@@ -30,7 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportMonthlyParticipantsButton = document.getElementById('exportMonthlyParticipants');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
-    const ignoredThresholdInput = document.getElementById('ignoredThreshold');
+    const replyThresholdInputs = ['ignoredThreshold', 'monthlyIgnoredThreshold'].map(id => document.getElementById(id));
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeToggleIcon = themeToggleBtn?.querySelector('i');
     const bodyElement = document.body;
@@ -335,14 +335,16 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMonthlyStats();
     }
 
-    // Обработчик изменения порога игнорирования
-    ignoredThresholdInput.addEventListener('change', (e) => {
-        const minutes = e.target.valueAsNumber;
+    replyThresholdInputs.forEach(input => input.addEventListener('change', changeReplyThreshold));
+
+    function changeReplyThreshold({ target }) {
+        const minutes = target.valueAsNumber;
         if (!Number.isSafeInteger(minutes) || minutes < 1) {
-            e.target.value = ignoredMessageThreshold / 60;
+            target.value = ignoredMessageThreshold / 60;
             return;
         }
         ignoredMessageThreshold = minutes * 60;
+        for (const input of replyThresholdInputs) input.value = minutes;
         if (overallResponseStats) {
             const responseTimes = selectedResponseTimes(overallResponseStats);
             displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
@@ -351,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 displayMonthlyThresholdStats(monthData);
             }
         }
-    });
+    }
 
     replyTimingSelect.addEventListener('change', () => {
         const mode = replyTimingSelect.value;
@@ -1497,23 +1499,29 @@ document.addEventListener('DOMContentLoaded', () => {
         let linkedReplies = 0;
         let timedReplies = 0;
         const replyTargets = findReplyTargets(timings);
+        const participantTotals = new Map();
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(timing => {
             const { message: msg, calendar, time } = timing;
             const replyLink = replyLinkId(msg);
             if (replyLink !== null) linkedReplies++;
-            const words = msg.from ? countWords(getReportMessageText(msg)) : 0;
-            if (msg.from) wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
+            const text = msg.from ? getReportMessageText(msg) : '';
+            const words = countWords(text);
+            const textLength = countTextCharacters(text);
+            if (msg.from) {
+                wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
+                addParticipantMessage(participantTotals, msg.from, textLength);
+            }
             if (!calendar) return;
             const year = calendar.getUTCFullYear().toString().padStart(4, '0');
             const monthNumber = (calendar.getUTCMonth() + 1).toString().padStart(2, '0');
             const monthKey = `${year}-${monthNumber}`;
 
             const month = messagesByMonth[monthKey] ??= {
-                messages: [],
+                messageCount: 0,
                 unattributedCount: 0,
-                participants: Object.create(null),
+                participantTotals: new Map(),
                 messageTypes: Object.create(null),
                 timeOfDay: new Array(24).fill(0),
                 responseTimes: Object.create(null),
@@ -1526,7 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 dailyActivity: new Array(31).fill(0)
             };
 
-            month.messages.push(msg);
+            month.messageCount++;
             if (replyLink !== null) month.linkedReplies++;
             const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
@@ -1538,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 month.unattributedCount++;
                 return;
             }
-            (month.participants[msg.from] ??= []).push(msg);
+            addParticipantMessage(month.participantTotals, msg.from, textLength);
             if (isSharedContentCategory(type)) {
                 const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
@@ -1576,7 +1584,7 @@ document.addEventListener('DOMContentLoaded', () => {
         replyTimingSelect.disabled = !hasDirectReplies;
         if (!hasDirectReplies) replyTimingMode = 'adjacent';
         replyTimingSelect.value = replyTimingMode;
-        overallParticipantTotals = getParticipantTotals(messages);
+        overallParticipantTotals = participantTotals;
         overviewData = {
             messageCount: messages.length,
             words: wordCounts,
@@ -1817,7 +1825,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             heading.append(openMonth);
             const records = document.createElement('td');
-            records.textContent = countFormat.format(data.messages.length);
+            records.textContent = countFormat.format(data.messageCount);
             const activeDays = document.createElement('td');
             activeDays.textContent = countFormat.format(countActiveDays(data));
             row.append(heading, records, activeDays);
@@ -1879,9 +1887,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
         const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
-        const participantTotals = getParticipantTotals(data.messages);
+        const { participantTotals } = data;
         exportMonthlyParticipantsButton.disabled = participantTotals.size === 0;
-        setMessageMetric(monthlyMessageCountElement, data.messages.length);
+        setMessageMetric(monthlyMessageCountElement, data.messageCount);
         document.getElementById('monthlyParticipantCount').textContent = countFormat.format(participantTotals.size);
         document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(countActiveDays(data));
 
@@ -2034,7 +2042,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const makeDataset = (participant, index) => ({
             ...lineAppearance(index),
             participant,
-            data: monthsData.map(m => m.data.participants[participant]?.length || 0)
+            data: monthsData.map(m => m.data.participantTotals.get(participant)?.messageCount ?? 0)
         });
         const datasets = leadingParticipants.map(makeDataset);
 
@@ -2067,8 +2075,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function selectLeadingTrendParticipants(participants, months) {
         const counts = new Map();
         for (const { data } of months) {
-            for (const [name, messages] of Object.entries(data.participants)) {
-                counts.set(name, (counts.get(name) ?? 0) + messages.length);
+            for (const [name, { messageCount }] of data.participantTotals) {
+                counts.set(name, (counts.get(name) ?? 0) + messageCount);
             }
         }
         return participants.slice().sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
@@ -2311,19 +2319,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Helper Functions for HTML Generation ---
 
-    function getParticipantTotals(messages) {
-        const totalsByParticipant = new Map();
-        for (const message of messages) {
-            if (!message.from) continue;
-            let totals = totalsByParticipant.get(message.from);
-            if (!totals) {
-                totals = { messageCount: 0, textLength: 0 };
-                totalsByParticipant.set(message.from, totals);
-            }
+    function addParticipantMessage(totalsByParticipant, name, textLength) {
+        const totals = totalsByParticipant.get(name);
+        if (totals) {
             totals.messageCount++;
-            totals.textLength += countTextCharacters(getReportMessageText(message));
+            totals.textLength += textLength;
+        } else {
+            totalsByParticipant.set(name, { messageCount: 1, textLength });
         }
-        return totalsByParticipant;
     }
 
     function generateParticipantStatsHTML(totalsByParticipant) {
@@ -2350,7 +2353,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthData = monthsData[currentMonthIndex];
         if (exportMonthlyParticipantsButton.disabled || !monthData) return;
         downloadParticipantSummary(
-            getParticipantTotals(monthData.data.messages),
+            monthData.data.participantTotals,
             `telegram-analyzer-${monthData.month}-participants.csv`
         );
     }
@@ -2359,7 +2362,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (exportMonthlyActivityButton.disabled || statsContainer.style.display !== 'block') return;
         const rows = ['month,records,active_days'];
         for (const { month, data } of monthsData) {
-            rows.push(`${month},${data.messages.length},${countActiveDays(data)}`);
+            rows.push(`${month},${data.messageCount},${countActiveDays(data)}`);
         }
         downloadCsv(rows, 'telegram-analyzer-monthly-activity.csv');
     }

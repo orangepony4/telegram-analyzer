@@ -555,7 +555,7 @@ a { color: var(--accent); }
     font-weight: 630;
 }
 
-.account-chat-field select, #accountChatSearch, #ignoredThreshold, #replyTiming, #reportMonth, #trendComparison, #trendComparisonSearch {
+.account-chat-field select, #accountChatSearch, .threshold-control input, #replyTiming, #reportMonth, #trendComparison, #trendComparisonSearch {
     max-width: 100%;
     min-height: 40px;
     padding: 6px 8px;
@@ -1078,7 +1078,7 @@ a { color: var(--accent); }
     .drop-hint { display: none; }
     .source-file { padding: 2px 0 4px; }
     .export-help { padding: 0; }
-    .button, .icon-button, .nav-btn, .tab-btn, .account-chat-field select, #accountChatSearch, #replyTiming, #reportMonth,
+    .button, .icon-button, .nav-btn, .tab-btn, .account-chat-field select, .threshold-control input, #accountChatSearch, #replyTiming, #reportMonth,
     #trendComparison, #trendComparisonSearch { min-height: 44px; }
     .icon-button, .nav-btn { width: 44px; }
     .report-heading { margin-bottom: 13px; padding-bottom: 12px; }

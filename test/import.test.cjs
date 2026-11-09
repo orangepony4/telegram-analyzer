@@ -873,6 +873,36 @@ test('exports reply timing for the active report scope and method with formula-s
     assert.equal(button.disabled, true);
 });
 
+test('shares a long reply threshold between the overview, monthly report and both CSV scopes', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    app.selectFile('replies.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-01-01T00:00:00Z' },
+        { id: 2, from: 'Bob', date: '2026-01-01T00:02:00Z', reply_to_message_id: 1 },
+    ] });
+    const overviewThreshold = app.element('ignoredThreshold');
+    const monthThreshold = app.element('monthlyIgnoredThreshold');
+    const change = (input, value) => {
+        input.valueAsNumber = value;
+        input.change({ target: input });
+    };
+    app.monthlyTab.click();
+    change(monthThreshold, 3);
+    assert.equal(Number(overviewThreshold.value), 3);
+    app.element('exportReplyTiming').click();
+    assert.match(await app.downloads[0].blob.text(), /"Alice","Bob",1,120\.000,0,180/);
+    app.allTab.click();
+    change(overviewThreshold, 1);
+    assert.equal(Number(monthThreshold.value), 1);
+    app.element('exportReplyTiming').click();
+    assert.match(await app.downloads[1].blob.text(), /"Alice","Bob",1,120\.000,1,60/);
+    app.monthlyTab.click();
+    change(monthThreshold, 0.5);
+    assert.equal(Number(monthThreshold.value), 1);
+    assert.equal(Number(overviewThreshold.value), 1);
+    app.element('exportReplyTiming').click();
+    assert.match(await app.downloads[2].blob.text(), /"Alice","Bob",1,120\.000,1,60/);
+});
+
 test('clears the report and account data and aborts a pending replacement without losing language', () => {
     const app = createAnalyzer({ search: '?view=upload' });
     const clear = app.element('clearLoadedData');
@@ -1803,6 +1833,66 @@ test('counts graphemes across Telegram text entities in report lengths and both 
     assert.match(await month.blob.text(), /"Alice",3,1\.0\r\n$/);
     assert.equal(overall.name, 'telegram-analyzer-participants.csv');
     assert.match(await overall.blob.text(), /"Alice",4,1\.3\r\n$/);
+});
+
+test('reuses grapheme totals across monthly views, reply methods, locale changes and CSVs', async () => {
+    let graphemeCalls = 0;
+    class CountingSegmenter extends Intl.Segmenter {
+        segment(text) {
+            if (this.resolvedOptions().granularity === 'grapheme') graphemeCalls++;
+            return super.segment(text);
+        }
+    }
+    const intl = Object.assign(Object.create(Intl), { Segmenter: CountingSegmenter });
+    const app = createAnalyzer({ chartsAvailable: false, intl, search: '?view=upload' });
+    const formulaName = '=1+1, "fixture"';
+    app.selectFile('account.json').complete({ chats: { list: [
+        { name: 'First fixture', messages: [
+            { id: 1, from: formulaName, date: '2026-10-01T12:00:00Z',
+                text: ['e', { type: 'bold', text: '\u0301' }] },
+            { id: 2, date: '2026-10-01T12:01:00Z', type: 'service' },
+            { id: 3, from: 'Alice', date: '2026-11-01T12:00:00Z', reply_to_message_id: 1,
+                rich_message: { blocks: [{ type: 'paragraph', text: 'A👍🏽' }] } },
+            { id: 4, from: formulaName, text: 'XYZ' },
+        ] },
+        { name: 'Second fixture', messages: [
+            { id: 1, from: formulaName, date: '2026-11-01T12:00:00Z', text: 'Different' },
+        ] },
+    ] } });
+    const analyze = app.element('analyzeAccountChat');
+    const monthExport = app.element('exportMonthlyParticipants');
+    chooseAccountChat(app, '0');
+    analyze.click();
+    const initialCalls = graphemeCalls;
+    app.monthlyTab.click();
+    monthExport.click();
+    app.element('languageToggle').click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change({ target: mode });
+    monthExport.click();
+    app.element('prevMonth').click();
+    assert.match(app.element('monthlyMessageCount').innerHTML, />2<\/strong>/);
+    monthExport.click();
+    app.element('exportParticipants').click();
+    assert.equal(graphemeCalls, initialCalls, 'views and downloads should use the stored totals');
+    assert.equal(initialCalls, 3, 'each attributed message should be segmented once');
+
+    chooseAccountChat(app, '1');
+    analyze.click();
+    monthExport.click();
+    assert.equal(graphemeCalls, 4);
+    const header = '\uFEFFУчастник,Сообщения,Средняя длина сообщения\r\n';
+    const csvName = '"\'=1+1, ""fixture"""';
+    const reports = await Promise.all(app.downloads.map(async ({ name, blob }) =>
+        [name, Buffer.from(await blob.arrayBuffer()).toString('utf8')]));
+    assert.deepEqual(reports, [
+        ['telegram-analyzer-2026-11-participants.csv', header + '"Alice",1,2.0\r\n'],
+        ['telegram-analyzer-2026-11-participants.csv', header + '"Alice",1,2.0\r\n'],
+        ['telegram-analyzer-2026-10-participants.csv', header + `${csvName},1,1.0\r\n`],
+        ['telegram-analyzer-participants.csv', header + `${csvName},2,2.0\r\n"Alice",1,2.0\r\n`],
+        ['telegram-analyzer-2026-11-participants.csv', header + `${csvName},1,9.0\r\n`],
+    ]);
 });
 
 test('counts formatted Telegram Desktop rich text in both report scopes and CSVs', async () => {

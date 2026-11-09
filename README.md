@@ -37,6 +37,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
 - **Chat CSV** exports the whole chat. **Month CSV** exports the selected month. Both files contain participant names, message counts, and average message length in comma-separated UTF-8. The column headers stay the same when you change the interface language.
 - **Replies CSV** exports the current report period and timing method. Each sender–responder pair has a count, an average in seconds, and the number of replies longer than the current threshold. The filename includes the method and, in the monthly view, the month.
+- Set **Long reply threshold** from **Overview** or **By month**. Both reports and their reply CSVs use the same setting.
 - Choose **Clear report** under **Chat data** to remove the report, chat list and filename from the page or stop a pending import. Your original JSON file stays on disk.
 - Average message length counts grapheme clusters, so a compound emoji can count as one character. Browsers without `Intl.Segmenter` count Unicode code points.
 
@@ -96,6 +97,7 @@ Telegram Analyzer показывает активность, участнико�
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.
 - Кнопка **«CSV чата»** сохраняет данные по всему чату. Кнопка **«CSV месяца»** сохраняет данные за выбранный месяц. В обоих файлах содержатся имена участников, количество сообщений и средняя длина сообщения. Формат — UTF-8 с запятой в качестве разделителя. Названия столбцов сохраняются при переключении языка.
 - Кнопка **«CSV ответов»** выгружает данные за открытый период с выбранным методом замера. Для каждой пары участников файл содержит число ответов, среднее время в секундах и число ответов дольше текущего порога. В имени файла указан метод замера, а в помесячном отчёте также указан месяц.
+- Порог **«Долгий ответ»** можно менять в разделах **«Обзор»** и **«По месяцам»**. Оба отчёта и их выгрузки CSV используют одно значение.
 - Кнопка **«Очистить отчёт»** в блоке **«Данные чата»** убирает со страницы отчёт, список чатов и имя файла или прерывает чтение экспорта. Исходный JSON остаётся на диске.
 - Средняя длина считается по графемам. Например, составной эмодзи может считаться одним символом. В браузерах без `Intl.Segmenter` используются кодовые точки Unicode.
 
