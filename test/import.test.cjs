@@ -974,7 +974,8 @@ test('counts formatted Telegram Desktop rich text in both report scopes and CSVs
     ];
     const rich = { rtl: false, part: false, blocks };
     let tooDeep = plain('Deep');
-    for (let depth = 0; depth < 1000; depth++) tooDeep = { type: 'bold', text: tooDeep };
+    // Exceed the report's depth limit without exhausting the test fixture's JSON.stringify stack.
+    for (let depth = 0; depth < 128; depth++) tooDeep = { type: 'bold', text: tooDeep };
     const date = '2026-10-10T12:00:00';
     const messages = [
         { id: 1, type: 'message', from: 'Rich', date, rich_message: rich },
