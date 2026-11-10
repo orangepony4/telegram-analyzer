@@ -76,9 +76,10 @@
                 <button type="button" id="clearLoadedData" class="button button-quiet source-clear" data-ru="Очистить отчёт" hidden>Clear report</button>
                 <p id="demoImportHint" class="sr-only" data-ru="Вымышленная переписка за три месяца.">A fictional conversation spanning three months.</p>
                 <p id="fileError" class="file-error" role="alert" hidden></p>
-                <div id="loadingIndicator" class="loading-indicator" aria-hidden="true">
+                <div id="loadingIndicator" class="loading-indicator">
                     <i class="fas fa-spinner fa-spin" aria-hidden="true"></i>
-                    <span data-ru="Читаем файл…">Reading file…</span>
+                    <span aria-hidden="true" data-ru="Читаем файл…">Reading file…</span>
+                    <button type="button" id="cancelImport" class="button button-quiet" data-ru="Отменить импорт">Cancel import</button>
                 </div>
                 <p id="importStatus" class="sr-only" role="status"></p>
             </div>

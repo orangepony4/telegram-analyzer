@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropZone = document.getElementById('dropZone');
     const dropFileNameElement = document.getElementById('dropFileName');
     const loadingIndicator = document.getElementById('loadingIndicator');
+    const cancelImportButton = document.getElementById('cancelImport');
     const importStatus = document.getElementById('importStatus');
     const sourceFileType = document.getElementById('sourceFileType');
     const fileError = document.getElementById('fileError');
@@ -145,6 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         readingFile: ['Reading file', 'Чтение файла'],
         reportAfterRead: ['The report appears after the data is processed.', 'Отчёт появится после обработки данных.'],
         processing: ['Reading and analyzing data…', 'Загрузка и анализ данных...'],
+        importCanceled: ['Import canceled.', 'Импорт отменён.'],
         reportReady: ['Analysis complete. The report is available below.', 'Анализ завершён. Статистика доступна ниже.'],
         chooseJson: ['Choose a JSON export from Telegram Desktop.', 'Выберите JSON из Telegram Desktop.'],
         noChatHistory: [
@@ -445,6 +447,7 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadBlob(file, file.name);
     });
     clearLoadedDataButton.addEventListener('click', clearLoadedData);
+    cancelImportButton.addEventListener('click', cancelImport);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
         const chat = selectedAccountChat();
@@ -716,6 +719,42 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof value === 'string' && /^-?\d+$/.test(value)) value = Number(value);
         // Telegram shifts migrated chat history into negative IDs.
         return Number.isSafeInteger(value) && value !== 0 ? value : null;
+    }
+
+    function findUnsupportedGaps(timings) {
+        const ids = [];
+        for (const { message, time } of timings) {
+            if (message.type !== 'unsupported' || Number.isFinite(time)) continue;
+            const id = numericMessageId(message.id);
+            if (id !== null) ids.push(id);
+        }
+
+        const duplicateIds = new Set();
+        if (!ids.length) return { ids, duplicateIds };
+        const seenIds = new Set();
+        for (const { message } of timings) {
+            const id = numericMessageId(message.id);
+            if (id === null) continue;
+            if (seenIds.has(id)) duplicateIds.add(id);
+            seenIds.add(id);
+        }
+        return { ids: ids.filter(id => !duplicateIds.has(id)).sort((a, b) => a - b), duplicateIds };
+    }
+
+    function crossesUnsupportedGap({ ids, duplicateIds }, previousId, nextId) {
+        // ID order can place an undated record only within one unambiguous history.
+        if (!ids.length || previousId === null || nextId === null || previousId >= nextId
+            || (previousId < 0) !== (nextId < 0) || duplicateIds.has(previousId) || duplicateIds.has(nextId)) return false;
+
+        let first = 0;
+        let last = ids.length;
+        // Find the first unsupported ID after the previous message.
+        while (first < last) {
+            const middle = Math.floor((first + last) / 2);
+            if (ids[middle] <= previousId) first = middle + 1;
+            else last = middle;
+        }
+        return first < ids.length && ids[first] < nextId;
     }
 
     function replyLinkId(message) {
@@ -1235,6 +1274,16 @@ document.addEventListener('DOMContentLoaded', () => {
         return pending;
     }
 
+    function cancelImport() {
+        const pending = abortActiveImport();
+        if (!pending) return;
+        restoreImportView(pending.previous);
+        clearLoadedDataButton.hidden = pending.previous.clearButtonHidden;
+        showFileError(pending.previous.fileError);
+        clearFileInput();
+        hideLoadingIndicator(translated('importCanceled'));
+    }
+
     function clearLoadedData() {
         abortActiveImport();
         resetAccountChooser();
@@ -1276,6 +1325,8 @@ document.addEventListener('DOMContentLoaded', () => {
             chooserVisible: !accountChatChooser.hidden,
             overallExportDisabled: exportParticipantsButton.disabled,
             monthlyExportDisabled: exportMonthlyParticipantsButton.disabled,
+            clearButtonHidden: clearLoadedDataButton.hidden,
+            fileError: savedViewText(fileError) ?? '',
             reportHeader: [reportKind, reportTitle, reportMeta].map(savedViewText),
             placeholderTitle: savedViewText(placeholderTitle),
             placeholderText: savedViewText(placeholderText),
@@ -1334,9 +1385,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!file) {
             return;
         }
-        clearLoadedDataButton.hidden = false;
-
         if (!isJsonFile(file)) {
+            clearLoadedDataButton.hidden = false;
             const pending = abortActiveImport();
             if (pending) {
                 restoreImportView(pending.previous);
@@ -1350,6 +1400,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const reader = new FileReader();
         const previousRequest = activeImport;
         const previous = previousRequest ? previousRequest.previous : suspendImportView();
+        clearLoadedDataButton.hidden = false;
         const request = { reader, previous };
         activeImport = request;
         // The old reader can fire its abort callback synchronously.
@@ -1510,6 +1561,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function hideLoadingIndicator(status = '') {
+        if (document.activeElement === cancelImportButton) fileInput?.focus();
         loadingIndicator.style.display = 'none';
         setLocalizedText(importStatus, status);
     }
@@ -1665,6 +1717,7 @@ document.addEventListener('DOMContentLoaded', () => {
         let linkedReplies = 0;
         let timedReplies = 0;
         const replyTargets = findReplyTargets(timings);
+        const unsupportedGaps = findUnsupportedGaps(timings);
         const participantTotals = new Map();
         const reactionCounts = new Map();
         const wordCounts = Object.create(null);
@@ -1728,13 +1781,15 @@ document.addEventListener('DOMContentLoaded', () => {
             month.wordCounts[msg.from] = (month.wordCounts[msg.from] ?? 0) + words;
 
             if (msg.type !== 'service' && Number.isFinite(time)) {
-                if (previousMessage && previousMessage.sender !== msg.from) {
+                const id = unsupportedGaps.ids.length ? numericMessageId(msg.id) : null;
+                if (previousMessage && previousMessage.sender !== msg.from
+                    && !crossesUnsupportedGap(unsupportedGaps, previousMessage.id, id)) {
                     const { sender, time: previousTime } = previousMessage;
                     const seconds = (time - previousTime) / 1000;
                     recordResponse(responseTimes, sender, msg.from, seconds);
                     recordResponse(month.responseTimes, sender, msg.from, seconds);
                 }
-                previousMessage = { sender: msg.from, time };
+                previousMessage = { sender: msg.from, time, id };
             }
             const direct = replyLink === null ? null : measureDirectReply(timing, replyLink, replyTargets);
             if (direct) {

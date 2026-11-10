@@ -75,6 +75,10 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
     element('all').classList.add('active');
     element('accountChatChooser').hidden = true;
     element('analyzeAccountChat').disabled = true;
+    element('clearLoadedData').hidden = true;
+    const uploadPlaceholder = element('placeholderTitle');
+    uploadPlaceholder.textContent = 'Choose a JSON file';
+    uploadPlaceholder.setAttribute('data-ru', 'Выберите JSON-файл');
 
     class Chart {
         static defaults = {};
@@ -138,6 +142,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
             get activeElement() { return focusedElement; },
             querySelectorAll(selector) {
                 if (selector === '.tab-btn') return [allTab, monthlyTab];
+                if (selector.startsWith('[data-ru]')) return [uploadPlaceholder];
                 return [];
             },
             createElement(tag) {
@@ -913,6 +918,61 @@ test('breaks adjacent estimates at chronologically placed records with no identi
     assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">6</);
 });
 
+test('does not infer adjacent replies across undated unsupported Telegram records', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const button = app.element('exportReplyTiming');
+    const mode = app.element('replyTiming');
+    app.selectFile('synthetic-migrated.json').complete({ messages: [
+        { id: '-102', from: 'Carol', date: '2026-11-01T00:01:00Z', reply_to_message_id: -103 },
+        { id: -103, from: 'Bob', date: '2026-11-01T00:00:00Z', reply_to_message_id: '-105' },
+        { id: '-105', from: 'Alice', date: '2026-10-31T23:59:00Z' },
+        { id: 40, type: 'unsupported' },
+        { id: '-104', type: 'unsupported' },
+        { id: 41, type: 'message' },
+    ] });
+
+    button.click();
+    app.monthlyTab.click();
+    button.click();
+    mode.value = 'direct';
+    mode.change();
+    button.click();
+    const header = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    const adjacent = '"Bob","Carol",1,60.000,0,3600\r\n';
+    const linked = '"Alice","Bob",1,60.000,0,3600\r\n' + adjacent;
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', header + adjacent],
+        ['telegram-analyzer-2026-11-adjacent-replies.csv', header + adjacent],
+        ['telegram-analyzer-2026-11-direct-replies.csv', header + linked],
+    ]);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">6</);
+    assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">2</);
+});
+
+test('does not position unsupported records between ambiguous IDs', async () => {
+    const unsupported = id => ({ id, type: 'unsupported' });
+    const cases = [
+        ['descending IDs', 3, 1, [unsupported(2)]],
+        ['different histories', -2, 2, [unsupported(-1), unsupported(1)]],
+        ['duplicate unsupported ID', 1, 3, [unsupported(2), unsupported('2')]],
+        ['duplicate first ID', 1, 3, [unsupported(2), { id: '1', type: 'service' }]],
+        ['duplicate last ID', 1, 3, [unsupported(2), { id: '3', type: 'service' }]],
+        ['missing first ID', undefined, 3, [unsupported(2)]],
+        ['ordinary undated record', 1, 3, [{ id: 2, type: 'message' }]],
+    ];
+    for (const [name, first, last, records] of cases) {
+        const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+        app.selectFile('synthetic.json').complete({ messages: [
+            { id: first, from: 'Alice', date: '2026-11-01T00:00:00Z' },
+            ...records,
+            { id: last, from: 'Bob', date: '2026-11-01T00:01:00Z' },
+        ] });
+        app.element('exportReplyTiming').click();
+        assert.equal(app.downloads.length, 1, name);
+        assert.match(await app.downloads[0].blob.text(), /"Alice","Bob",1,60\.000,0,3600/, name);
+    }
+});
+
 test('orders equal timestamps by numeric message ID in replies and participant names', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     const button = app.element('exportReplyTiming');
@@ -1449,6 +1509,56 @@ test('a wrong-format replacement cancels the pending read and restores the previ
     assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
     assert.equal(app.element('exportMonthlyParticipants').disabled, false);
     assert.equal(app.element('fileError').textContent, 'Выберите JSON из Telegram Desktop.');
+});
+
+test('canceling a replacement restores the previous account report and ignores stale callbacks', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('saved.json').complete({ chats: { list: [
+        { name: 'Saved chat', messages: [{ id: 1, from: 'Alice', date: '2026-11-01T00:00:00' }] },
+        { name: 'Other chat', messages: [] },
+    ] } });
+    const chooser = app.element('accountChatSelect');
+    chooser.value = '0';
+    chooser.change();
+    app.element('analyzeAccountChat').click();
+    app.monthlyTab.click();
+
+    const pending = app.selectFile('pending.json');
+    const cancel = app.element('cancelImport');
+    cancel.focus();
+    cancel.click();
+    assert.equal(pending.aborted, true);
+    pending.complete({ name: 'Stale chat', messages: [] });
+    pending.fail();
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+    assert.equal(app.element('importStatus').textContent, 'Import canceled.');
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.element('accountChatChooser').hidden, false);
+    assert.equal(chooser.value, '0');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.element('exportMonthlyParticipants').disabled, false);
+    assert.equal(app.focusedElement, app.element('jsonFile'));
+});
+
+test('canceling an initial read restores the empty screen and allows retry in the current language', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const initial = app.selectFile('retry.json');
+    app.element('languageToggle').click();
+    app.element('cancelImport').click();
+    assert.equal(initial.aborted, true);
+    assert.equal(app.element('clearLoadedData').hidden, true);
+    assert.equal(app.element('fileError').hidden, true);
+    assert.equal(app.element('placeholderTitle').textContent, 'Выберите JSON-файл');
+    assert.equal(app.element('importStatus').textContent, 'Импорт отменён.');
+    assert.equal(app.element('jsonFile').value, '');
+
+    const retry = app.selectFile('retry.json');
+    app.element('cancelImport').focus();
+    retry.complete({ name: 'Retry chat', messages: [] });
+    assert.equal(app.element('reportTitle').textContent, 'Retry chat');
+    assert.equal(app.element('clearLoadedData').hidden, false);
+    assert.equal(app.focusedElement, app.element('jsonFile'));
 });
 
 test('keeps the last upload and disables monthly statistics for an empty export', () => {

@@ -582,6 +582,7 @@ a { color: var(--accent); }
 
 .loading-indicator {
     display: none;
+    flex-wrap: wrap;
     align-items: center;
     gap: 7px;
     color: var(--text-muted);
