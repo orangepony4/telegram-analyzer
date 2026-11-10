@@ -67,6 +67,8 @@ npm start
 
 Open [localhost:3000](http://localhost:3000). Run `npm test` to check import, month navigation, and response time calculations. The tests use Node's built-in test runner. [Test workflow](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml)
 
+If port 3000 is busy, set `PORT` to another port or use `0` to let the system choose a free one. In PowerShell, set `$env:PORT = '0'` before running `npm start`. Open the URL printed in the terminal.
+
 Run `npm run package:offline` from a Git checkout to build `telegram-analyzer-offline.zip` from the tracked app files, documentation, and licenses in the current commit. To choose a destination, run `npm run package:offline -- ./offline-build.zip`.
 
 [Report an issue or suggest an improvement](https://github.com/orangepony4/telegram-analyzer/issues) · [MIT license](LICENSE)
@@ -135,6 +137,8 @@ npm start
 ```
 
 Откройте [localhost:3000](http://localhost:3000). Команда `npm test` проверяет импорт, переходы между месяцами и расчёт времени ответа с помощью встроенного тестового раннера Node.js. [Проверки на GitHub](https://github.com/orangepony4/telegram-analyzer/actions/workflows/test.yml)
+
+Если порт 3000 занят, задайте другой через `PORT` или укажите `0`, чтобы система выбрала свободный порт. В PowerShell выполните `$env:PORT = '0'` перед `npm start`. Откройте адрес, который появится в терминале.
 
 Команда `npm run package:offline` собирает `telegram-analyzer-offline.zip` из файлов приложения, документации и лицензий, зафиксированных в текущем коммите Git. Чтобы указать другой путь, запустите `npm run package:offline -- ./offline-build.zip`.
 

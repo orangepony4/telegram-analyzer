@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const app = express();
-const PORT = process.env.PORT || 3000; // Порт вынесен в переменную для удобства
+const port = Number(process.env.PORT?.trim() || '3000');
 
 // Serve only the files used by the web interface. Chat exports stay local.
 const publicFiles = {
@@ -20,11 +20,20 @@ for (const [route, file] of Object.entries(publicFiles)) {
     });
 }
 
-// Запуск сервера
-app.listen(PORT, () => {
-    console.log(`🚀 Сервер запущен на http://localhost:${PORT}`);
-    console.log('📝 Отслеживаются изменения в файлах...');
-});
+if (!Number.isInteger(port) || port < 0 || port > 65_535) {
+    console.error('PORT must be a whole number from 0 to 65535.');
+    process.exitCode = 1;
+} else {
+    const server = app.listen(port, () => {
+        console.log(`Telegram Analyzer is available at http://localhost:${server.address().port}`);
+    });
+    server.once('error', error => {
+        console.error(error.code === 'EADDRINUSE'
+            ? `Port ${port} is already in use. Choose another PORT or set PORT=0.`
+            : `Could not start Telegram Analyzer. ${error.message}`);
+        process.exitCode = 1;
+    });
+}
 
 // Обработка ошибок
 app.use((err, req, res, next) => {
