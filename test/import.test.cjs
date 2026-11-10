@@ -104,7 +104,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         readyState = 0;
         aborted = false;
 
-        readAsText(file) {
+        readAsArrayBuffer(file) {
             this.file = file;
             this.readyState = MockFileReader.LOADING;
             readers.push(this);
@@ -161,6 +161,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         Chart: chartsAvailable ? Chart : undefined,
         Blob,
         File,
+        TextDecoder,
         URLSearchParams,
         URL: {
             createObjectURL(blob) {
@@ -175,10 +176,11 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         console,
     });
 
-    function selectFile(name) {
-        element('jsonFile').change({ target: { files: [{ name }] } });
+    function selectFile(name, type = '') {
+        element('jsonFile').change({ target: { files: [{ name, type }] } });
         const reader = readers.at(-1);
-        const completeRaw = result => reader.complete(result);
+        const completeRaw = result => reader.complete(typeof result === 'string'
+            ? new TextEncoder().encode(result).buffer : Uint8Array.from(result).buffer);
         return {
             complete(data) { completeRaw(JSON.stringify(data)); },
             completeRaw,
@@ -192,7 +194,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         return {
             file: reader.file,
             async complete() {
-                reader.complete(await reader.file.text());
+                reader.complete(await reader.file.arrayBuffer());
             },
         };
     }
@@ -1207,6 +1209,70 @@ test('restores the same month and exports after malformed or unreadable replacem
     assert.equal(app.element('fileError').hidden, true);
     assert.equal(monthExport.disabled, true);
     assert.equal(overallExport.disabled, true);
+});
+
+test('opens Unicode exports with or without a BOM and respects declared charsets', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const title = 'Synthetic Кириллица 日本語 😸 �';
+    const data = JSON.stringify({ name: title, messages: [] });
+    const utf16le = Buffer.from('\uFEFF' + data, 'utf16le');
+    const legacyTitle = 'Synthetic Café';
+    const legacy = Buffer.from(JSON.stringify({ name: legacyTitle, messages: [] }), 'latin1');
+    const variants = [
+        ['utf8.json', '', Buffer.from(data), title],
+        ['utf8-bom.json', 'application/json;charset=windows-1252', Buffer.from('\uFEFF' + data), title],
+        ['utf16le.json', '', utf16le, title],
+        ['utf16be.json', '', Buffer.from(utf16le).swap16(), title],
+        ['legacy.json', 'application/json;profile="test;charset=utf-16be";charset="windows-1252"', legacy, legacyTitle],
+        ['unknown.json', 'application/json;charset=unrecognized', Buffer.from(data), title],
+    ];
+    for (const [filename, type, bytes, expectedTitle] of variants) {
+        app.selectFile(filename, type).completeRaw(bytes);
+        assert.equal(app.element('reportTitle').textContent, expectedTitle, filename);
+        assert.equal(app.element('fileError').hidden, true, filename);
+    }
+});
+
+test('rejects malformed text encodings and keeps the current account report', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const corruptUtf8 = Buffer.concat([
+        Buffer.from('{"name":"Broken '), Buffer.from([0xff]), Buffer.from('","messages":[]}'),
+    ]);
+    const corruptUtf16 = Buffer.concat([
+        Buffer.from('\uFEFF{"name":"Broken ', 'utf16le'),
+        Buffer.from([0x00, 0xd8]),
+        Buffer.from('","messages":[]}', 'utf16le'),
+    ]);
+
+    app.selectFile('invalid-utf8.json').completeRaw(corruptUtf8);
+    assert.match(app.element('fileError').textContent, /invalid text encoding/);
+    assert.equal(app.element('exportParticipants').disabled, true);
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+
+    app.selectFile('account.json').complete(accountFixture().data);
+    chooseAccountChat(app, '2');
+    app.element('analyzeAccountChat').click();
+    app.monthlyTab.click();
+    const title = app.element('reportTitle').textContent;
+    const month = app.element('reportMonth').value;
+    const chart = app.charts.get('dailyActivityChart');
+    assert.ok(chart);
+
+    const stale = app.selectFile('older.json');
+    app.selectFile('invalid-utf16.json').completeRaw(corruptUtf16);
+    assert.equal(stale.aborted, true);
+    stale.complete({ name: 'Stale report', messages: [] });
+    assert.match(app.element('fileError').textContent, /invalid text encoding/);
+    assert.equal(app.element('dropFileName').textContent, 'account.json');
+    assert.equal(app.element('accountChatChooser').hidden, false);
+    assert.equal(app.element('accountChatSelect').value, '2');
+    assert.equal(app.element('reportTitle').textContent, title);
+    assert.equal(app.element('reportMonth').value, month);
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.charts.get('dailyActivityChart'), chart);
+    assert.equal(app.element('exportMonthlyParticipants').disabled, false);
+    app.element('languageToggle').click();
+    assert.match(app.element('fileError').textContent, /кодировке/);
 });
 
 test('preserves an account chooser and its selection when the next export is invalid', () => {

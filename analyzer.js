@@ -152,6 +152,10 @@ document.addEventListener('DOMContentLoaded', () => {
             'В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.',
         ],
         reportFailed: ['Could not build a report from this export.', 'Не удалось построить отчёт по этому экспорту.'],
+        invalidEncoding: [
+            'The file contains invalid text encoding. Export your data again as JSON.',
+            'Не удалось прочитать текст в этой кодировке. Экспортируйте данные заново в формате JSON.',
+        ],
         invalidJson: [
             'Check that this file contains a valid JSON export.',
             'Проверьте, что файл содержит корректный экспорт в формате JSON.',
@@ -1295,6 +1299,34 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function decodeImportText(buffer, mimeType = '') {
+        const bytes = new Uint8Array(buffer);
+        let encoding = 'utf-8';
+        // The byte order mark takes precedence over the file's declared charset.
+        if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+            encoding = 'utf-16le';
+        } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+            encoding = 'utf-16be';
+        } else if (!(bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf)) {
+            const parameters = /;\s*([^=;\s]+)=(?:"((?:\\.|[^"\\])*)"|([^;]*))/g;
+            for (const [, name, quoted, unquoted] of mimeType.matchAll(parameters)) {
+                if (name.toLowerCase() !== 'charset') continue;
+                encoding = quoted === undefined ? unquoted.trim() : quoted.replace(/\\(.)/g, '$1');
+                break;
+            }
+        }
+
+        let decoder;
+        try {
+            decoder = new TextDecoder(encoding, { fatal: true });
+        } catch (error) {
+            if (error.name !== 'RangeError') throw error;
+            // FileReader also falls back to UTF-8 for unknown charset labels.
+            decoder = new TextDecoder('utf-8', { fatal: true });
+        }
+        return decoder.decode(bytes);
+    }
+
     function processSelectedFile(file, { isDemo = false } = {}) {
         if (!file) {
             return;
@@ -1355,7 +1387,14 @@ document.addEventListener('DOMContentLoaded', () => {
             let status = '';
             let replacing = false;
             try {
-                const data = JSON.parse(e.target?.result);
+                let text;
+                try {
+                    text = decodeImportText(e.target.result, file.type);
+                } catch {
+                    rejectImport('invalidEncoding');
+                    return;
+                }
+                const data = JSON.parse(text);
                 const messages = validMessages(data?.messages) ? data.messages : null;
                 const chats = messages ? [] : findAccountChats(data);
                 if (!messages && !chats.length) {
@@ -1401,7 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.onabort = readFailed;
 
         try {
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
         } catch {
             readFailed();
         }
