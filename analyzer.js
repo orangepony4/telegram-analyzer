@@ -2874,6 +2874,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     ...dataset, data: dataset.data.slice(), hidden: !source.isDatasetVisible(index)
                 }))
             };
+            const padding = 36;
+            const legendFont = { size: 13, family: Chart.defaults.font.family };
+            const legendPadding = 8;
+            const legendBoxWidth = 20;
             snapshot = new Chart(context, {
                 type, data,
                 options: {
@@ -2882,7 +2886,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     devicePixelRatio: 2,
                     animation: false,
                     events: [],
-                    layout: { padding: 36 },
+                    layout: { padding },
                     scales: {
                         ...options.scales,
                         x: {
@@ -2909,16 +2913,31 @@ document.addEventListener('DOMContentLoaded', () => {
                             position: 'bottom',
                             labels: {
                                 color: chartTheme.textColor,
-                                boxWidth: 20,
+                                boxWidth: legendBoxWidth,
                                 boxHeight: 8,
-                                font: { size: 13 },
+                                padding: legendPadding,
+                                font: legendFont,
                                 filter: item => !item.hidden,
                                 generateLabels(chart) {
-                                    return Chart.defaults.plugins.legend.labels.generateLabels(chart).map(item => {
+                                    const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                    // Fit at least three items per row so the longest legend keeps room for the plot.
+                                    const available = (chart.width - 2 * padding) / 3
+                                        - legendBoxWidth - legendPadding - legendFont.size;
+                                    context.save();
+                                    context.font = `${legendFont.size}px ${legendFont.family}`;
+                                    const fitted = items.map(item => {
+                                        if (context.measureText(item.text.slice(0, 96)).width <= available
+                                            && item.text.length <= 96) return item;
                                         const characters = Array.from(item.text.slice(0, 96));
-                                        return item.text.length > 96 || characters.length > 48
-                                            ? { ...item, text: characters.slice(0, 47).join('') + '…' } : item;
+                                        let text = characters.join('') + '…';
+                                        while (characters.length && context.measureText(text).width > available) {
+                                            characters.pop();
+                                            text = characters.join('') + '…';
+                                        }
+                                        return { ...item, text };
                                     });
+                                    context.restore();
+                                    return fitted;
                                 }
                             }
                         }
