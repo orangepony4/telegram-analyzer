@@ -63,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
     const reportTableView = document.getElementById('reportTableView');
+    const printContext = document.getElementById('printContext');
     const exportParticipantsButton = document.getElementById('exportParticipants');
     const exportMonthlyParticipantsButton = document.getElementById('exportMonthlyParticipants');
     const chartPngButtons = new Map(
@@ -116,6 +117,10 @@ document.addEventListener('DOMContentLoaded', () => {
         darkTheme: ['Switch to dark theme', 'Переключить на тёмную тему'],
         lightTheme: ['Switch to light theme', 'Переключить на светлую тему'],
         chartExportFailed: ['Could not save the chart. Please try again.', 'Не удалось сохранить график. Попробуйте ещё раз.'],
+        printWholeChat: ['Whole chat', 'Вся переписка'],
+        printReplyMethod: ['Reply timing', 'Замер ответов'],
+        printAdjacent: ['Adjacent messages', 'Соседние сообщения'],
+        printDirect: ['Direct replies', 'Прямые ответы'],
         demoReport: ['Demo report', 'Демо-отчёт'],
         demoTitle: ['Sample chat', 'Демонстрационный чат'],
         demoSource: ['Fictional conversation', 'Вымышленная переписка'],
@@ -385,6 +390,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statsContainer.classList.toggle('table-view', showTables);
         reportTableView.setAttribute('aria-pressed', String(showTables));
     });
+    document.getElementById('printReport').addEventListener('click', () => globalThis.print());
 
     function selectStatsTab(selected) {
         if (selected.disabled) return;
@@ -707,6 +713,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     }
 
+    function hasLegacyWallClock(text) {
+        let commentDepth = 0;
+        let outsideComments = '';
+        for (const character of text) {
+            if (character === '(') {
+                if (commentDepth === 0) outsideComments += ' ';
+                commentDepth++;
+            } else if (character === ')' && commentDepth > 0) {
+                commentDepth--;
+            } else if (commentDepth === 0) {
+                outsideComments += character;
+            }
+        }
+        // A zone offset can contain a colon without specifying an hour of the message.
+        const withoutZoneOffsets = outsideComments.replace(/(?:gmt|utc?|z)\s*[+-]\d{1,2}:\d{1,2}/gi, ' ');
+        return /\d{1,2}:\d{1,2}/.test(withoutZoneOffsets);
+    }
+
     function readMessageTiming(message) {
         const { date, date_unixtime: unix } = message;
         const seconds = typeof unix === 'string' && unix === unix.trim() && /^-?\d+$/.test(unix)
@@ -736,7 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const legacy = new Date(text);
                 if (Number.isFinite(legacy.getTime())) {
                     wall = new Date(legacy.getTime() - legacy.getTimezoneOffset() * 60_000);
-                    hasWallClock = true;
+                    hasWallClock = hasLegacyWallClock(text);
                 }
             }
         } else if (typeof date === 'number' && !Number.isFinite(time)) {
@@ -2010,9 +2034,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateReplyTimingControls() {
-        const responseStats = selectedReplyMonth()?.data ?? overallResponseStats;
+        const month = selectedReplyMonth();
+        const responseStats = month?.data ?? overallResponseStats;
         exportReplyTimingButton.disabled = !responseStats || Object.keys(selectedResponseTimes(responseStats)).length === 0;
         if (!responseStats) return;
+        setLocalizedText(printContext, () => {
+            const scope = month ? formatReportMonth(month.month) : translate('printWholeChat');
+            const method = translate(replyTimingMode === 'direct' ? 'printDirect' : 'printAdjacent');
+            return `${scope} · ${translate('printReplyMethod')} · ${method}`;
+        });
         const { linkedReplies, timedReplies } = responseStats;
         const hint = linkedReplies
             ? () => translate('replyCoverage', countFormat.format(timedReplies), countFormat.format(linkedReplies))

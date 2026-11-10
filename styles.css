@@ -684,6 +684,7 @@ a { color: var(--accent); }
 .notice { margin-bottom: 12px; border: 1px solid var(--border); }
 
 .report-toolbar { margin-bottom: 14px; }
+.print-context, .print-caption { display: none; }
 
 .report-table-toggle { overflow-wrap: anywhere; }
 .report-table-toggle[aria-pressed="true"] {
@@ -1169,4 +1170,60 @@ a { color: var(--accent); }
     .tab-btn[aria-selected="true"] { border: 1px solid Highlight; }
     .button-primary { border-color: ButtonText; }
     .drop-zone:has(#jsonFile:focus-visible) .file-button { outline-color: Highlight; }
+}
+
+@media print {
+    @page { margin: 14mm; }
+
+    body {
+        color-scheme: light;
+        --background: #fff;
+        --surface: #fff;
+        --surface-raised: #f3f4f2;
+        --border: #bfc5bf;
+        --text-color: #202620;
+        --text-muted: #444c44;
+        --accent: #314a3d;
+    }
+
+    .app-header, .source-rail, .skip-link, .report-toolbar, .month-toolbar,
+    .charts-grid, .charts-unavailable .notice, .threshold-control, .report button:not(.activity-month),
+    .activity-data:not([open]), .screen-caption { display: none !important; }
+
+    .workspace {
+        display: block;
+        width: auto;
+        max-width: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .report-heading { display: block; margin-bottom: 8pt; padding-bottom: 8pt; }
+    .report-heading h1 { font-size: 24pt; }
+    .report-kind { color: var(--text-muted); }
+    .print-context { display: block; margin-bottom: 10pt; color: var(--text-muted); font-size: 10pt; }
+    .print-caption { display: inline; }
+    .metric-band { border: 1px solid var(--border); border-radius: 0; break-inside: avoid; }
+    .metric { padding: 7pt; }
+    .metric-value { font-size: 15pt; }
+    .detail-grid, .activity-pattern-tables { display: block; }
+    .stat-box { padding: 6pt 0; font-size: 10pt; }
+    .stat-box h3 i { display: none; }
+    .stat-box li + li { margin-top: 2pt; }
+    .activity-data { margin-block: 10pt; border: 0; }
+    .activity-data summary { min-height: 0; padding: 0; list-style: none; }
+    .activity-data summary::-webkit-details-marker { display: none; }
+    .activity-data table { font-size: 9pt; }
+    .activity-data :is(th, td) { padding: 3pt 5pt; }
+    .activity-data .activity-month {
+        min-height: 0;
+        padding: 0;
+        border: 0;
+        color: var(--text-color);
+        background: transparent;
+        text-decoration: none;
+    }
+    .activity-data thead { display: table-header-group; }
+    .report :is(tr, li) { break-inside: avoid; }
+    .report :is(h2, h3, summary, caption) { break-after: avoid; }
 }

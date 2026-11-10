@@ -23,6 +23,8 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 Choose **Table view** to hide the charts and bring the expandable tables and text summaries closer. Choose it again to restore the charts. The current month, reply settings, and open tables stay selected.
 
+Choose **Print report** to print the selected scope or save it as PDF from the browser dialog. The printout includes the text summary and any tables you expanded. Use **Save PNG** separately for charts.
+
 ### What the report measures
 
 - Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records. Search for another participant by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
@@ -41,7 +43,7 @@ Choose **Table view** to hide the charts and bring the expandable tables and tex
 - Below **Reply timing**, the report shows how many direct reply links could be timed in the current view. The total includes links to missing messages or other chats, so an incomplete export can show fewer measured replies than links.
 - The text report shows short average reply times in seconds, with up to three decimal places.
 - Activity charts keep the dates and times written in the export. Direct replies use Unix timestamps or explicit offsets whenever both messages have them. When legacy dates without offsets are mixed in, adjacent-message timing and direct pairs without two exact timestamps use the written times where both messages have one. Records with the same timestamp are ordered by message ID, including numeric IDs written as strings.
-- A date-only record still counts in activity and can contribute to reply timing when it has a comparable Unix timestamp. Without a comparable time, its ID can interrupt an inferred pair within the same chat history.
+- A date-only record still counts in activity, including when the date uses an accepted legacy format. A comparable Unix timestamp can contribute to reply timing. Without a comparable time, the record's ID can interrupt an inferred pair within the same chat history.
 - Hourly activity uses the hour written in the export, or UTC if only a timestamp supplies the time. Records with a date and no known time still count by day, weekday, and month.
 - Use **Save PNG** on **Activity over time** or **Daily activity** to save a 2,000 × 1,040 image for a report or slide. The PNG uses the current language and light or dark theme. The trend includes visible series and shortens long legend labels to fit. Daily activity uses the selected month.
 - Sender IDs group the same person across name changes. The app numbers identical names to distinguish participants. Reports and CSVs show names without IDs. Dated records without an identified sender count toward monthly activity and have their own trend line. Participant statistics and CSVs cover records linked to a sender.
@@ -99,6 +101,8 @@ Telegram Analyzer показывает активность, участнико�
 
 Нажмите **«Режим таблиц»**, чтобы скрыть графики и быстрее перейти к раскрывающимся таблицам и текстовым сводкам. Повторное нажатие возвращает графики. Выбранный месяц, настройки замера ответов и раскрытые таблицы сохраняются.
 
+Кнопка **«Печать отчёта»** открывает диалог браузера для печати или сохранения в PDF. В документ попадут текстовая сводка выбранного периода и раскрытые таблицы. Графики можно отдельно скачать кнопкой **«Скачать PNG»**.
+
 ### Что считает анализатор
 
 - Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
@@ -117,7 +121,7 @@ Telegram Analyzer показывает активность, участнико�
 - Под меню видно, сколько прямых ответов удалось замерить в открытой сводке. В общее число входят ссылки на отсутствующие сообщения и другие чаты. В неполном экспорте замеров может быть меньше, чем ссылок.
 - Короткие интервалы в сводке среднего времени ответа показаны в секундах с точностью до тысячных.
 - Графики сохраняют даты и время из экспорта. Для прямых ответов используется Unix-время или явное смещение часового пояса, если точное время есть у обоих сообщений. Если в экспорте есть старые даты без смещения, интервалы между соседними сообщениями и прямые ответы без пары точных меток считаются по времени из экспорта, когда оно есть у обоих сообщений. Записи с одинаковым временем упорядочиваются по идентификатору сообщения, даже если числовой идентификатор записан строкой.
-- Записи, в которых указана только дата, входят в статистику активности. Для замера ответов можно использовать их Unix-время, если оно сопоставимо с временем второго сообщения. Если сопоставимого времени нет, идентификатор записи может прервать оценку по соседним сообщениям внутри одной истории.
+- Записи, в которых указана только дата, входят в статистику активности, в том числе при чтении старых форматов даты. Для замера ответов можно использовать их Unix-время, если оно сопоставимо с временем второго сообщения. Если сопоставимого времени нет, идентификатор записи может прервать оценку по соседним сообщениям внутри одной истории.
 - Почасовая активность использует час из экспорта. Если время известно только по метке, используется UTC. Записи с датой без времени остаются в итогах по дням, дням недели и месяцам.
 - Кнопка **«Скачать PNG»** у графиков **«Динамика переписки»** и **«Активность по дням»** сохраняет изображение 2 000 × 1 040 для отчёта или слайда. Сохраняются текущий язык и светлая или тёмная тема. На графике динамики остаются видимые линии, а длинные подписи в легенде сокращаются. Активность по дням строится за выбранный месяц.
 - Идентификаторы отправителей позволяют объединить сообщения человека после смены имени. Участники с одинаковыми именами получают порядковые номера. В отчёте и CSV видны только имена. Записи с датой без определённого отправителя входят в месячную активность и показаны отдельной линией. В статистику участников и CSV входят записи с определённым отправителем.

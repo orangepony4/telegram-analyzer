@@ -3165,6 +3165,42 @@ test('keeps date-only activity without using midnight to measure replies', async
     ]);
 });
 
+test('keeps accepted legacy date-only formats out of reply intervals and hourly activity', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const unix = value => String(Date.parse(value) / 1000);
+    app.selectFile('synthetic-legacy-dates.json').complete({ messages: [
+        { id: 1, from: 'Calendar sender', date: '2025/10/31' },
+        { id: 2, from: 'Calendar reply', date: 'Oct 31, 2025', reply_to_message_id: 1 },
+        { id: 3, from: 'Alice', date: '2025-10-31T01:55:00', date_unixtime: unix('2025-10-31T05:55:00Z') },
+        { id: 4, from: 'Unknown clock', date: '2025/10/31 (legacy (note) 03:00)' },
+        { id: 5, from: 'Bob', date: '2025-10-31T01:05:00', date_unixtime: unix('2025-10-31T06:05:00Z'), reply_to_message_id: 3 },
+        { id: 6, from: 'Carol', date: 'Oct 31, 2025', date_unixtime: unix('2025-10-31T06:10:00Z'), reply_to_message_id: 5 },
+        { id: 7, type: 'service', date: 'Oct 31, 2025 GMT+00:00' },
+        { id: 8, type: 'service', date: '2025/10/31GMT+04:00' },
+    ] });
+    const knownHours = Array.from({ length: 24 }, (_, hour) => hour === 1 ? 2 : hour === 6 ? 1 : 0);
+    for (const id of ['timeOfDayChart', 'monthlyTimeOfDayChart']) {
+        assert.deepEqual(Array.from(app.charts.get(id).data.datasets[0].data), knownHours);
+    }
+    assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data.reduce((sum, count) => sum + count, 0), 8);
+    assert.match(app.element('replyTimingHint').textContent, /2 of 3/);
+    const button = app.element('exportReplyTiming');
+    button.click();
+    app.monthlyTab.click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    app.element('languageToggle').click();
+    assert.match(app.element('replyTimingHint').textContent, /2 из 3/);
+    button.click();
+    const header = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    const adjacent = '"Bob","Carol",1,300.000,0,3600\r\n';
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', header + adjacent],
+        ['telegram-analyzer-2025-10-direct-replies.csv', header + '"Alice","Bob",1,600.000,0,3600\r\n' + adjacent],
+    ]);
+});
+
 test('uses explicit ISO offsets for elapsed time when Unix values are absent', () => {
     const app = createAnalyzer();
     app.selectFile('explicit-offsets.json').complete({ messages: [
