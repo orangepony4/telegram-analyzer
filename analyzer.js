@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     const fileInput = document.getElementById('jsonFile');
     const demoButton = document.getElementById('loadDemoChat');
+    const demoDownloadButton = document.getElementById('downloadDemoJson');
     const clearLoadedDataButton = document.getElementById('clearLoadedData');
     const accountChatChooser = document.getElementById('accountChatChooser');
     const accountChatSearchField = document.getElementById('accountChatSearchField');
@@ -432,6 +433,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     demoButton?.addEventListener('click', loadDemoChat);
+    demoDownloadButton?.addEventListener('click', () => {
+        const file = createDemoFile();
+        downloadBlob(file, file.name);
+    });
     clearLoadedDataButton.addEventListener('click', clearLoadedData);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
@@ -575,6 +580,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadDemoChat() {
+        processSelectedFile(createDemoFile(), { isDemo: true });
+    }
+
+    function createDemoFile() {
         const people = ['Ника', 'Лев', 'Мира'];
         const rows = [
             ['2025-01-10T09:30:00', 0, 'Как будет выглядеть маяк на нашей карте?'],
@@ -603,8 +612,8 @@ document.addEventListener('DOMContentLoaded', () => {
             from_id: `user${person + 1}`, text, media_type: mediaType,
             reply_to_message_id: directReplies[index + 1], reactions: reactions[index + 1],
         }));
-        const json = JSON.stringify({ name: 'Демонстрационный чат', messages });
-        processSelectedFile(new File([json], 'demo-chat.json', { type: 'application/json' }), { isDemo: true });
+        const json = JSON.stringify({ name: 'Демонстрационный чат', messages }, null, 2);
+        return new File([json, '\n'], 'demo-chat.json', { type: 'application/json' });
     }
 
     // Helper function to sanitize HTML and prevent XSS
@@ -2620,6 +2629,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function downloadCsv(rows, filename) {
         const blob = new Blob(['\uFEFF', rows.join('\r\n'), '\r\n'], { type: 'text/csv;charset=utf-8' });
+        downloadBlob(blob, filename);
+    }
+
+    function downloadBlob(blob, filename) {
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = url;

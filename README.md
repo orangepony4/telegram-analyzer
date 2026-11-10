@@ -10,7 +10,7 @@ Analyze Telegram Desktop chat exports in your browser. See who participates, whe
 
 [Analyze my export](https://orangepony4.github.io/telegram-analyzer/?view=upload) · [Download the offline ZIP](https://github.com/orangepony4/telegram-analyzer/releases/latest) · [View source code](https://github.com/orangepony4/telegram-analyzer/tree/main)
 
-The app opens with a fictional three-month conversation. Explore the charts and download a sample CSV right away. **Analyze my export** opens the upload view, where **Sample chat** opens the example. The interface starts in English. Use **RU** in the header to switch to Russian without reopening the report.
+The app opens with a fictional three-month conversation. Explore the charts and download a sample CSV right away. **Analyze my export** opens the upload view. Choose **Sample chat** to open the example or **Download sample JSON** to save the same conversation and try importing it yourself with **Open JSON**. The interface starts in English. Use **RU** in the header to switch to Russian without reopening the report.
 
 ![Telegram Analyzer showing monthly activity and message types for a fictional chat](docs/preview.webp)
 
@@ -73,7 +73,7 @@ Run `npm run package:offline` from a Git checkout to build `telegram-analyzer-of
 
 [Проанализировать свой экспорт](https://orangepony4.github.io/telegram-analyzer/?view=upload) · [Скачать ZIP для работы без интернета](https://github.com/orangepony4/telegram-analyzer/releases/latest) · [Исходный код](https://github.com/orangepony4/telegram-analyzer/tree/main) · [English](#english)
 
-Telegram Analyzer показывает активность, участников и время ответа по экспорту из Telegram Desktop. Ссылка «Попробовать в браузере» открывает вымышленную переписку за три месяца. Можно сразу посмотреть графики и скачать пробный CSV. Ссылка «Проанализировать свой экспорт» ведёт на экран загрузки. Этот же пример там доступен через кнопку **«Демо-чат»**.
+Telegram Analyzer показывает активность, участников и время ответа по экспорту из Telegram Desktop. Ссылка «Попробовать в браузере» открывает вымышленную переписку за три месяца. Можно сразу посмотреть графики и скачать пробный CSV. Ссылка «Проанализировать свой экспорт» ведёт на экран загрузки. Нажмите **«Демо-чат»**, чтобы открыть пример, или **«Скачать пример JSON»**, чтобы сохранить ту же переписку и загрузить её через **«Открыть JSON»**.
 
 Интерфейс открывается на английском. Нажмите **RU** в шапке, чтобы перейти на русский. Текущий отчёт останется открытым.
 

@@ -1370,6 +1370,43 @@ test('loads the fictional demo through normal file import and keeps the newest s
     assert.deepEqual(app.alerts, []);
 });
 
+test('downloads the same fictional JSON without changing the report or replacing a pending import', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const button = app.element('downloadDemoJson');
+    const title = app.element('reportTitle');
+    const initialTitle = title.textContent;
+    assert.equal(app.startupDemo, null);
+    button.focus();
+    button.click();
+    assert.equal(app.focusedElement, button);
+    assert.equal(title.textContent, initialTitle);
+    assert.equal(app.element('loadingIndicator').style.display, undefined);
+
+    const file = app.downloads[0];
+    assert.equal(file.name, 'demo-chat.json');
+    assert.equal(file.blob.type, 'application/json');
+    const json = await file.blob.text();
+    assert.equal(JSON.parse(json).messages.length, 14);
+    const demo = app.selectDemo();
+    assert.equal(await demo.file.text(), json);
+    await demo.complete();
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    const month = app.element('reportMonth').value;
+    button.click();
+    assert.equal(app.monthlyTab.classList.contains('active'), true);
+    assert.equal(app.element('reportMonth').value, month);
+
+    const pending = app.selectFile(file.name);
+    button.click();
+    assert.equal(pending.aborted, false);
+    pending.completeRaw(json);
+    assert.equal(app.element('dropFileName').textContent, file.name);
+    assert.equal(app.allTab.classList.contains('active'), true);
+    assert.match(app.element('messageCount').innerHTML, /class="metric-value">14</);
+    assert.equal(await app.downloads[2].blob.text(), json);
+});
+
 test('selects one statistics tab at a time and wraps keyboard navigation', async () => {
     const app = createAnalyzer();
     await app.selectDemo().complete();

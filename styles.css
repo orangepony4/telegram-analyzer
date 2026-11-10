@@ -422,6 +422,8 @@ a { color: var(--accent); }
     gap: 8px;
 }
 
+.demo-download { grid-column: 1 / -1; }
+
 .source-clear { justify-self: start; }
 
 .source-file {
