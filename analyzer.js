@@ -191,8 +191,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ],
         participantStats: ['Participant statistics', 'Статистика по участникам:'],
         participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
-        meanDelay: ['Average response delay (minutes)', 'Средняя задержка ответа (в минутах):'],
-        monthDelay: ['Average response delay this month (minutes)', 'Средняя задержка ответа (за месяц, в минутах):'],
+        meanDelay: ['Average reply time by pair', 'Среднее время ответа по парам участников'],
+        monthDelay: ['Average reply time by pair this month', 'Среднее время ответа по парам за месяц'],
         delayFor: [name => `Average response delay for ${name}`, name => `Средняя задержка ответа ${name}:`],
         totalWords: ['Total word count', 'Общее количество слов:'],
         monthWords: ['Word count', 'Количество слов:'],
@@ -214,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
         toParticipant: ['To', 'К'],
         fromParticipant: ['From', 'От'],
         seconds: ['sec', 'сек'],
+        lessThan: [value => 'Less than ' + value, value => 'Меньше ' + value],
         minutes: ['min', 'мин'],
         hours: ['hr', 'ч'],
         days: ['d', 'дн'],
@@ -249,6 +250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const syntheticNames = new Map();
     let language = 'en';
     let countFormat;
+    let replyMinutesFormat;
     let monthFormat;
     let dayFormat;
     let weekdayFormat;
@@ -537,6 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.documentElement) document.documentElement.lang = next;
         const locale = next === 'ru' ? 'ru-RU' : 'en';
         countFormat = new Intl.NumberFormat(locale);
+        replyMinutesFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
         dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
         weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
@@ -1923,7 +1926,7 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const [sender, responders] of Object.entries(responseTimes)) {
             for (const [responder, times] of Object.entries(responders)) {
                 const bySender = averages[responder] ??= Object.create(null);
-                bySender[sender] = times.reduce((sum, seconds) => sum + seconds, 0) / times.length / 60;
+                bySender[sender] = times.reduce((sum, seconds) => sum + seconds, 0) / times.length;
             }
         }
         return averages;
@@ -2555,8 +2558,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function formatShortReplyTime(seconds) {
+        // Round before picking a unit so the seconds readout never displays 60.
+        const milliseconds = Math.round(seconds * 1000);
+        if (milliseconds >= 60_000) return null;
+        const unit = translate('seconds');
+        if (seconds > 0 && milliseconds === 0) return translate('lessThan', countFormat.format(0.001) + ' ' + unit);
+        return countFormat.format(milliseconds / 1000) + ' ' + unit;
+    }
+
     function formatTime(seconds) {
-        if (seconds < 60) return `${Math.round(seconds)} ${translate('seconds')}`;
+        const shortTime = formatShortReplyTime(seconds);
+        if (shortTime !== null) return shortTime;
         if (seconds < 3600) return `${Math.round(seconds / 60)} ${translate('minutes')}`;
         if (seconds < 86400) return `${Math.round(seconds / 3600)} ${translate('hours')}`;
         return `${Math.round(seconds / 86400)} ${translate('days')}`;
@@ -2722,8 +2735,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 html += `<li><strong>${translate('delayFor', sanitizedResponder)}</strong><ul>`;
                 validInitiators.forEach(initiator => {
                     const sanitizedInitiator = sanitizeHTML(participantLabel(initiator));
-                    const avgTime = initiatorDelays[initiator]?.toFixed(1) || 'N/A';
-                    html += `<li>${translate('toParticipant')} <strong>${sanitizedInitiator}</strong>: ${avgTime} ${translate('minutes')}</li>`;
+                    const seconds = initiatorDelays[initiator];
+                    const avgTime = formatShortReplyTime(seconds)
+                        ?? (replyMinutesFormat.format(seconds / 60) + ' ' + translate('minutes'));
+                    html += `<li>${translate('toParticipant')} <strong>${sanitizedInitiator}</strong>: ${avgTime}</li>`;
                 });
                 html += `</ul></li>`;
             }

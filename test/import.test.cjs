@@ -942,6 +942,56 @@ test('orders equal timestamps by numeric message ID in replies and participant n
     ]);
 });
 
+test('shows precise localized short reply times and carries rounded seconds into minutes', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const rows = [
+        [1, '12:00:00', 'Alice'],
+        [2, '12:00:02', 'Bob', 1],
+        [3, '12:00:02', 'Carol', 2],
+        [4, '12:00:02.125', 'Dana', 3],
+        [5, '12:01:02.124', 'Eve', 4],
+        [6, '12:02:02.124', 'Faye', 5],
+        [7, '12:02:03', 'Tiny sender'],
+        [8, '12:02:03.001', 'Tiny responder', 7],
+        [9, '12:02:03.001', 'Tiny sender'],
+        [10, '12:02:03.001', 'Tiny responder', 9],
+        [11, '12:02:03.001', 'Tiny sender'],
+        [12, '12:02:03.001', 'Tiny responder', 11],
+        [13, '12:03:00', 'Carry sender'],
+        [14, '12:03:59.999', 'Carry responder', 13],
+        [15, '12:04:00', 'Carry sender'],
+        [16, '12:05:00', 'Carry responder', 15],
+    ];
+    app.selectFile('synthetic.json').complete({ messages: rows.map(([id, time, from, reply]) => ({
+        id, date: '2026-11-10T' + time + 'Z', from, reply_to_message_id: reply,
+    })) });
+
+    const expected = [
+        ['Alice', '2 sec', '2 сек'],
+        ['Bob', '0 sec', '0 сек'],
+        ['Carol', '0.125 sec', '0,125 сек'],
+        ['Dana', '59.999 sec', '59,999 сек'],
+        ['Eve', '1.0 min', '1,0 мин'],
+        ['Tiny sender', 'Less than 0.001 sec', 'Меньше 0,001 сек'],
+        ['Carry sender', '1.0 min', '1,0 мин'],
+    ];
+    const assertTimes = (details, column) => {
+        for (const [sender, ...times] of expected) {
+            assert.ok(details.innerHTML.includes(sender + '</strong>: ' + times[column] + '</li>'), sender);
+        }
+    };
+    assertTimes(app.element('averageResponseDelayStats'), 0);
+    assert.match(app.element('participantStats').innerHTML, /Dana<\/strong>: 0\.125 sec/);
+    app.monthlyTab.click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    const monthly = app.element('monthlyAverageResponseDelayStats');
+    assertTimes(monthly, 0);
+    app.element('languageToggle').click();
+    assertTimes(monthly, 1);
+});
+
 test('shares a long reply threshold between the overview, monthly report and both CSV scopes', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     app.selectFile('replies.json').complete({ messages: [
