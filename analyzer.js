@@ -39,10 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const overviewTypes = {
         panel: document.getElementById('overviewMessageTypes'),
+        exportButton: document.getElementById('exportOverviewMessageTypes'),
         rows: document.getElementById('overviewMessageTypeRows'),
     };
     const monthlyTypes = {
         panel: document.getElementById('monthlyMessageTypes'),
+        exportButton: document.getElementById('exportMonthlyMessageTypes'),
         rows: document.getElementById('monthlyMessageTypeRows'),
     };
     const overviewReactions = {
@@ -417,6 +419,15 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
     overviewTypes.panel.addEventListener('toggle', refreshOverviewMessageTypes);
     monthlyTypes.panel.addEventListener('toggle', refreshMonthlyMessageTypes);
+    overviewTypes.exportButton.addEventListener('click', () => {
+        if (allStatsTab.classList.contains('active')) downloadMessageTypeCounts(overviewData?.activity.messageTypes);
+    });
+    monthlyTypes.exportButton.addEventListener('click', () => {
+        const selected = monthsData[currentMonthIndex];
+        if (selected && monthlyStatsTab.classList.contains('active')) {
+            downloadMessageTypeCounts(selected.data.messageTypes, selected.month);
+        }
+    });
     overviewReactions.panel.addEventListener('toggle', refreshOverviewReactions);
     monthlyReactions.panel.addEventListener('toggle', refreshMonthlyReactions);
     overviewReactions.exportButton.addEventListener('click', () => {
@@ -2222,9 +2233,10 @@ document.addEventListener('DOMContentLoaded', () => {
         renderMessageTypeCounts(monthlyTypes, monthsData[currentMonthIndex]?.data.messageTypes);
     }
 
-    function renderMessageTypeCounts({ panel, rows }, counts) {
+    function renderMessageTypeCounts({ panel, exportButton, rows }, counts) {
         const entries = Object.entries(counts ?? {});
         panel.hidden = entries.length === 0;
+        exportButton.disabled = panel.hidden;
         if (panel.hidden) panel.open = false;
         rows.replaceChildren();
         if (!panel.open) return;
@@ -2802,17 +2814,27 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadCsv(rows, `telegram-analyzer-${period}reactions.csv`);
     }
 
+    function downloadMessageTypeCounts(counts, month) {
+        if (statsContainer.style.display !== 'block') return;
+        const entries = Object.entries(counts ?? {});
+        if (!entries.length) return;
+        const rows = ['message_type,count'];
+        for (const [type, count] of entries) rows.push(`${csvTextField(type)},${count}`);
+        const period = month ? `${month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}message-types.csv`);
+    }
+
     function downloadReplyTiming() {
         if (exportReplyTimingButton.disabled || statsContainer.style.display !== 'block') return;
         const month = selectedReplyMonth();
         const responseTimes = selectedResponseTimes(month?.data ?? overallResponseStats);
         const rows = ['sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds'];
         for (const [sender, responders] of Object.entries(responseTimes)) {
-            const senderField = csvParticipantName(sender);
+            const senderField = csvTextField(sender);
             for (const [responder, times] of Object.entries(responders)) {
                 const total = times.reduce((sum, seconds) => sum + seconds, 0);
                 const longReplies = times.filter(seconds => seconds > ignoredMessageThreshold).length;
-                rows.push([senderField, csvParticipantName(responder), times.length,
+                rows.push([senderField, csvTextField(responder), times.length,
                     (total / times.length).toFixed(3), longReplies, ignoredMessageThreshold].join(','));
             }
         }
@@ -2824,16 +2846,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (participantTotals.size === 0) return;
         const rows = ['Участник,Сообщения,Средняя длина сообщения'];
         for (const [participant, { messageCount, textLength }] of participantTotals) {
-            rows.push(`${csvParticipantName(participant)},${messageCount},${(textLength / messageCount).toFixed(1)}`);
+            rows.push(`${csvTextField(participant)},${messageCount},${(textLength / messageCount).toFixed(1)}`);
         }
         downloadCsv(rows, filename);
     }
 
-    function csvParticipantName(participant) {
-        const name = String(participant);
-        // Prevent spreadsheet programs from treating an imported name as a formula.
-        const safeName = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(name) ? "'" + name : name;
-        return `"${safeName.replaceAll('"', '""')}"`;
+    function csvTextField(value) {
+        const text = String(value);
+        // Prevent spreadsheet programs from treating imported text as a formula.
+        const safeText = /^\s*[=+@＝＋＠－-]|^[\t\r\n]/u.test(text) ? "'" + text : text;
+        return `"${safeText.replaceAll('"', '""')}"`;
     }
 
     function downloadCsv(rows, filename) {

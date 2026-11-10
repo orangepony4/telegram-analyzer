@@ -2422,6 +2422,61 @@ test('counts exported reactions by message month without exposing reaction metad
     assert.equal(app.element('monthlyReactionTotal').textContent, '');
 });
 
+test('exports formula-safe type counts for the active report and keeps keys stable across languages', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    const overview = app.element('exportOverviewMessageTypes');
+    const monthly = app.element('exportMonthlyMessageTypes');
+    const unsafe = '=TYPE("A,B")';
+    app.selectFile('synthetic-types.json').complete({ messages: [
+        { id: 1, from: 'Synthetic sender', date: '2026-10-20T00:00:00Z', text: 'Synthetic body' },
+        { id: 2, from: 'Synthetic sender', date: '2026-10-20T00:01:00Z', photo: 'photos/synthetic.jpg' },
+        { id: 3, type: 'service', date: '2026-10-20T00:02:00Z', action: 'create_group' },
+        { id: 4, from: 'Synthetic sender', date: '2026-11-01T00:00:00Z', media_type: unsafe },
+        { id: 5, type: 'unsupported' },
+        { id: 6, from: 'Synthetic sender', date: '2026-11-01T00:01:00Z', media_type: unsafe },
+        { id: 7, from: 'Synthetic sender', date: '2026-11-01T00:02:00Z', text: 'Another synthetic body' },
+    ] });
+
+    assert.equal(overview.disabled, false);
+    assert.equal(monthly.disabled, false);
+    app.element('overviewMessageTypes').open = true;
+    app.element('overviewMessageTypes').toggle();
+    overview.click();
+    monthly.click();
+    assert.equal(app.downloads.length, 1);
+    app.monthlyTab.click();
+    app.element('monthlyMessageTypes').open = true;
+    app.element('monthlyMessageTypes').toggle();
+    monthly.click();
+    overview.click();
+    assert.equal(app.downloads.length, 2);
+    app.element('prevMonth').click();
+    monthly.click();
+    app.element('languageToggle').click();
+    monthly.click();
+
+    const files = await Promise.all(app.downloads.map(async ({ name, blob }) => [
+        name, Buffer.from(await blob.arrayBuffer()).toString('utf8'),
+    ]));
+    const header = '\uFEFFmessage_type,count\r\n';
+    const unsafeRow = "\"'=TYPE(\"\"A,B\"\")\",2\r\n";
+    const october = '"text",1\r\n"photo",1\r\n"service",1\r\n';
+    assert.deepEqual(files, [
+        ['telegram-analyzer-message-types.csv', header + '"text",2\r\n"photo",1\r\n"service",1\r\n'
+            + unsafeRow + '"unsupported",1\r\n'],
+        ['telegram-analyzer-2026-11-message-types.csv', header + unsafeRow + '"text",1\r\n'],
+        ['telegram-analyzer-2026-10-message-types.csv', header + october],
+        ['telegram-analyzer-2026-10-message-types.csv', header + october],
+    ]);
+
+    app.element('clearLoadedData').click();
+    assert.equal(overview.disabled, true);
+    assert.equal(monthly.disabled, true);
+    overview.click();
+    monthly.click();
+    assert.equal(app.downloads.length, 4);
+});
+
 test('exports exact reaction counts from the active report without names or reaction metadata', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     const overview = app.element('exportOverviewReactions');

@@ -245,6 +245,9 @@
 
                     <details id="overviewMessageTypes" class="activity-data" hidden>
                         <summary data-ru="Типы сообщений в таблице">Message types table</summary>
+                        <button type="button" id="exportOverviewMessageTypes" class="button button-secondary activity-export" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV типов">Types CSV</span>
+                        </button>
                         <table class="message-type-table">
                             <caption data-ru="Записи каждого типа за всю переписку, включая записи без даты.">Records by type across the whole chat, including undated records.</caption>
                             <thead><tr><th scope="col" data-ru="Тип">Type</th><th scope="col" data-ru="Число">Count</th></tr></thead>
@@ -367,6 +370,9 @@
 
                     <details id="monthlyMessageTypes" class="activity-data" hidden>
                         <summary data-ru="Типы сообщений в таблице">Message types table</summary>
+                        <button type="button" id="exportMonthlyMessageTypes" class="button button-secondary activity-export" aria-describedby="currentMonth" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV типов">Types CSV</span>
+                        </button>
                         <table class="message-type-table" aria-describedby="currentMonth">
                             <caption data-ru="Записи каждого типа за выбранный месяц.">Records by type for the selected month.</caption>
                             <thead><tr><th scope="col" data-ru="Тип">Type</th><th scope="col" data-ru="Число">Count</th></tr></thead>
