@@ -685,6 +685,13 @@ a { color: var(--accent); }
 
 .report-toolbar { margin-bottom: 14px; }
 
+.report-table-toggle { overflow-wrap: anywhere; }
+.report-table-toggle[aria-pressed="true"] {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
+}
+
 .reply-timing {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
@@ -793,7 +800,7 @@ a { color: var(--accent); }
     background: var(--border);
 }
 
-.charts-unavailable .metric-band {
+:is(.charts-unavailable, .table-view) .metric-band {
     border-bottom: 1px solid var(--border);
     border-radius: var(--radius);
 }
@@ -956,7 +963,7 @@ a { color: var(--accent); }
     clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
-.charts-unavailable .charts-grid { display: none; }
+:is(.charts-unavailable, .table-view) .charts-grid { display: none; }
 
 .activity-data {
     margin-top: 12px;

@@ -795,8 +795,25 @@ test('jumps between available months and keeps charts, arrows, language and CSV 
     assert.equal(app.monthlyTab.disabled, true);
 });
 
+test('keeps the table-view choice when switching report scope or reloading the sample', () => {
+    const app = createAnalyzer();
+    const toggle = app.element('reportTableView');
+    const stats = app.element('.stats-container');
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+    assert.ok(stats.classList.contains('table-view'));
+    app.monthlyTab.click();
+    app.element('loadDemoChat').click();
+    assert.ok(stats.classList.contains('table-view'));
+    assert.equal(toggle.getAttribute('aria-pressed'), 'true');
+    toggle.click();
+    assert.equal(toggle.getAttribute('aria-pressed'), 'false');
+    assert.ok(!stats.classList.contains('table-view'));
+});
+
 test('opens dated activity as a localized table without charts and jumps to its month', () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    assert.ok(app.element('reportTableView').hidden);
     const details = app.element('monthlyActivity');
     const rows = app.element('monthlyActivityRows');
     app.selectFile('activity.json').complete({ messages: [
@@ -2859,6 +2876,41 @@ test('counts formatted Telegram Desktop rich text in both report scopes and CSVs
     const expectedCsv = 'Участник,Сообщения,Средняя длина сообщения\r\n'
         + '"Rich",1,' + expectedLength + '\r\n"Legacy",1,8.0\r\n"Malformed",1,0.0\r\n"Deep",1,0.0\r\n';
     for (const { blob } of app.downloads) assert.equal(await blob.text(), expectedCsv);
+});
+
+test('uses inline images as rich word boundaries without adding text characters', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const plain = text => ({ type: 'plain', text });
+    const concat = (...text) => ({ type: 'concat', text });
+    const paragraph = text => ({ type: 'paragraph', text });
+    const image = { type: 'inline_image', document_id: '123456', file_skip_reason: 'file_type' };
+    const fixtures = [
+        ['Image between words', [paragraph(concat(plain('Open'), image, plain('map')))], 2, '7.0'],
+        ['Styled word', [paragraph(concat(plain('co'), { type: 'bold', text: plain('operate') }))], 1, '9.0'],
+        ['Image alone', [paragraph(image)], 0, '0.0'],
+        ['Image-only block', [paragraph(plain('Side')), paragraph(image), paragraph(plain('view'))], 2, '9.0'],
+        ['Literal replacement character', [paragraph(plain('A\uFFFCB'))], 1, '3.0'],
+        ['Custom emoji', [paragraph(concat(plain('go'), { type: 'custom_emoji', text: '🙂' }, plain('now')))], 2, '6.0'],
+        ['Image inside a cell', [{ type: 'table', rows: [{ cells: [{ text: concat(plain('find'), image, plain('map')) }] }] }], 2, '7.0'],
+    ];
+    app.selectFile('synthetic-rich-words.json').complete({ messages: fixtures.map(([from, blocks], index) => ({
+        id: index + 1, type: 'message', from, date: '2026-10-20T12:00:00Z', rich_message: { blocks },
+    })) });
+    for (const [from, , words] of fixtures) {
+        const item = from + '</strong>: ' + words + (words === 1 ? ' word' : ' words') + '</li>';
+        assert.ok(app.element('wordCountStats').innerHTML.includes(item), from);
+        assert.ok(app.element('monthlyWordCountStats').innerHTML.includes(item), from);
+    }
+    app.element('exportParticipants').click();
+    app.monthlyTab.click();
+    app.element('languageToggle').click();
+    app.element('exportMonthlyParticipants').click();
+    const csv = 'Участник,Сообщения,Средняя длина сообщения\r\n'
+        + fixtures.map(([from, , , length]) => '"' + from + '",1,' + length + '\r\n').join('');
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-participants.csv', csv],
+        ['telegram-analyzer-2026-10-participants.csv', csv],
+    ]);
 });
 
 test('counts words in unspaced scripts and ignores standalone punctuation and emoji', async () => {

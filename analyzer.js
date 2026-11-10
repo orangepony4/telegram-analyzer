@@ -62,6 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const allStatsTab = document.querySelector('.tab-btn[data-tab="all"]');
     const monthlyStatsTab = document.querySelector('.tab-btn[data-tab="monthly"]');
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
+    const reportTableView = document.getElementById('reportTableView');
     const exportParticipantsButton = document.getElementById('exportParticipants');
     const exportMonthlyParticipantsButton = document.getElementById('exportMonthlyParticipants');
     const chartPngButtons = new Map(
@@ -378,6 +379,11 @@ document.addEventListener('DOMContentLoaded', () => {
     statsTabs.forEach(tab => {
         tab.addEventListener('click', () => selectStatsTab(tab));
         tab.addEventListener('keydown', event => handleStatsTabKey(tab, event));
+    });
+    reportTableView.addEventListener('click', () => {
+        const showTables = reportTableView.getAttribute('aria-pressed') !== 'true';
+        statsContainer.classList.toggle('table-view', showTables);
+        reportTableView.setAttribute('aria-pressed', String(showTables));
     });
 
     function selectStatsTab(selected) {
@@ -975,13 +981,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }).join('');
     }
 
-    function getReportMessageText({ text, rich_message: richMessage }) {
-        if (typeof text === 'string' || Array.isArray(text)) return getMessageText(text);
-        if (!Array.isArray(richMessage?.blocks)) return '';
+    function countReportText({ text, rich_message: richMessage }) {
+        if (typeof text === 'string' || Array.isArray(text)) {
+            const plainText = getMessageText(text);
+            return { words: countWords(plainText), textLength: countTextCharacters(plainText) };
+        }
+        if (!Array.isArray(richMessage?.blocks)) return { words: 0, textLength: 0 };
 
-        const paragraphs = [];
+        const paragraphs = { text: [], wordText: [] };
         for (const block of richMessage.blocks) appendRichBlock(block, paragraphs, 0);
-        return paragraphs.join('\n');
+        return {
+            words: countWords(paragraphs.wordText.join('\n')),
+            textLength: countTextCharacters(paragraphs.text.join('\n')),
+        };
     }
 
     function appendRichBlock(block, paragraphs, depth) {
@@ -1014,7 +1026,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const parts = [];
         appendRichInline(value, parts, 0);
         const text = parts.join('');
-        if (text) paragraphs.push(text);
+        if (!text) return;
+        paragraphs.text.push(text);
+        paragraphs.wordText.push(parts.includes(null) ? parts.map(part => part ?? ' ').join('') : text);
     }
 
     function appendRichInline(value, parts, depth) {
@@ -1024,7 +1038,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (Array.isArray(value)) {
             for (const child of value) appendRichInline(child, parts, depth + 1);
         } else if (value && typeof value === 'object') {
-            appendRichInline(value.text, parts, depth + 1);
+            // A null part is empty in the text join and a boundary in the word join.
+            if (value.type === 'inline_image') parts.push(null);
+            else appendRichInline(value.text, parts, depth + 1);
         }
     }
 
@@ -1422,6 +1438,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showChartsUnavailable() {
         clearRenderedCharts();
         statsContainer.classList.add('charts-unavailable');
+        reportTableView.hidden = true;
         document.getElementById('chartsUnavailableNotice').hidden = false;
     }
 
@@ -1858,9 +1875,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { message: msg, calendar, hour, time } = timing;
             const replyLink = replyLinkId(msg);
             if (replyLink !== null) linkedReplies++;
-            const text = msg.from ? getReportMessageText(msg) : '';
-            const words = countWords(text);
-            const textLength = countTextCharacters(text);
+            const { words, textLength } = msg.from ? countReportText(msg) : { words: 0, textLength: 0 };
             if (msg.from) {
                 wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
                 addParticipantMessage(participantTotals, msg.from, textLength);
