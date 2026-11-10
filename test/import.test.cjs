@@ -873,6 +873,37 @@ test('exports reply timing for the active report scope and method with formula-s
     assert.equal(button.disabled, true);
 });
 
+test('breaks adjacent estimates at chronologically placed records with no identifiable sender', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const button = app.element('exportReplyTiming');
+    const mode = app.element('replyTiming');
+    app.selectFile('synthetic.json').complete({ messages: [
+        { id: 1, from: 'A', date: '2026-09-30T23:59:00Z' },
+        { id: 2, type: 'message', date: '2026-10-01T00:00:00Z' },
+        { id: 3, from: 'B', date: '2026-10-01T00:01:00Z', reply_to_message_id: 1 },
+        { id: 4, type: 'service', date: '2026-10-01T00:02:00Z' },
+        { id: 5, from: 'C', date: '2026-10-01T00:03:00Z' },
+        { id: 6, from: '\t  ', date: '2026-10-01T00:04:00Z' },
+        { id: 7, from: 'D', date: '2026-10-01T00:05:00Z' },
+    ] });
+    button.click();
+    app.monthlyTab.click();
+    button.click();
+    mode.value = 'direct';
+    mode.change();
+    button.click();
+    const header = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    const adjacent = header + '"B","C",1,120.000,0,3600\r\n';
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', adjacent],
+        ['telegram-analyzer-2026-10-adjacent-replies.csv', adjacent],
+        ['telegram-analyzer-2026-10-direct-replies.csv', header + '"A","B",1,120.000,0,3600\r\n'],
+    ]);
+    assert.equal(app.element('overviewParticipantCount').textContent, '4');
+    assert.equal(app.element('monthlyParticipantCount').textContent, '3');
+    assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">6</);
+});
+
 test('shares a long reply threshold between the overview, monthly report and both CSV scopes', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     app.selectFile('replies.json').complete({ messages: [
@@ -1957,6 +1988,66 @@ test('counts exported reactions by message month without exposing reaction metad
     assert.deepEqual(counts('monthlyReactionRows'), []);
     assert.equal(app.element('overviewReactionTotal').textContent, '');
     assert.equal(app.element('monthlyReactionTotal').textContent, '');
+});
+
+test('exports exact reaction counts from the active report without names or reaction metadata', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const overview = app.element('exportOverviewReactions');
+    const monthly = app.element('exportMonthlyReactions');
+    const maximum = 4_294_967_295;
+    app.selectFile('reactions.json').complete({ messages: [
+        { id: 1, from: 'Synthetic sender', date: '2026-10-31T23:50:00-08:00', reactions: [
+            { type: 'emoji', emoji: '👏', count: 3, recent: [{ from: 'Synthetic reactor' }] },
+            { type: 'custom_emoji', document_id: '123456789', count: 1 },
+            { type: 'paid', count: maximum },
+        ] },
+        { id: 2, date: '2026-11-01T00:05:00+08:00', reactions: [
+            { type: 'paid', count: maximum },
+            { type: 'emoji', emoji: '👏', count: 4 },
+            { type: 'emoji', emoji: '=UNSAFE', count: 999 },
+        ] },
+        { id: 3, reactions: [{ type: 'emoji', emoji: '🎉', count: 1 }] },
+        { id: 4, date: '2026-12-01T00:00:00Z' },
+    ] });
+
+    assert.equal(overview.disabled, false);
+    overview.click();
+    monthly.click();
+    app.monthlyTab.click();
+    assert.equal(monthly.disabled, true);
+    monthly.click();
+    overview.click();
+    assert.equal(app.downloads.length, 1);
+    app.element('prevMonth').click();
+    assert.equal(monthly.disabled, false);
+    monthly.click();
+    app.element('prevMonth').click();
+    monthly.click();
+    app.element('languageToggle').click();
+    monthly.click();
+
+    const files = await Promise.all(app.downloads.map(async ({ name, blob }) => [
+        name, Buffer.from(await blob.arrayBuffer()).toString('utf8'),
+    ]));
+    const header = '\uFEFFreaction_type,emoji,count\r\n';
+    assert.deepEqual(files[0], [
+        'telegram-analyzer-reactions.csv',
+        header + 'paid,,8589934590\r\nemoji,👏,7\r\ncustom_emoji,,1\r\nemoji,🎉,1\r\n',
+    ]);
+    assert.deepEqual(files[1], [
+        'telegram-analyzer-2026-11-reactions.csv', header + 'paid,,4294967295\r\nemoji,👏,4\r\n',
+    ]);
+    assert.deepEqual(files[2], [
+        'telegram-analyzer-2026-10-reactions.csv', header + 'paid,,4294967295\r\nemoji,👏,3\r\ncustom_emoji,,1\r\n',
+    ]);
+    assert.deepEqual(files[3], files[2]);
+
+    app.element('clearLoadedData').click();
+    assert.equal(overview.disabled, true);
+    assert.equal(monthly.disabled, true);
+    overview.click();
+    monthly.click();
+    assert.equal(app.downloads.length, 4);
 });
 
 test('counts games, invoices, giveaways and paid media without exposing their metadata', async () => {

@@ -237,6 +237,9 @@
 
                     <details id="overviewReactionSummary" class="activity-data" hidden>
                         <summary data-ru="Реакции на сообщения">Message reactions</summary>
+                        <button type="button" id="exportOverviewReactions" class="button button-secondary activity-export" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV реакций">Reactions CSV</span>
+                        </button>
                         <table>
                             <caption data-ru="Суммы реакций из экспорта по всем сообщениям">Exported reaction counts across all messages</caption>
                             <thead><tr><th scope="col" data-ru="Реакция">Reaction</th><th scope="col" data-ru="Количество">Count</th></tr></thead>
@@ -347,6 +350,9 @@
 
                     <details id="monthlyReactionSummary" class="activity-data" hidden>
                         <summary data-ru="Реакции на сообщения">Message reactions</summary>
+                        <button type="button" id="exportMonthlyReactions" class="button button-secondary activity-export" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV реакций">Reactions CSV</span>
+                        </button>
                         <table aria-describedby="currentMonth">
                             <caption data-ru="Реакции на сообщения, отправленные в этом месяце. Реакции могли появиться позже.">Reactions to messages sent in this month. Some reactions may have been added later.</caption>
                             <thead><tr><th scope="col" data-ru="Реакция">Reaction</th><th scope="col" data-ru="Количество">Count</th></tr></thead>

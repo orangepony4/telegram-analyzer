@@ -36,11 +36,13 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     const overviewReactions = {
         panel: document.getElementById('overviewReactionSummary'),
+        exportButton: document.getElementById('exportOverviewReactions'),
         rows: document.getElementById('overviewReactionRows'),
         total: document.getElementById('overviewReactionTotal'),
     };
     const monthlyReactions = {
         panel: document.getElementById('monthlyReactionSummary'),
+        exportButton: document.getElementById('exportMonthlyReactions'),
         rows: document.getElementById('monthlyReactionRows'),
         total: document.getElementById('monthlyReactionTotal'),
     };
@@ -374,6 +376,15 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
     overviewReactions.panel.addEventListener('toggle', refreshOverviewReactions);
     monthlyReactions.panel.addEventListener('toggle', refreshMonthlyReactions);
+    overviewReactions.exportButton.addEventListener('click', () => {
+        if (allStatsTab.classList.contains('active')) downloadReactionCounts(overviewData?.reactionCounts);
+    });
+    monthlyReactions.exportButton.addEventListener('click', () => {
+        const selected = monthsData[currentMonthIndex];
+        if (selected && monthlyStatsTab.classList.contains('active')) {
+            downloadReactionCounts(selected.data.reactionCounts, selected.month);
+        }
+    });
 
     function selectReportMonth(index) {
         if (!monthsData[index] || index === currentMonthIndex) return;
@@ -652,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const timings = messages.map(message => {
             const timing = readMessageTiming(message);
             if (!useCivilTime && timing.hasWallClock && !Number.isFinite(timing.time)
-                && message.type !== 'service' && (message.from || getSenderId(message) !== null)) {
+                && message.type !== 'service' && (message.from?.trim() || getSenderId(message) !== null)) {
                 // Legacy messages share one civil timeline to avoid mixing timezone assumptions.
                 useCivilTime = true;
             }
@@ -745,6 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const id = getSenderId(message);
             const name = typeof message.from === 'string' && message.from.trim() ? message.from : null;
             if (name) actualNames.add(name);
+            else if (message.from) message.from = null;
             if (!id) {
                 if (name) nameOnly.add(name);
                 continue;
@@ -1627,6 +1639,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (!msg.from) {
                 month.unattributedCount++;
+                if (msg.type !== 'service' && Number.isFinite(time)) previousMessage = null;
                 return;
             }
             addParticipantMessage(month.participantTotals, msg.from, textLength);
@@ -2019,24 +2032,28 @@ document.addEventListener('DOMContentLoaded', () => {
         renderReactionCounts(monthlyReactions, monthsData[currentMonthIndex]?.data.reactionCounts);
     }
 
-    function renderReactionCounts({ panel, rows, total }, counts) {
+    function renderReactionCounts({ panel, exportButton, rows, total }, counts) {
         panel.hidden = !counts?.size;
+        exportButton.disabled = panel.hidden;
         if (panel.hidden) panel.open = false;
         rows.replaceChildren();
         total.textContent = '';
         if (!panel.open || !counts?.size) return;
 
-        const ordered = [...counts].sort(([leftKey, leftCount], [rightKey, rightCount]) => {
-            if (leftCount !== rightCount) return leftCount > rightCount ? -1 : 1;
-            return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
-        });
         let sum = 0n;
-        for (const [key, count] of ordered) {
+        for (const [key, count] of sortedReactionCounts(counts)) {
             const label = reactionLabels.get(key)?.[language === 'ru' ? 1 : 0] ?? key;
             appendCountRow(rows, label, count);
             sum += count;
         }
         total.textContent = countFormat.format(sum);
+    }
+
+    function sortedReactionCounts(counts) {
+        return [...counts].sort(([leftKey, leftCount], [rightKey, rightCount]) => {
+            if (leftCount !== rightCount) return leftCount > rightCount ? -1 : 1;
+            return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+        });
     }
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
@@ -2554,6 +2571,17 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.push(`${reportDayKey(month, day)},${data.dailyActivity[day - 1]}`);
         }
         downloadCsv(rows, `telegram-analyzer-${month}-daily-activity.csv`);
+    }
+
+    function downloadReactionCounts(counts, month) {
+        if (!counts?.size || statsContainer.style.display !== 'block') return;
+        const rows = ['reaction_type,emoji,count'];
+        for (const [key, count] of sortedReactionCounts(counts)) {
+            // Only known types and validated emoji sequences can reach this export.
+            rows.push(reactionLabels.has(key) ? `${key},,${count}` : `emoji,${key},${count}`);
+        }
+        const period = month ? `${month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}reactions.csv`);
     }
 
     function downloadReplyTiming() {
