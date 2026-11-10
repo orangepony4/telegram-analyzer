@@ -88,6 +88,10 @@
                 <div class="account-chat-field account-chat-search" id="accountChatSearchField" hidden>
                     <label for="accountChatSearch" data-ru="Найти чат по названию">Find a chat by name</label>
                     <input type="search" id="accountChatSearch" aria-controls="accountChatSelect" aria-describedby="accountChatSearchStatus" autocomplete="off" spellcheck="false">
+                    <div id="accountChatTypeField" class="account-chat-type" hidden>
+                        <label for="accountChatType" data-ru="Тип чата">Chat type</label>
+                        <select id="accountChatType" aria-controls="accountChatSelect" aria-describedby="accountChatSearchStatus"></select>
+                    </div>
                     <p id="accountChatSearchStatus" class="account-chat-status" role="status"></p>
                 </div>
                 <div class="account-chat-controls">
@@ -239,6 +243,15 @@
                         </div>
                     </details>
 
+                    <details id="overviewMessageTypes" class="activity-data" hidden>
+                        <summary data-ru="Типы сообщений в таблице">Message types table</summary>
+                        <table class="message-type-table">
+                            <caption data-ru="Записи каждого типа за всю переписку, включая записи без даты.">Records by type across the whole chat, including undated records.</caption>
+                            <thead><tr><th scope="col" data-ru="Тип">Type</th><th scope="col" data-ru="Число">Count</th></tr></thead>
+                            <tbody id="overviewMessageTypeRows"></tbody>
+                        </table>
+                    </details>
+
                     <details id="overviewReactionSummary" class="activity-data" hidden>
                         <summary data-ru="Реакции на сообщения">Message reactions</summary>
                         <button type="button" id="exportOverviewReactions" class="button button-secondary activity-export" disabled>
@@ -350,6 +363,15 @@
                                 <tbody id="monthlyHourlyRows"></tbody>
                             </table>
                         </div>
+                    </details>
+
+                    <details id="monthlyMessageTypes" class="activity-data" hidden>
+                        <summary data-ru="Типы сообщений в таблице">Message types table</summary>
+                        <table class="message-type-table" aria-describedby="currentMonth">
+                            <caption data-ru="Записи каждого типа за выбранный месяц.">Records by type for the selected month.</caption>
+                            <thead><tr><th scope="col" data-ru="Тип">Type</th><th scope="col" data-ru="Число">Count</th></tr></thead>
+                            <tbody id="monthlyMessageTypeRows"></tbody>
+                        </table>
                     </details>
 
                     <details id="monthlyReactionSummary" class="activity-data" hidden>

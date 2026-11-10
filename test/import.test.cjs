@@ -576,6 +576,71 @@ test('filters account chats by part of a name without changing the open report o
     assert.deepEqual(values(), ['', '0']);
 });
 
+test('combines account chat type and name filters and preserves them on language change or canceled import', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const type = app.element('accountChatType');
+    const typeField = app.element('accountChatTypeField');
+    const search = app.element('accountChatSearch');
+    const select = app.element('accountChatSelect');
+    const values = () => select.options.map(option => option.value);
+    const filterType = value => {
+        type.value = value;
+        type.change();
+    };
+    app.selectFile('mixed-account.json').complete({
+        chats: { list: [
+            { type: 'personal_chat', name: 'Project', messages: [] },
+            { type: 'private_supergroup', name: 'Project', messages: [{ id: 1, from: 'Ari', text: 'Group entry' }] },
+            { type: 'public_channel', name: 'Project', messages: [] },
+            { type: 'bot_chat', name: 'Project bot', messages: [] },
+            { type: 'saved_messages', messages: [] },
+            { type: 'verification_codes', messages: [] },
+            { type: 'constructor', name: 'Project archive', messages: [] },
+        ] },
+        left_chats: { list: [
+            { type: 'public_supergroup', name: 'Former Project', messages: [] },
+        ] },
+    });
+    assert.equal(typeField.hidden, false);
+    assert.deepEqual(type.options.map(option => option.textContent),
+        ['Все типы', 'Личные чаты', 'Группы', 'Каналы', 'Боты', 'Избранное', 'Системные чаты', 'Другие чаты']);
+
+    filterType('accountTypeGroup');
+    assert.deepEqual(values(), ['', '1', '7']);
+    chooseAccountChat(app, '1');
+    app.element('analyzeAccountChat').click();
+    search.value = 'project';
+    search.input();
+    assert.equal(select.value, '1');
+    assert.equal(app.element('reportTitle').textContent, 'Project');
+
+    app.element('languageToggle').click();
+    assert.equal(type.value, 'accountTypeGroup');
+    assert.equal(type.options[2].textContent, 'Groups');
+    assert.equal(search.value, 'project');
+    assert.equal(select.value, '1');
+    assert.equal(app.element('accountChatSearchStatus').textContent, '2 of 8 chats');
+
+    const pending = app.selectFile('pending-replacement.json');
+    app.element('cancelImport').click();
+    assert.equal(pending.aborted, true);
+    assert.equal(type.value, 'accountTypeGroup');
+    assert.equal(select.value, '1');
+    filterType('accountTypeOther');
+    assert.deepEqual(values(), ['', '6']);
+    assert.equal(select.value, '');
+    assert.equal(app.element('reportTitle').textContent, 'Project');
+
+    app.selectFile('new-account.json').complete({ chats: { list: [
+        { type: 'private_group', name: 'One', messages: [] },
+        { type: 'private_supergroup', name: 'Two', messages: [] },
+    ] } });
+    assert.equal(typeField.hidden, true);
+    assert.equal(type.value, '');
+    assert.equal(search.value, '');
+    assert.deepEqual(values(), ['', '0', '1']);
+});
+
 test('lists valid account chats safely and waits for an explicit analysis', () => {
     const app = createAnalyzer();
     const chooser = app.element('accountChatChooser');
@@ -2221,6 +2286,55 @@ test('classifies Telegram checklists without counting or exposing checklist cont
     for (const { blob } of app.downloads) {
         assert.equal(await blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n"Alice",1,9.0\r\n"Bob",6,2.5\r\n');
     }
+});
+
+test('shows localized message type counts in both report scopes without charts', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    const overview = app.element('overviewMessageTypes');
+    const monthly = app.element('monthlyMessageTypes');
+    const overviewRows = app.element('overviewMessageTypeRows');
+    const monthlyRows = app.element('monthlyMessageTypeRows');
+    const rows = container => container.children.map(row => row.children.map(cell => cell.textContent));
+    const unknownType = '<img src=x onerror=alert(1)>';
+
+    app.selectFile('synthetic-types.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: '2026-10-20T00:00:00Z', text: 'Synthetic text' },
+        { id: 2, from: 'Bob', date: '2026-10-20T00:01:00Z', photo: 'photos/synthetic.jpg' },
+        { id: 3, type: 'service', date: '2026-10-20T00:02:00Z', action: 'create_group' },
+        { id: 4, type: 'unsupported' },
+        { id: 5, from: 'Carol', date: '2026-11-10T00:00:00Z', media_type: unknownType },
+    ] });
+    assert.equal(overview.hidden, false);
+    assert.equal(monthly.hidden, false);
+    assert.deepEqual(rows(overviewRows), []);
+    assert.deepEqual(rows(monthlyRows), []);
+
+    overview.open = true;
+    overview.toggle();
+    assert.deepEqual(rows(overviewRows), [
+        ['Text', '1'], ['Photos', '1'], ['Service events', '1'], [unknownType, '1'], ['Unsupported records', '1'],
+    ]);
+    assert.equal(overviewRows.children[0].children[0].scope, 'row');
+    app.monthlyTab.click();
+    monthly.open = true;
+    monthly.toggle();
+    assert.deepEqual(rows(monthlyRows), [[unknownType, '1']]);
+    app.element('prevMonth').click();
+    assert.equal(monthly.open, true);
+    assert.deepEqual(rows(monthlyRows), [['Text', '1'], ['Photos', '1'], ['Service events', '1']]);
+
+    app.element('languageToggle').click();
+    assert.equal(app.element('reportMonth').value, '2026-10');
+    assert.equal(monthly.open, true);
+    assert.deepEqual(rows(monthlyRows), [['Текст', '1'], ['Фото', '1'], ['Служебные события', '1']]);
+    assert.deepEqual(rows(overviewRows).at(-1), ['Неподдерживаемые записи', '1']);
+    app.selectFile('empty.json').complete({ messages: [] });
+    assert.equal(overview.hidden, true);
+    assert.equal(monthly.hidden, true);
+    assert.equal(overview.open, false);
+    assert.equal(monthly.open, false);
+    assert.deepEqual(rows(overviewRows), []);
+    assert.deepEqual(rows(monthlyRows), []);
 });
 
 test('counts exported reactions by message month without exposing reaction metadata', () => {

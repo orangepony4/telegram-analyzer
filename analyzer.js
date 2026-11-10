@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const accountChatSearchField = document.getElementById('accountChatSearchField');
     const accountChatSearch = document.getElementById('accountChatSearch');
     const accountChatSearchStatus = document.getElementById('accountChatSearchStatus');
+    const accountChatTypeField = document.getElementById('accountChatTypeField');
+    const accountChatType = document.getElementById('accountChatType');
     const accountChatSelect = document.getElementById('accountChatSelect');
     const analyzeAccountChatButton = document.getElementById('analyzeAccountChat');
     const accountChatStatus = document.getElementById('accountChatStatus');
@@ -34,6 +36,14 @@ document.addEventListener('DOMContentLoaded', () => {
         panel: document.getElementById('monthlyActivityPatterns'),
         weekdays: document.getElementById('monthlyWeekdayRows'),
         hours: document.getElementById('monthlyHourlyRows'),
+    };
+    const overviewTypes = {
+        panel: document.getElementById('overviewMessageTypes'),
+        rows: document.getElementById('overviewMessageTypeRows'),
+    };
+    const monthlyTypes = {
+        panel: document.getElementById('monthlyMessageTypes'),
+        rows: document.getElementById('monthlyMessageTypeRows'),
     };
     const overviewReactions = {
         panel: document.getElementById('overviewReactionSummary'),
@@ -78,6 +88,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const languageToggle = document.getElementById('languageToggle');
     const languageToggleLabel = document.getElementById('languageToggleLabel');
     const LOCALE_STORAGE_KEY = 'telegramAnalyzerLocale';
+    const accountChatTypes = new Map([
+        ['personal_chat', 'accountTypeDirect'],
+        ['private_group', 'accountTypeGroup'],
+        ['private_supergroup', 'accountTypeGroup'],
+        ['public_supergroup', 'accountTypeGroup'],
+        ['private_channel', 'accountTypeChannel'],
+        ['public_channel', 'accountTypeChannel'],
+        ['bot_chat', 'accountTypeBot'],
+        ['saved_messages', 'savedMessages'],
+        ['replies', 'accountTypeSystem'],
+        ['verification_codes', 'accountTypeSystem'],
+    ]);
+    const accountTypeOrder = [...new Set(accountChatTypes.values()), 'accountTypeOther'];
+
     const copy = {
         switchLanguage: ['RU · Switch to Russian', 'EN · Переключить на английский'],
         darkTheme: ['Switch to dark theme', 'Переключить на тёмную тему'],
@@ -108,6 +132,13 @@ document.addEventListener('DOMContentLoaded', () => {
         selectChat: ['Choose a chat', 'Выберите чат'],
         selectChatStatus: ['Choose a chat to see its statistics.', 'Выберите чат, чтобы увидеть его статистику.'],
         noMatchingChats: ['No matching chats', 'Подходящих чатов нет'],
+        accountTypeAll: ['All types', 'Все типы'],
+        accountTypeDirect: ['Direct chats', 'Личные чаты'],
+        accountTypeGroup: ['Groups', 'Группы'],
+        accountTypeChannel: ['Channels', 'Каналы'],
+        accountTypeBot: ['Bots', 'Боты'],
+        accountTypeSystem: ['System chats', 'Системные чаты'],
+        accountTypeOther: ['Other chats', 'Другие чаты'],
         accountSearchGroup: ['Available chats', 'Доступные чаты'],
         accountSearchMatches: [
             (shown, total) => `${shown} of ${total} chats`,
@@ -384,6 +415,8 @@ document.addEventListener('DOMContentLoaded', () => {
     exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
+    overviewTypes.panel.addEventListener('toggle', refreshOverviewMessageTypes);
+    monthlyTypes.panel.addEventListener('toggle', refreshMonthlyMessageTypes);
     overviewReactions.panel.addEventListener('toggle', refreshOverviewReactions);
     monthlyReactions.panel.addEventListener('toggle', refreshMonthlyReactions);
     overviewReactions.exportButton.addEventListener('click', () => {
@@ -449,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearLoadedDataButton.addEventListener('click', clearLoadedData);
     cancelImportButton.addEventListener('click', cancelImport);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
+    accountChatType.addEventListener('change', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
         const chat = selectedAccountChat();
         analyzeAccountChatButton.disabled = !chat;
@@ -1102,6 +1136,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!validMessages(chat?.messages)) continue;
                 chats.push({
                     name: accountChatName(chat), number: chats.length + 1,
+                    type: accountChatTypes.get(chat.type) ?? 'accountTypeOther',
                     left: groupIndex === 1, messages: chat.messages,
                 });
             }
@@ -1122,9 +1157,15 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshAccountChooser() {
         if (!accountChats.length) return;
         const query = normalizeSearchText(accountChatSearch.value);
-        const matches = query
-            ? accountChats.filter(chat => normalizeSearchText(resolveText(chat.name)).includes(query))
+        const type = accountChatType.value;
+        const matches = query || type
+            ? accountChats.filter(chat => (!type || chat.type === type)
+                && (!query || normalizeSearchText(resolveText(chat.name)).includes(query)))
             : accountChats;
+        for (const option of accountChatType.options) {
+            const label = translate(option.value || 'accountTypeAll');
+            if (option.textContent !== label) option.textContent = label;
+        }
         const selected = accountChatSelect.value;
         const currentOptions = accountChatSelect.options;
         if (currentOptions.length !== matches.length + 1
@@ -1164,6 +1205,8 @@ document.addEventListener('DOMContentLoaded', () => {
         accountChats = [];
         accountChatChooser.hidden = true;
         accountChatSearchField.hidden = true;
+        accountChatTypeField.hidden = true;
+        accountChatType.replaceChildren();
         accountChatSearch.value = '';
         accountChatSearchStatus.textContent = '';
         accountChatSelect.replaceChildren();
@@ -1174,6 +1217,17 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAccountChooser(chats) {
         accountChats = chats;
         accountChatSearchField.hidden = chats.length < 2;
+        const presentTypes = new Set(chats.map(chat => chat.type));
+        accountChatTypeField.hidden = presentTypes.size < 2;
+        if (!accountChatTypeField.hidden) {
+            const types = ['', ...accountTypeOrder.filter(type => presentTypes.has(type))];
+            const options = types.map(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                return option;
+            });
+            accountChatType.replaceChildren(...options);
+        }
         refreshAccountChooser();
         accountChatChooser.hidden = false;
         setLocalizedText(accountChatStatus, translated('selectChatStatus'));
@@ -1253,6 +1307,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshDailyActivity();
         refreshOverviewPatterns();
         refreshMonthlyPatterns();
+        refreshOverviewMessageTypes();
+        refreshMonthlyMessageTypes();
         refreshOverviewReactions();
         refreshMonthlyReactions();
         allParticipants = new Set();
@@ -1823,6 +1879,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         renderOverviewStatistics();
         refreshOverviewPatterns();
+        refreshOverviewMessageTypes();
         refreshOverviewReactions();
 
         // Создаем графики общей статистики
@@ -1877,6 +1934,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderOverviewStatistics();
         refreshOverviewPatterns();
+        refreshOverviewMessageTypes();
         refreshOverviewReactions();
         updateMonthlyStats({ rebuildCharts: false });
         for (const chart of renderedCharts.values()) {
@@ -2156,6 +2214,23 @@ document.addEventListener('DOMContentLoaded', () => {
         container.append(row);
     }
 
+    function refreshOverviewMessageTypes() {
+        renderMessageTypeCounts(overviewTypes, overviewData?.activity.messageTypes);
+    }
+
+    function refreshMonthlyMessageTypes() {
+        renderMessageTypeCounts(monthlyTypes, monthsData[currentMonthIndex]?.data.messageTypes);
+    }
+
+    function renderMessageTypeCounts({ panel, rows }, counts) {
+        const entries = Object.entries(counts ?? {});
+        panel.hidden = entries.length === 0;
+        if (panel.hidden) panel.open = false;
+        rows.replaceChildren();
+        if (!panel.open) return;
+        for (const [type, count] of entries) appendCountRow(rows, mediaLabel(type), count);
+    }
+
     function refreshOverviewReactions() {
         renderReactionCounts(overviewReactions, overviewData?.reactionCounts);
     }
@@ -2192,6 +2267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
         refreshMonthlyPatterns();
+        refreshMonthlyMessageTypes();
         refreshMonthlyReactions();
         if (!monthsData.length) {
             exportMonthlyParticipantsButton.disabled = true;

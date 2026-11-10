@@ -18,7 +18,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
 2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. While the file is being read, **Cancel import** lets you stop the read and return to your previous report or chat selection.
-3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. The selected chat's full name, message count, and list number appear below the controls. Choose **Analyze chat** to open its report and CSV exports.
+3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. If the export contains several chat types, combine the search with **Chat type**. The selected chat's full name, message count, and list number appear below the controls. Choose **Analyze chat** to open its report and CSV exports.
 4. Open **Overview** for the full chat or **By month** to jump to any month with records. Use the arrows to move between months with records. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
 ### What the report measures
@@ -28,7 +28,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records. Use **Daily CSV** to download those same counts for the selected month with `YYYY-MM-DD` dates.
 - Open **Activity by weekday and hour** in either report to read the same counts as the charts, including zero values. The counts follow the calendar time written in the export.
 - **Message reactions** shows exported emoji counts and separate totals for custom emoji and paid reactions. The monthly table groups counts by the date the messages were sent, since reactions may have been added later. Choose **Reactions CSV** to download the rows in the current table, with the same `reaction_type,emoji,count` columns in either language. The emoji column is empty for the grouped categories. The table and CSV include counts without reactor names or custom emoji IDs. [Telegram Desktop export fields](https://github.com/telegramdesktop/tdesktop/blob/v7.3.2/Telegram/SourceFiles/export/output/export_output_json.cpp#L2393-L2450)
-- Message-type charts count Telegram service events and unsupported records separately. Monthly charts include records with a date.
+- Open **Message types table** in either report to read the record counts by category. The overview includes undated records. The monthly table covers the selected month. Telegram service events and unsupported records have separate rows.
 - Message-type charts and shared-content summaries count each Telegram checklist as one record.
 - Games, invoices, giveaway announcements and results, and paid media also count by type. The report shows the counts without the payment amounts or winner lists.
 - Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
@@ -87,7 +87,7 @@ Telegram Analyzer показывает активность, участнико�
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
 2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Пока файл читается, кнопка **«Отменить импорт»** остановит чтение и вернёт предыдущий отчёт или выбор чата.
-3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Под списком появятся полное название выбранного чата, число сообщений и номер в списке. Нажмите **«Показать статистику»**, чтобы открыть его отчёт и выгрузки CSV.
+3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Если в экспорте несколько типов чатов, можно также выбрать **«Тип чата»**. Под списком появятся полное название выбранного чата, число сообщений и номер в списке. Нажмите **«Показать статистику»**, чтобы открыть его отчёт и выгрузки CSV.
 4. Во вкладке **«Обзор»** видна статистика за всё время. Во вкладке **«По месяцам»** можно сразу выбрать любой месяц с записями или перейти к соседнему месяцу с записями стрелками. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
 ### Что считает анализатор
@@ -97,7 +97,7 @@ Telegram Analyzer показывает активность, участнико�
 - В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей. Кнопка **«CSV по дням»** сохраняет те же значения за выбранный месяц с датами в формате `YYYY-MM-DD`.
 - Раздел **«Активность по дням недели и часам»** есть в обоих отчётах. Таблицы показывают те же значения, что и графики, включая нулевые, по календарному времени из экспорта.
 - В разделе **«Реакции на сообщения»** видны количества обычных эмодзи и отдельные итоги по пользовательским эмодзи и платным реакциям. Месяц определяется по дате сообщения, поскольку реакции могли появиться позже. Кнопка **«CSV реакций»** выгружает строки текущей таблицы с одинаковыми столбцами `reaction_type,emoji,count` в обеих версиях интерфейса. У сгруппированных категорий столбец эмодзи пустой. Таблица и CSV содержат числа без имён поставивших реакции и идентификаторов пользовательских эмодзи. [Поля экспорта Telegram Desktop](https://github.com/telegramdesktop/tdesktop/blob/v7.3.2/Telegram/SourceFiles/export/output/export_output_json.cpp#L2393-L2450)
-- Графики типов сообщений отдельно показывают служебные события и неподдерживаемые записи Telegram. В помесячные графики входят записи с датой.
+- В обеих сводках раздел **«Типы сообщений в таблице»** показывает количество записей каждого типа. В обзор входят записи без даты, а помесячная таблица охватывает выбранный месяц. Служебные события и неподдерживаемые записи Telegram показаны отдельными строками.
 - В графиках типов сообщений и сводках по вложениям каждый список задач Telegram учитывается как одна запись.
 - Игры, счета, объявления и итоги розыгрышей, а также платные медиа учитываются по типам. В отчёте видны числа записей без сумм платежей и списков победителей.
 - При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.

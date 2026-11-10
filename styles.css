@@ -570,6 +570,7 @@ a { color: var(--accent); }
 .account-chat-field select, #accountChatSearch { width: 100%; }
 
 .account-chat-search { margin-bottom: 10px; }
+.account-chat-type { margin-top: 10px; }
 
 .account-chat-status {
     margin-top: 7px;
@@ -980,6 +981,8 @@ a { color: var(--accent); }
 .activity-data th:first-child { text-align: start; }
 .activity-data th[scope="row"] { font-weight: 500; }
 .activity-data tbody tr:last-child > * { border-bottom: 0; }
+.message-type-table :is(th, td) { padding-inline: 3px; }
+.message-type-table :is(th, td):last-child { white-space: nowrap; }
 
 .activity-month {
     min-height: 36px;
