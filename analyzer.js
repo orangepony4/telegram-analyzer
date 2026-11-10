@@ -1215,10 +1215,15 @@ document.addEventListener('DOMContentLoaded', () => {
         resetTrendComparison();
     }
 
-    function clearLoadedData() {
-        const reader = activeImport?.reader;
+    function abortActiveImport() {
+        const pending = activeImport;
         activeImport = null;
-        if (reader?.readyState === FileReader.LOADING) reader.abort();
+        if (pending?.reader.readyState === FileReader.LOADING) pending.reader.abort();
+        return pending;
+    }
+
+    function clearLoadedData() {
+        abortActiveImport();
         resetAccountChooser();
         clearReport();
         selectStatsTab(allStatsTab);
@@ -1244,14 +1249,23 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('chartsUnavailableNotice').hidden = false;
     }
 
+    function savedViewText(element) {
+        const current = localizedText.get(element);
+        if (current != null) return current;
+        const original = staticTranslations.find(entry => entry.element === element);
+        return original?.russian == null ? element.textContent
+            : () => language === 'ru' ? original.russian : original.english;
+    }
+
     function suspendImportView() {
         const previous = {
             reportVisible: statsContainer.style.display === 'block',
             chooserVisible: !accountChatChooser.hidden,
             overallExportDisabled: exportParticipantsButton.disabled,
             monthlyExportDisabled: exportMonthlyParticipantsButton.disabled,
-            placeholderTitle: localizedText.get(placeholderTitle) ?? placeholderTitle.textContent,
-            placeholderText: localizedText.get(placeholderText) ?? placeholderText.textContent,
+            reportHeader: [reportKind, reportTitle, reportMeta].map(savedViewText),
+            placeholderTitle: savedViewText(placeholderTitle),
+            placeholderText: savedViewText(placeholderText),
             language,
         };
         statsContainer.style.display = 'none';
@@ -1270,6 +1284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reportPlaceholder.hidden = true;
             if (previous.language !== language) refreshReportLanguage();
         } else {
+            setReportHeader(...previous.reportHeader);
             setReportPlaceholder(previous.placeholderTitle, previous.placeholderText);
         }
     }
@@ -1281,6 +1296,11 @@ document.addEventListener('DOMContentLoaded', () => {
         clearLoadedDataButton.hidden = false;
 
         if (!isJsonFile(file)) {
+            const pending = abortActiveImport();
+            if (pending) {
+                restoreImportView(pending.previous);
+                hideLoadingIndicator();
+            }
             showFileError(translated('chooseJson'));
             clearFileInput();
             return;

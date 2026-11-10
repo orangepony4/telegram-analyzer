@@ -1280,6 +1280,25 @@ test('cancels a superseded file read without disturbing the newest import', () =
     assert.equal(app.element('exportMonthlyParticipants').disabled, false);
 });
 
+test('a wrong-format replacement cancels the pending read and restores the previous report', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    app.selectFile('saved.json').complete({
+        name: 'Saved chat',
+        messages: [{ id: 1, from: 'Alice', date: '2026-11-01T00:00:00', text: 'Hello' }],
+    });
+    app.monthlyTab.click();
+    const pending = app.selectFile('pending.json');
+    app.element('jsonFile').change({ target: { files: [{ name: 'export.html', type: 'text/html' }] } });
+    assert.equal(pending.aborted, true);
+    assert.equal(app.element('loadingIndicator').style.display, 'none');
+    pending.complete({ name: 'Superseded chat', messages: [] });
+    assert.equal(app.element('reportTitle').textContent, 'Saved chat');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
+    assert.equal(app.element('exportMonthlyParticipants').disabled, false);
+    assert.equal(app.element('fileError').textContent, 'Выберите JSON из Telegram Desktop.');
+});
+
 test('keeps the last upload and disables monthly statistics for an empty export', () => {
     const app = createAnalyzer();
     const older = app.selectFile('old.json');

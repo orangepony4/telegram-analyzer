@@ -48,6 +48,8 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 Use a modern browser and a Telegram Desktop JSON export to analyze your own data. HTML exports use a different structure. If your import fails, check that you chose the Telegram JSON file.
 
+Choosing or dropping a new file stops the previous pending import. If the new file cannot be opened, the last completed report or account chat list remains available.
+
 To work offline, extract the [latest release ZIP](https://github.com/orangepony4/telegram-analyzer/releases/latest) and open `index.html`. Keep the `vendor` folder next to it. Charts, icons, and CSV export work offline. Chat data stays in the browser. The app serves its scripts, styles, and chart library locally, and its content security policy blocks connections made by `fetch` and `XMLHttpRequest`.
 
 ### Development
@@ -110,6 +112,8 @@ Telegram Analyzer показывает активность, участнико�
 ### Работа без интернета и приватность
 
 Для своего чата нужен современный браузер и JSON-экспорт Telegram Desktop. У HTML-экспорта другая структура. Если файл не открывается, проверьте формат экспорта.
+
+Выбор или перетаскивание нового файла останавливает незавершённый импорт. Если новый файл не открывается, последний готовый отчёт или список чатов аккаунта остаётся доступен.
 
 Распакуйте [ZIP из последнего релиза](https://github.com/orangepony4/telegram-analyzer/releases/latest) и откройте `index.html`. Оставьте папку `vendor` рядом с ним. Графики, значки и выгрузки CSV работают без интернета. Данные переписки обрабатываются в браузере. Скрипты, стили и библиотека графиков входят в приложение, а политика безопасности блокирует подключения через `fetch` и `XMLHttpRequest`.
 
