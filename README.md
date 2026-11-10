@@ -18,7 +18,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
 2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. The source panel shows the reading status.
-3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. Select a chat and choose **Analyze chat**. The report and CSV cover the selected chat.
+3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. The selected chat's full name, message count, and list number appear below the controls. Choose **Analyze chat** to open its report and CSV exports.
 4. Open **Overview** for the full chat or **By month** to jump to any month with records. Use the arrows to move between months with records. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
 ### What the report measures
@@ -83,7 +83,7 @@ Telegram Analyzer показывает активность, участнико�
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
 2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Рядом с источником появится статус чтения.
-3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Выберите переписку и нажмите **«Показать статистику»**. Отчёт и CSV будут относиться к выбранному чату.
+3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Под списком появятся полное название выбранного чата, число сообщений и номер в списке. Нажмите **«Показать статистику»**, чтобы открыть его отчёт и выгрузки CSV.
 4. Во вкладке **«Обзор»** видна статистика за всё время. Во вкладке **«По месяцам»** можно сразу выбрать любой месяц с записями или перейти к соседнему месяцу с записями стрелками. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
 ### Что считает анализатор

@@ -496,6 +496,7 @@ test('filters account chats by part of a name without changing the open report o
     const app = createAnalyzer({ search: '?view=upload' });
     const filter = app.element('accountChatSearch');
     const select = app.element('accountChatSelect');
+    const choiceStatus = app.element('accountChatStatus');
     const matches = app.element('accountChatSearchStatus');
     const analyze = app.element('analyzeAccountChat');
     const values = () => select.options.map(option => option.value);
@@ -514,6 +515,8 @@ test('filters account chats by part of a name without changing the open report o
     assert.equal(app.element('accountChatSearchField').hidden, false);
     assert.deepEqual(values(), ['', '0', '1', '2', '3']);
     chooseAccountChat(app, '3');
+    assert.equal(choiceStatus.textContent, 'Выбран чат Weekly Cafe\u0301 Alpha · Покинутый чат · 1 сообщ. · #4');
+    assert.equal(app.element('reportTitle').textContent, 'Выберите чат');
     analyze.click();
     assert.match(app.element('reportTitle').textContent, /Weekly/);
 
@@ -527,13 +530,17 @@ test('filters account chats by part of a name without changing the open report o
     assert.equal(select.value, '3');
     assert.match(matches.textContent, /2 of 4/);
     assert.match(select.options[2].textContent, /Left chat.*#4/);
+    assert.equal(choiceStatus.textContent, 'Showing statistics for chat Weekly Cafe\u0301 Alpha · Left chat · 1 message · #4');
 
     search('notes');
     assert.deepEqual(values(), ['', '0', '1']);
     assert.equal(select.value, '');
     assert.equal(analyze.disabled, true);
+    assert.equal(choiceStatus.textContent, 'Choose a chat to see its statistics.');
     assert.match(app.element('reportTitle').textContent, /Weekly/);
     chooseAccountChat(app, '1');
+    assert.equal(choiceStatus.textContent, 'Selected chat Café Alpha notes · 1 message · #2');
+    assert.match(app.element('reportTitle').textContent, /Weekly/);
     analyze.click();
     assert.match(app.element('reportTitle').textContent, /Café Alpha notes/);
 

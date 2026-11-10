@@ -116,6 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
             (name, suffix, count, number) => `${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'} · #${number}`,
             (name, suffix, count, number) => `${name}${suffix} · ${count} сообщ. · #${number}`,
         ],
+        chosenChat: [label => `Selected chat ${label}`, label => `Выбран чат ${label}`],
         selectedChat: [label => `Showing statistics for chat ${label}`, label => `Статистика открыта для чата ${label}`],
         accountInstructions: [
             'This file contains multiple chats. The report covers one conversation.',
@@ -440,7 +441,11 @@ document.addEventListener('DOMContentLoaded', () => {
     clearLoadedDataButton.addEventListener('click', clearLoadedData);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
-        analyzeAccountChatButton.disabled = selectedAccountChat() === undefined;
+        const chat = selectedAccountChat();
+        analyzeAccountChatButton.disabled = !chat;
+        setLocalizedText(accountChatStatus, chat
+            ? () => translate('chosenChat', accountChatLabel(chat))
+            : translated('selectChatStatus'));
     });
     analyzeAccountChatButton.addEventListener('click', analyzeAccountChat);
     exportParticipantsButton.addEventListener('click', () => {
@@ -1103,6 +1108,7 @@ document.addEventListener('DOMContentLoaded', () => {
         accountChatSelect.value = stillSelected ? selected : '';
         accountChatSelect.disabled = matches.length === 0;
         analyzeAccountChatButton.disabled = !stillSelected;
+        if (selected && !stillSelected) setLocalizedText(accountChatStatus, translated('selectChatStatus'));
         const status = translate('accountSearchMatches',
             countFormat.format(matches.length), countFormat.format(accountChats.length));
         if (accountChatSearchStatus.textContent !== status) accountChatSearchStatus.textContent = status;
