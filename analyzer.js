@@ -74,6 +74,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const dropFileNameElement = document.getElementById('dropFileName');
     const loadingIndicator = document.getElementById('loadingIndicator');
     const cancelImportButton = document.getElementById('cancelImport');
+    const importReadProgress = document.getElementById('importReadProgress');
+    const importProgress = document.getElementById('importProgress');
+    const importProgressPercent = document.getElementById('importProgressPercent');
     const importStatus = document.getElementById('importStatus');
     const sourceFileType = document.getElementById('sourceFileType');
     const fileError = document.getElementById('fileError');
@@ -285,6 +288,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const syntheticNames = new Map();
     let language = 'en';
     let countFormat;
+    let importPercentFormat;
     let replyMinutesFormat;
     let monthFormat;
     let dayFormat;
@@ -298,13 +302,19 @@ document.addEventListener('DOMContentLoaded', () => {
         : null;
     const dictionaryWordScripts = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
     const wordCharacter = /[\p{L}\p{N}]/u;
-    const reactionPictograph = String.raw`\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?`;
+    const wordLinkToken = /^[\p{P}\p{S}]*(?:[a-z][a-z\d+.-]*:\/\/|www\.)/iu;
+    const emojiKeycap = String.raw`[#*0-9]\uFE0F?\u20E3`;
+    const emojiPictograph = String.raw`\p{Extended_Pictographic}[\uFE0E\uFE0F]?\p{Emoji_Modifier}?`;
+    const emojiPictographSequence = String.raw`${emojiPictograph}(?:\u200D${emojiPictograph})*`;
+    const wordEmojiSeparator = new RegExp(
+        String.raw`${emojiKeycap}|\p{Regional_Indicator}|${emojiPictographSequence}[\u{E0020}-\u{E007F}]*`,
+        'u'
+    );
     // These three Unicode tag sequences encode England, Scotland and Wales.
     const subdivisionFlag = String.raw`\u{1F3F4}\u{E0067}\u{E0062}`
         + String.raw`(?:\u{E0065}\u{E006E}\u{E0067}|\u{E0073}\u{E0063}\u{E0074}|\u{E0077}\u{E006C}\u{E0073})\u{E007F}`;
     const reactionEmojiPattern = new RegExp(
-        String.raw`^(?:[#*0-9]\uFE0F?\u20E3|\p{Regional_Indicator}{2}|${subdivisionFlag}|`
-        + String.raw`${reactionPictograph}(?:\u200D${reactionPictograph})*)$`,
+        String.raw`^(?:${emojiKeycap}|\p{Regional_Indicator}{2}|${subdivisionFlag}|${emojiPictographSequence})$`,
         'u'
     );
     // Telegram Desktop stores each exported reaction count as a uint32.
@@ -587,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.documentElement) document.documentElement.lang = next;
         const locale = next === 'ru' ? 'ru-RU' : 'en';
         countFormat = new Intl.NumberFormat(locale);
+        importPercentFormat = new Intl.NumberFormat(locale, { style: 'percent' });
         replyMinutesFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
         monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
         dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
@@ -1014,16 +1025,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function countWords(text) {
         if (!text) return 0;
-        // Digits displayed as keycap emoji do not represent a number in the text.
-        if (text.includes('\u20E3')) text = text.replace(/[0-9]\uFE0F?\u20E3/g, ' ');
+        const spacedTokens = text.match(/\S+/g) ?? [];
+        // Emoji can separate words without spaces, including text flattened from Telegram entities.
+        const tokens = wordEmojiSeparator.test(text)
+            ? spacedTokens.flatMap(token => wordLinkToken.test(token) ? [token] : token.split(wordEmojiSeparator))
+            : spacedTokens;
         const useSegmenter = wordSegmenter && dictionaryWordScripts.test(text);
-        const tokens = text.match(/\S+/g) ?? [];
         let count = 0;
         for (const token of tokens) {
             if (!wordCharacter.test(token)) continue;
-            if (useSegmenter && dictionaryWordScripts.test(token)) {
-                for (const { isWordLike } of wordSegmenter.segment(token)) {
-                    if (isWordLike) count++;
+            if (useSegmenter && dictionaryWordScripts.test(token) && !wordLinkToken.test(token)) {
+                // Apply the same letter-or-number rule to dictionary segments in every browser.
+                for (const { segment } of wordSegmenter.segment(token)) {
+                    if (wordCharacter.test(segment)) count++;
                 }
             } else {
                 // Preserve one count for common compounds, URLs, and other spaced terms.
@@ -1274,6 +1288,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             renderMessages(chat.messages, { name: chat.name, preserveNames: true });
             setLocalizedText(accountChatStatus, () => translate('selectedChat', accountChatLabel(chat)));
+            reportTitle.focus();
         } catch (error) {
             console.error('Ошибка анализа выбранного чата:', error);
             clearReport();
@@ -1501,6 +1516,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        reader.onprogress = ({ lengthComputable, loaded, total }) => {
+            if (activeImport !== request || !lengthComputable || !Number.isFinite(loaded)
+                || !Number.isFinite(total) || loaded < 0 || total <= 0) return;
+            const percent = Math.min(100, Math.floor(loaded * 100 / total));
+            if (!importReadProgress.hidden && importProgress.value === percent) return;
+            importProgress.value = percent;
+            setLocalizedText(importProgressPercent, () => importPercentFormat.format(percent / 100));
+            importReadProgress.hidden = false;
+        };
+
         reader.onload = (e) => {
             if (activeImport !== request) {
                 return;
@@ -1622,7 +1647,14 @@ document.addEventListener('DOMContentLoaded', () => {
         processSelectedFile(file);
     }
 
+    function resetImportProgress() {
+        importReadProgress.hidden = true;
+        importProgress.value = 0;
+        setLocalizedText(importProgressPercent, '');
+    }
+
     function showLoadingIndicator() {
+        resetImportProgress();
         loadingIndicator.style.display = 'flex';
         setLocalizedText(importStatus, translated('processing'));
     }
@@ -1630,6 +1662,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function hideLoadingIndicator(status = '') {
         if (document.activeElement === cancelImportButton) fileInput?.focus();
         loadingIndicator.style.display = 'none';
+        resetImportProgress();
         setLocalizedText(importStatus, status);
     }
 

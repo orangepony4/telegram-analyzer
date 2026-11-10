@@ -592,6 +592,17 @@ a { color: var(--accent); }
 
 .loading-indicator i { color: var(--accent); }
 
+.import-read-progress {
+    display: grid;
+    flex: 0 0 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    font-variant-numeric: tabular-nums;
+}
+
+.import-read-progress progress { width: 100%; min-width: 0; accent-color: var(--accent); }
+
 .report-heading, .report-toolbar, .month-toolbar {
     display: flex;
     flex-wrap: wrap;

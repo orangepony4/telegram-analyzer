@@ -17,7 +17,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 ### Analyze your own chat
 
 1. In Telegram Desktop, open a private chat, group, or channel. Choose **Export chat history** from the chat menu, select **JSON**, and export. You can leave the media download options unchecked.
-2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. While the file is being read, **Cancel import** lets you stop the read and return to your previous report or chat selection.
+2. Select **Open JSON** or drop the exported file, usually `result.json`, into the import area. While the file is being read, the progress bar shows the percentage when the browser can measure it. Use **Cancel import** to stop the read and return to your previous report or chat selection.
 3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. If the export contains several chat types, combine the search with **Chat type**. The selected chat's full name, message count, and list number appear below the controls. Choose **Analyze chat** to open its report and CSV exports.
 4. Open **Overview** for the full chat or **By month** to jump to any month with records. Use the arrows to move between months with records. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
@@ -31,7 +31,7 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 - Open **Message types table** in either report to read the record counts by category. The overview includes undated records. The monthly table covers the selected month. Telegram service events and unsupported records have separate rows. **Types CSV** exports the current table with the same `message_type,count` columns and category keys in either language.
 - Message-type charts and shared-content summaries count each Telegram checklist as one record.
 - Games, invoices, giveaway announcements and results, and paid media also count by type. The report shows the counts without the payment amounts or winner lists.
-- Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
+- Emoji separate neighboring words. Word counts skip standalone emoji and punctuation. Where supported by the browser, word segmentation also handles scripts such as Chinese and Japanese that are often written without spaces.
 - For rich Telegram posts, word counts and message lengths include text from headings, paragraphs, lists, tables, and captions. Text blocks are separated by line breaks.
 - A formatted post with an embedded photo, video, audio track, or file counts once as rich media, even if the export skipped the attachment.
 - **Reply timing** defaults to **Adjacent messages**, which estimates delays between consecutive messages from different participants. A message with a comparable timestamp and no identified sender interrupts the sequence. Choose **Direct replies** to measure the elapsed time from each explicitly replied-to message to its reply. Direct mode uses pairs with known times and distinct senders in the same export. Both modes skip service events and assign an interval to the month of the reply. The setting applies to the reply charts, participant details, and adjustable long-response threshold.
@@ -88,7 +88,7 @@ Telegram Analyzer показывает активность, участнико�
 ### Как открыть свою переписку
 
 1. В Telegram Desktop откройте личный чат, группу или канал. В меню чата выберите **«Экспорт истории чата»** и формат **JSON**. Параметры скачивания медиа можно оставить выключенными.
-2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Пока файл читается, кнопка **«Отменить импорт»** остановит чтение и вернёт предыдущий отчёт или выбор чата.
+2. Нажмите **«Открыть JSON»** или перетащите экспортированный файл, обычно `result.json`, в область импорта. Во время чтения индикатор показывает процент, если браузер может его вычислить. Кнопка **«Отменить импорт»** остановит чтение и вернёт предыдущий отчёт или выбор чата.
 3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Если в экспорте несколько типов чатов, можно также выбрать **«Тип чата»**. Под списком появятся полное название выбранного чата, число сообщений и номер в списке. Нажмите **«Показать статистику»**, чтобы открыть его отчёт и выгрузки CSV.
 4. Во вкладке **«Обзор»** видна статистика за всё время. Во вкладке **«По месяцам»** можно сразу выбрать любой месяц с записями или перейти к соседнему месяцу с записями стрелками. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
@@ -102,7 +102,7 @@ Telegram Analyzer показывает активность, участнико�
 - В обеих сводках раздел **«Типы сообщений в таблице»** показывает количество записей каждого типа. В обзор входят записи без даты, а помесячная таблица охватывает выбранный месяц. Служебные события и неподдерживаемые записи Telegram показаны отдельными строками. Кнопка **«CSV типов»** выгружает текущую таблицу с одинаковыми столбцами `message_type,count` и обозначениями типов в обеих версиях интерфейса.
 - В графиках типов сообщений и сводках по вложениям каждый список задач Telegram учитывается как одна запись.
 - Игры, счета, объявления и итоги розыгрышей, а также платные медиа учитываются по типам. В отчёте видны числа записей без сумм платежей и списков победителей.
-- При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
+- Эмодзи между словами разделяют их. При подсчёте слов отдельные эмодзи и знаки препинания пропускаются. Если браузер умеет разбивать текст на слова, это работает и для китайского, японского и других языков, где слова часто пишутся без пробелов.
 - В форматированных постах Telegram слова и длина сообщения рассчитываются по тексту заголовков, абзацев, списков, таблиц и подписей. Текстовые блоки разделяются переносами строк.
 - Форматированный пост с фотографией, видео, аудио или файлом учитывается как одна запись с медиа, даже если само вложение не скачали.
 - В меню **«Замер ответов»** по умолчанию выбраны **«Соседние сообщения»**. Этот режим оценивает паузы между соседними сообщениями разных участников. Сообщение без известного отправителя прерывает последовательность, если его место в хронологии можно определить. Выберите **«Прямые ответы»**, чтобы измерять время от исходного сообщения до ответа, связанного с ним в Telegram. Подходят пары из одной переписки с известным временем и разными отправителями. Служебные события пропускаются. В обоих режимах интервал относится к месяцу ответа, а настройка применяется к графикам, деталям по участникам и порогу долгого ответа.

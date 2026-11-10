@@ -189,6 +189,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         return {
             complete(data) { completeRaw(JSON.stringify(data)); },
             completeRaw,
+            progress(loaded, total, lengthComputable = true) { reader.onprogress?.({ loaded, total, lengthComputable }); },
             fail() { reader.fail(); },
             abort() { reader.abort(); },
             get aborted() { return reader.aborted; },
@@ -526,6 +527,7 @@ test('filters account chats by part of a name without changing the open report o
     assert.equal(app.element('reportTitle').textContent, 'Выберите чат');
     analyze.click();
     assert.match(app.element('reportTitle').textContent, /Weekly/);
+    assert.equal(app.focusedElement, app.element('reportTitle'));
 
     search('  CAFÉ ALPHA  ');
     assert.deepEqual(values(), ['', '1', '3']);
@@ -1624,6 +1626,44 @@ test('canceling an initial read restores the empty screen and allows retry in th
     assert.equal(app.element('reportTitle').textContent, 'Retry chat');
     assert.equal(app.element('clearLoadedData').hidden, false);
     assert.equal(app.focusedElement, app.element('jsonFile'));
+});
+
+test('shows localized byte progress for the current measurable read and resets it on cancel or completion', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const progress = app.element('importReadProgress');
+    const meter = app.element('importProgress');
+    const percent = app.element('importProgressPercent');
+    const first = app.selectFile('first.json');
+    assert.equal(progress.hidden, true);
+    first.progress(25, 100, false);
+    first.progress(25, 0);
+    assert.equal(progress.hidden, true);
+    first.progress(29, 100);
+    assert.equal(progress.hidden, false);
+    assert.equal(meter.value, 29);
+    assert.equal(percent.textContent, '29%');
+    app.element('languageToggle').click();
+    assert.equal(percent.textContent, new Intl.NumberFormat('ru-RU', { style: 'percent' }).format(0.29));
+
+    const second = app.selectFile('second.json');
+    assert.equal(first.aborted, true);
+    assert.equal(progress.hidden, true);
+    first.progress(90, 100);
+    assert.equal(progress.hidden, true);
+    second.progress(72, 200);
+    assert.equal(meter.value, 36);
+    app.element('cancelImport').click();
+    assert.equal(second.aborted, true);
+    second.progress(175, 200);
+    assert.equal(progress.hidden, true);
+
+    const third = app.selectFile('third.json');
+    third.progress(103, 100);
+    assert.equal(meter.value, 100);
+    third.complete({ name: 'Completed import', messages: [] });
+    assert.equal(progress.hidden, true);
+    assert.equal(percent.textContent, '');
+    assert.equal(app.element('reportTitle').textContent, 'Completed import');
 });
 
 test('keeps the last upload and disables monthly statistics for an empty export', () => {
@@ -2802,6 +2842,45 @@ test('counts words in unspaced scripts and ignores standalone punctuation and em
     const [{ blob }] = app.downloads;
     assert.equal(await blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n'
         + '"Punctuation",1,5.0\r\n"Emoji",1,5.0\r\n"Chinese",1,4.0\r\n"Russian",1,12.0\r\n');
+});
+
+test('separates words joined by emoji while retaining links, compounds and grapheme lengths', async () => {
+    const date = '2026-11-10T10:00:00Z';
+    const fixtures = [
+        ['Cyrillic', 'привет👋мир', 2],
+        ['Custom emoji', ['hello', { type: 'custom_emoji', text: '🧑🏽‍💻', document_id: '123' }, 'world'], 2],
+        ['Flag', 'before🇬🇧after', 2],
+        ['Keycaps', 'one2️⃣two#️⃣three', 3],
+        ['Chinese', '你好❤️世界', 2],
+        ['Chinese single', '你好', 1],
+        ['Japanese single', '日本語', 1],
+        ['Links and compound', 'follow-up https://example.test/a🐕b tg://resolve?domain=🐕name', 3],
+        ['Emoji only', '🐕 👨‍👩‍👧 1️⃣ 🇺🇳', 0],
+    ];
+    const withoutSegmenter = { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat };
+    const withIncorrectWordFlags = {
+        ...withoutSegmenter,
+        Segmenter: class extends Intl.Segmenter {
+            segment(value) {
+                return Array.from(super.segment(value), item => ({ ...item, isWordLike: false }));
+            }
+        },
+    };
+    for (const intl of [Intl, withoutSegmenter, withIncorrectWordFlags]) {
+        const app = createAnalyzer({ intl, search: '?view=upload', storage: { getItem: () => null } });
+        app.selectFile('synthetic-emoji.json').complete({ messages: fixtures.map(([from, text], index) => ({
+            id: index + 1, from, text, date,
+        })) });
+        for (const [from, , count] of fixtures) {
+            const item = from + '</strong>: ' + count + (count === 1 ? ' word' : ' words') + '</li>';
+            assert.ok(app.element('wordCountStats').innerHTML.includes(item), from);
+            assert.ok(app.element('monthlyWordCountStats').innerHTML.includes(item), from);
+        }
+        if (intl === Intl) {
+            app.element('exportParticipants').click();
+            assert.match(await app.downloads[0].blob.text(), /"Cyrillic",1,10\.0\r\n"Custom emoji",1,11\.0/);
+        }
+    }
 });
 
 test('falls back to letter and number tokens when word segmentation is unavailable', () => {
