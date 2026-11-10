@@ -1097,10 +1097,13 @@ a { color: var(--accent); }
 
 @media (max-width: 520px) {
     .activity-pattern-tables { grid-template-columns: minmax(0, 1fr); }
-    .header-tools { gap: 6px; }
+    .header-inner { flex-wrap: wrap; row-gap: 8px; padding-block: 7px; }
+    .brand { flex: 1 1 min-content; }
+    .header-tools { gap: 6px; margin-inline-start: auto; }
     .privacy-indicator { display: none; }
     .source-privacy { display: flex; }
-    .source-actions .button { gap: 5px; padding-inline: 7px; }
+    .source-actions .drop-zone { grid-template-columns: minmax(0, 1fr); }
+    .source-actions .button { flex-wrap: wrap; gap: 5px; padding-inline: 7px; overflow-wrap: anywhere; }
     .report-toolbar { align-items: stretch; }
     .report-toolbar .tabs { flex: 1 1 100%; width: 100%; }
     /* Keep native select labels visible when enlarged text needs another row. */
