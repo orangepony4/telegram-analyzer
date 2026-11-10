@@ -3021,6 +3021,43 @@ test('groups legacy date-only values at the written midnight', () => {
     assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[0], 1);
 });
 
+test('keeps date-only activity without using midnight to measure replies', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const day = '2025-11-02';
+    const unix = value => String(Date.parse(value) / 1000);
+    app.selectFile('synthetic-date-only.json').complete({ messages: [
+        { id: 1, from: 'Calendar sender', date: day },
+        { id: 2, from: 'Calendar reply', date: day, reply_to_message_id: 1 },
+        { id: 3, from: 'Alice', date: day + 'T01:55:00', date_unixtime: unix(day + 'T05:55:00Z') },
+        { id: 4, from: 'Unknown clock', date: day },
+        { id: 5, from: 'Bob', date: day + 'T01:05:00', date_unixtime: unix(day + 'T06:05:00Z'), reply_to_message_id: 3 },
+        { id: 6, type: 'service', date: day },
+        { id: 7, from: 'Carol', date: day, date_unixtime: unix(day + 'T06:10:00Z'), reply_to_message_id: 5 },
+    ] });
+    const exportTiming = app.element('exportReplyTiming');
+    const mode = app.element('replyTiming');
+    assert.deepEqual(Array.from(app.charts.get('timeOfDayChart').data.datasets[0].data.slice(0, 2)), [5, 2]);
+    assert.match(app.element('replyTimingHint').textContent, /2 of 3/);
+    exportTiming.click();
+    app.monthlyTab.click();
+    exportTiming.click();
+    mode.value = 'direct';
+    mode.change();
+    exportTiming.click();
+    app.element('languageToggle').click();
+    exportTiming.click();
+    assert.match(app.element('replyTimingHint').textContent, /2 из 3/);
+    const heading = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    const adjacent = '"Bob","Carol",1,300.000,0,3600\r\n';
+    const direct = '"Alice","Bob",1,600.000,0,3600\r\n' + adjacent;
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', heading + adjacent],
+        ['telegram-analyzer-2025-11-adjacent-replies.csv', heading + adjacent],
+        ['telegram-analyzer-2025-11-direct-replies.csv', heading + direct],
+        ['telegram-analyzer-2025-11-direct-replies.csv', heading + direct],
+    ]);
+});
+
 test('uses explicit ISO offsets for elapsed time when Unix values are absent', () => {
     const app = createAnalyzer();
     app.selectFile('explicit-offsets.json').complete({ messages: [
