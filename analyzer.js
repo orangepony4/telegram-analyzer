@@ -737,15 +737,18 @@ document.addEventListener('DOMContentLoaded', () => {
             time = new Date(date).getTime();
         }
 
-        const calendar = wall ?? (Number.isFinite(time) ? new Date(time) : null);
+        const timestamp = !hasWallClock && Number.isFinite(time) ? new Date(time) : null;
+        const calendar = wall ?? timestamp;
         if (calendar) {
             const year = calendar.getUTCFullYear();
             if (Number.isNaN(year) || year < 0 || year > 9999) {
-                return { message, time: Infinity, absoluteTime: Infinity, calendar: null, hasWallClock: false, dateOnly: false };
+                return { message, time: Infinity, absoluteTime: Infinity, calendar: null, hour: null, hasWallClock: false, dateOnly: false };
             }
         }
         const absoluteTime = Number.isFinite(time) ? time : Infinity;
-        return { message, time: absoluteTime, absoluteTime, calendar, hasWallClock, dateOnly: wall !== null && !hasWallClock };
+        // The date-only calendar placeholder is never evidence of an hour.
+        const hour = (hasWallClock ? wall : timestamp)?.getUTCHours() ?? null;
+        return { message, time: absoluteTime, absoluteTime, calendar, hour, hasWallClock, dateOnly: wall !== null && !hasWallClock };
     }
 
     function orderMessageTimings(messages) {
@@ -1852,7 +1855,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const wordCounts = Object.create(null);
         let previousMessage = null;
         timings.forEach(timing => {
-            const { message: msg, calendar, time } = timing;
+            const { message: msg, calendar, hour, time } = timing;
             const replyLink = replyLinkId(msg);
             if (replyLink !== null) linkedReplies++;
             const text = msg.from ? getReportMessageText(msg) : '';
@@ -1892,7 +1895,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (replyLink !== null) month.linkedReplies++;
             const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
-            month.timeOfDay[calendar.getUTCHours()]++;
+            if (hour !== null) month.timeOfDay[hour]++;
             month.dayOfWeekActivity[calendar.getUTCDay()]++;
             month.dailyActivity[calendar.getUTCDate() - 1]++;
 
@@ -2053,9 +2056,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const messageTypes = Object.create(null);
         const dayOfWeekActivity = new Array(7).fill(0);
 
-        timings.forEach(({ message: msg, calendar }) => {
+        timings.forEach(({ message: msg, calendar, hour }) => {
             if (calendar) {
-                timeOfDay[calendar.getUTCHours()]++;
+                if (hour !== null) timeOfDay[hour]++;
                 dayOfWeekActivity[calendar.getUTCDay()]++;
             }
 

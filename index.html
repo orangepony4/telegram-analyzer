@@ -210,7 +210,7 @@
                         <section class="chart-card">
                             <div class="chart-heading">
                                 <h3 id="timeOfDayChartLabel" data-ru="Активность по часам">Activity by hour</h3>
-                                <p data-ru="По времени в экспорте">Based on the time in the export</p>
+                                <p data-ru="Час из экспорта или UTC, если есть только метка времени">Written hour or UTC when only a timestamp is available</p>
                             </div>
                             <div class="chart-plot"><canvas id="timeOfDayChart" role="img" aria-labelledby="timeOfDayChartLabel"></canvas></div>
                         </section>
@@ -247,7 +247,7 @@
                                 <tbody id="overviewWeekdayRows"></tbody>
                             </table>
                             <table>
-                                <caption data-ru="Записи по часам">Records by hour</caption>
+                                <caption data-ru="Записи с известным временем">Records with a known hour</caption>
                                 <thead><tr><th scope="col" data-ru="Час">Hour</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
                                 <tbody id="overviewHourlyRows"></tbody>
                             </table>
@@ -344,7 +344,10 @@
                             <div class="chart-plot"><canvas id="monthlyResponseTimeChart" role="img" aria-labelledby="monthlyResponseTimeChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
-                            <div class="chart-heading"><h3 id="monthlyTimeOfDayChartLabel" data-ru="Активность по часам">Activity by hour</h3></div>
+                            <div class="chart-heading">
+                                <h3 id="monthlyTimeOfDayChartLabel" data-ru="Активность по часам">Activity by hour</h3>
+                                <p data-ru="Час из экспорта или UTC, если есть только метка времени">Written hour or UTC when only a timestamp is available</p>
+                            </div>
                             <div class="chart-plot"><canvas id="monthlyTimeOfDayChart" role="img" aria-labelledby="monthlyTimeOfDayChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card">
@@ -379,7 +382,7 @@
                                 <tbody id="monthlyWeekdayRows"></tbody>
                             </table>
                             <table aria-describedby="currentMonth">
-                                <caption data-ru="Записи по часам">Records by hour</caption>
+                                <caption data-ru="Записи с известным временем">Records with a known hour</caption>
                                 <thead><tr><th scope="col" data-ru="Час">Hour</th><th scope="col" data-ru="Записи">Records</th></tr></thead>
                                 <tbody id="monthlyHourlyRows"></tbody>
                             </table>

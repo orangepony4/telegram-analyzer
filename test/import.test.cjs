@@ -3054,18 +3054,24 @@ test('keeps the written calendar hour through a browser DST gap', () => {
     assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[8], 1);
 });
 
-test('groups legacy date-only values at the written midnight', () => {
+test('preserves the written calendar day while hourly activity requires a known time', () => {
     const app = createAnalyzer();
     app.selectFile('date-only.json').complete({ messages: [
-        { id: 1, from: 'Alice', date: '2025-11-01' },
-        { id: 2, from: 'Invalid', date: '2025-02-30', date_unixtime: '' },
-        { id: 3, from: 'Missing', date: null, date_unixtime: false },
+        { id: 1, from: 'Alice', date: '2025-10-31' },
+        { id: 2, from: 'UTC time', date: '2025-10-31', date_unixtime: Date.parse('2025-11-01T02:00:00Z') / 1000 },
+        { id: 3, from: 'Local midnight', date: '2025-10-31T00:00:00-05:00' },
+        { id: 4, from: 'Unix only', date_unixtime: Date.parse('2025-10-31T12:00:00Z') / 1000 },
+        { id: 5, from: 'Invalid', date: '2025-02-30', date_unixtime: '' },
+        { id: 6, from: 'Missing', date: null, date_unixtime: false },
     ] });
     assert.deepEqual(app.alerts, []);
-    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-11');
-    assert.equal(app.charts.get('timeOfDayChart').data.datasets[0].data[0], 1);
-    assert.equal(app.charts.get('dayOfWeekChart').data.datasets[0].data[6], 1);
-    assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[0], 1);
+    assert.equal(app.charts.get('monthlyChart').data.labels.join(), '2025-10');
+    const knownHours = Array.from({ length: 24 }, (_, index) => [0, 2, 12].includes(index) ? 1 : 0);
+    for (const chartId of ['timeOfDayChart', 'monthlyTimeOfDayChart']) {
+        assert.deepEqual(Array.from(app.charts.get(chartId).data.datasets[0].data), knownHours);
+    }
+    assert.equal(app.charts.get('dayOfWeekChart').data.datasets[0].data[5], 4);
+    assert.equal(app.charts.get('dailyActivityChart').data.datasets[0].data[30], 4);
 });
 
 test('keeps date-only activity without using midnight to measure replies', async () => {
@@ -3083,7 +3089,9 @@ test('keeps date-only activity without using midnight to measure replies', async
     ] });
     const exportTiming = app.element('exportReplyTiming');
     const mode = app.element('replyTiming');
-    assert.deepEqual(Array.from(app.charts.get('timeOfDayChart').data.datasets[0].data.slice(0, 2)), [5, 2]);
+    const hours = app.charts.get('timeOfDayChart').data.datasets[0].data;
+    assert.deepEqual(Array.from(hours.slice(0, 2)), [0, 2]);
+    assert.equal(hours[6], 1);
     assert.match(app.element('replyTimingHint').textContent, /2 of 3/);
     exportTiming.click();
     app.monthlyTab.click();
