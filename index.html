@@ -168,9 +168,16 @@
 
                     <div class="charts-grid">
                         <section class="chart-card chart-feature">
-                            <div class="chart-heading">
-                                <h3 id="monthlyChartLabel" data-ru="Динамика переписки">Activity over time</h3>
-                                <p data-ru="Количество сообщений по месяцам">Messages per month</p>
+                            <div class="chart-heading chart-heading-with-export">
+                                <div>
+                                    <h3 id="monthlyChartLabel" data-ru="Динамика переписки">Activity over time</h3>
+                                    <p data-ru="Количество сообщений по месяцам">Messages per month</p>
+                                </div>
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="monthlyChart"
+                                        aria-labelledby="trendPngLabel monthlyChartLabel" disabled>
+                                    <i class="fas fa-download" aria-hidden="true"></i> <span id="trendPngLabel" data-ru="Скачать PNG">Save PNG</span>
+                                </button>
+                                <p class="chart-export-feedback" role="status"></p>
                             </div>
                             <div class="chart-plot"><canvas id="monthlyChart" role="img" aria-labelledby="monthlyChartLabel"></canvas></div>
                             <div class="trend-comparison" id="trendComparisonPanel" hidden>
@@ -312,9 +319,16 @@
 
                     <div class="charts-grid">
                         <section class="chart-card chart-feature">
-                            <div class="chart-heading">
-                                <h3 id="dailyActivityChartLabel" data-ru="Активность по дням">Daily activity</h3>
-                                <p data-ru="Количество сообщений за каждый день месяца">Messages on each day of the month</p>
+                            <div class="chart-heading chart-heading-with-export">
+                                <div>
+                                    <h3 id="dailyActivityChartLabel" data-ru="Активность по дням">Daily activity</h3>
+                                    <p data-ru="Количество сообщений за каждый день месяца">Messages on each day of the month</p>
+                                </div>
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="dailyActivityChart"
+                                        aria-labelledby="dailyPngLabel dailyActivityChartLabel" disabled>
+                                    <i class="fas fa-download" aria-hidden="true"></i> <span id="dailyPngLabel" data-ru="Скачать PNG">Save PNG</span>
+                                </button>
+                                <p class="chart-export-feedback" role="status"></p>
                             </div>
                             <div class="chart-plot"><canvas id="dailyActivityChart" role="img" aria-labelledby="dailyActivityChartLabel"></canvas></div>
                         </section>

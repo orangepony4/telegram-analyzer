@@ -64,6 +64,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsTabs = [...document.querySelectorAll('.tab-btn')];
     const exportParticipantsButton = document.getElementById('exportParticipants');
     const exportMonthlyParticipantsButton = document.getElementById('exportMonthlyParticipants');
+    const chartPngButtons = new Map(
+        Array.from(document.querySelectorAll('[data-chart-png]'), button => [button.dataset.chartPng, button])
+    );
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
     const replyThresholdInputs = ['ignoredThreshold', 'monthlyIgnoredThreshold'].map(id => document.getElementById(id));
@@ -111,6 +114,7 @@ document.addEventListener('DOMContentLoaded', () => {
         switchLanguage: ['RU · Switch to Russian', 'EN · Переключить на английский'],
         darkTheme: ['Switch to dark theme', 'Переключить на тёмную тему'],
         lightTheme: ['Switch to light theme', 'Переключить на светлую тему'],
+        chartExportFailed: ['Could not save the chart. Please try again.', 'Не удалось сохранить график. Попробуйте ещё раз.'],
         demoReport: ['Demo report', 'Демо-отчёт'],
         demoTitle: ['Sample chat', 'Демонстрационный чат'],
         demoSource: ['Fictional conversation', 'Вымышленная переписка'],
@@ -518,6 +522,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
     exportReplyTimingButton.addEventListener('click', downloadReplyTiming);
+    for (const [canvasId, button] of chartPngButtons) {
+        button.addEventListener('click', () => downloadActivityChart(canvasId, button));
+    }
     monthlyChartSeries.addEventListener('focusin', event => {
         event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     });
@@ -1060,8 +1067,16 @@ document.addEventListener('DOMContentLoaded', () => {
             && blocks.some(block => hasRichMediaBlock(block, depth));
     }
 
+    function hasRichInlineImage(value, depth = 0) {
+        if (depth >= richTextDepthLimit || !value || typeof value !== 'object') return false;
+        if (Array.isArray(value)) return value.some(child => hasRichInlineImage(child, depth + 1));
+        return value.type === 'inline_image' || hasRichInlineImage(value.text, depth + 1);
+    }
+
     function hasRichMediaBlock(block, depth) {
         if (depth >= richTextDepthLimit || !block || typeof block !== 'object' || Array.isArray(block)) return false;
+        if (hasRichInlineImage(block.text) || hasRichInlineImage(block.title)
+            || hasRichInlineImage(block.caption) || hasRichInlineImage(block.caption?.credit)) return true;
         const nestedDepth = depth + 1;
         switch (block.type) {
             case 'photo':
@@ -1081,7 +1096,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return hasRichMediaBlocks(block.items, nestedDepth);
             case 'list':
                 return Array.isArray(block.items) && block.items.some(item =>
-                    item?.content === 'blocks' && hasRichMediaBlocks(item.blocks, nestedDepth));
+                    (item?.content === 'blocks' && hasRichMediaBlocks(item.blocks, nestedDepth))
+                    || (item?.content === 'text' && hasRichInlineImage(item.text)));
+            case 'table':
+                return Array.isArray(block.rows) && block.rows.some(row =>
+                    Array.isArray(row?.cells) && row.cells.some(cell => hasRichInlineImage(cell?.text)));
+            case 'button_row':
+                return Array.isArray(block.buttons) && block.buttons.some(button => hasRichInlineImage(button?.text));
             default:
                 return false;
         }
@@ -1349,6 +1370,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function clearRenderedCharts() {
         renderedCharts.forEach(chart => chart.destroy());
         renderedCharts.clear();
+        for (const button of chartPngButtons.values()) {
+            button.disabled = true;
+            setLocalizedText(button.parentElement.querySelector('.chart-export-feedback'), '');
+        }
         renderMonthlyChartLegend();
         resetTrendComparison();
     }
@@ -2469,6 +2494,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const chart = new Chart(ctx, { type, data, options });
         chartTranslations.set(chart, localize);
         renderedCharts.set(canvasId, chart);
+        const exportButton = chartPngButtons.get(canvasId);
+        if (exportButton) {
+            exportButton.disabled = data.labels.length === 0;
+            setLocalizedText(exportButton.parentElement.querySelector('.chart-export-feedback'), '');
+        }
         return chart;
     }
 
@@ -2807,6 +2837,107 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         statsHTML += '</ul>';
         return statsHTML;
+    }
+
+    async function downloadActivityChart(canvasId, button) {
+        const source = renderedCharts.get(canvasId);
+        if (!source || button.disabled || button.getAttribute('aria-busy') === 'true') return;
+        const heading = button.parentElement;
+        const feedback = heading.querySelector('.chart-export-feedback');
+        const monthly = canvasId === 'dailyActivityChart';
+        const month = monthly ? monthsData[currentMonthIndex]?.month : null;
+        const filename = month
+            ? `telegram-analyzer-${month}-daily-activity.png`
+            : 'telegram-analyzer-activity-over-time.png';
+        const title = heading.querySelector('h3').textContent;
+        const description = heading.querySelector('div > p').textContent;
+        const subtitle = month ? `${formatReportMonth(month)} · ${description}` : description;
+        button.setAttribute('aria-busy', 'true');
+        setLocalizedText(feedback, '');
+
+        let snapshot;
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1000;
+            canvas.height = 520;
+            const context = canvas.getContext('2d');
+            if (!context) throw new Error('Canvas unavailable');
+            const { type, options } = source.config;
+            const { labels, datasets } = source.data;
+            // Keep indices and styling stable when a series is hidden in the on-screen chart.
+            const data = {
+                labels: labels.slice(),
+                datasets: datasets.map((dataset, index) => ({
+                    ...dataset, data: dataset.data.slice(), hidden: !source.isDatasetVisible(index)
+                }))
+            };
+            snapshot = new Chart(context, {
+                type, data,
+                options: {
+                    ...options,
+                    responsive: false,
+                    devicePixelRatio: 2,
+                    animation: false,
+                    events: [],
+                    layout: { padding: 36 },
+                    scales: {
+                        ...options.scales,
+                        x: {
+                            ...options.scales.x,
+                            ticks: {
+                                ...options.scales.x.ticks,
+                                autoSkip: !monthly,
+                                font: { size: 13 }
+                            }
+                        },
+                        y: {
+                            ...options.scales.y,
+                            ticks: { ...options.scales.y.ticks, font: { size: 13 } }
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true, text: title, color: chartTheme.tooltipText, align: 'start',
+                            font: { family: 'Georgia, serif', size: 22 }
+                        },
+                        subtitle: { display: true, text: subtitle, color: chartTheme.textColor, align: 'start', padding: { bottom: 16 } },
+                        legend: {
+                            display: !monthly,
+                            position: 'bottom',
+                            labels: {
+                                color: chartTheme.textColor,
+                                boxWidth: 20,
+                                boxHeight: 8,
+                                font: { size: 13 },
+                                filter: item => !item.hidden,
+                                generateLabels(chart) {
+                                    return Chart.defaults.plugins.legend.labels.generateLabels(chart).map(item => {
+                                        const characters = Array.from(item.text.slice(0, 96));
+                                        return item.text.length > 96 || characters.length > 48
+                                            ? { ...item, text: characters.slice(0, 47).join('') + '…' } : item;
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            // Paint behind the chart so the exported image carries its chosen theme on any slide.
+            context.save();
+            context.setTransform(1, 0, 0, 1, 0, 0);
+            context.globalCompositeOperation = 'destination-over';
+            context.fillStyle = chartTheme.surface;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            context.restore();
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            if (!blob) throw new Error('PNG encoding failed');
+            downloadBlob(blob, filename);
+        } catch {
+            if (renderedCharts.get(canvasId) === source) setLocalizedText(feedback, translated('chartExportFailed'));
+        } finally {
+            snapshot?.destroy();
+            button.removeAttribute('aria-busy');
+        }
     }
 
     function downloadMonthlyParticipantSummary() {

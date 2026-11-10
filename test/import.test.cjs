@@ -2161,6 +2161,53 @@ test('classifies service and unsupported records separately from text and shared
     assert.equal(await month.blob.text(), header + '"Bob",2,0.0\r\n');
 });
 
+test('classifies native inline images as rich media in both type exports', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const plain = text => ({ type: 'plain', text });
+    const image = { type: 'inline_image', document_id: '123456', file_skip_reason: 'file_type', width: 128, height: 96 };
+    const wrappedImage = { type: 'bold', text: image };
+    let tooDeep = image;
+    for (let depth = 0; depth < 128; depth++) tooDeep = { type: 'bold', text: tooDeep };
+    const posts = [
+        ['Paragraph', { type: 'paragraph', text: { type: 'concat', text: [plain('Map '), wrappedImage, image, plain('view')] } }],
+        ['Table', { type: 'table', rows: [{ cells: [null, { text: wrappedImage }] }] }],
+        ['List', { type: 'list', items: [{ content: 'text', text: wrappedImage }] }],
+        ['Quote', { type: 'quote', content: 'text', text: plain('Quote'), caption: wrappedImage }],
+        ['Caption', { type: 'embed', caption: { text: plain('Caption'), credit: wrappedImage } }],
+        ['Button', { type: 'button_row', buttons: [{ text: wrappedImage, button: { type: 'url', url: 'https://example.test' } }] }],
+        ['Emoji', { type: 'paragraph', text: { type: 'custom_emoji', text: '🙂', document_id: '456789' } }],
+        ['Metadata', { type: 'paragraph', text: plain('Ordinary text'), metadata: image }],
+        ['Deep', { type: 'paragraph', text: tooDeep }],
+    ];
+    const messages = posts.map(([from, block], index) => ({
+        id: index + 1, type: 'message', from, date: '2026-10-20T12:00:00Z',
+        rich_message: { rtl: false, part: false, blocks: [block] },
+    }));
+    messages.push({
+        id: messages.length + 1, type: 'message', from: 'Standalone photo', date: '2026-11-20T12:00:00Z',
+        rich_message: { rtl: false, part: false, blocks: [{ type: 'photo', photo_id: '42', photo_skip_reason: 'file_type' }] },
+    });
+    app.selectFile('synthetic-inline-images.json').complete({ messages });
+    const values = chartId => Array.from(app.charts.get(chartId).data.datasets[0].data);
+    assert.deepEqual(values('messageTypesChart'), [7, 3]);
+    assert.deepEqual(values('monthlyMessageTypesChart'), [1]);
+    assert.match(app.element('wordCountStats').innerHTML, /Paragraph<\/strong>: 2 words/);
+    app.element('exportOverviewMessageTypes').click();
+    app.monthlyTab.click();
+    app.element('prevMonth').click();
+    assert.deepEqual(values('monthlyMessageTypesChart'), [6, 3]);
+    app.element('exportMonthlyMessageTypes').click();
+    app.element('languageToggle').click();
+    app.element('exportMonthlyMessageTypes').click();
+    const header = 'message_type,count\r\n';
+    const october = header + '"rich_media",6\r\n"text",3\r\n';
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-message-types.csv', header + '"rich_media",7\r\n"text",3\r\n'],
+        ['telegram-analyzer-2026-10-message-types.csv', october],
+        ['telegram-analyzer-2026-10-message-types.csv', october],
+    ]);
+});
+
 test('counts embedded rich media once per message without exposing attachment data', async () => {
     const app = createAnalyzer();
     const empty = { type: 'empty' };

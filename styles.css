@@ -825,6 +825,19 @@ a { color: var(--accent); }
 
 .chart-heading { margin-bottom: 10px; }
 
+.chart-heading-with-export {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px 12px;
+}
+
+.chart-heading-with-export > div { flex: 1 1 11rem; min-width: 0; }
+.chart-export { min-height: 36px; flex: 0 1 auto; font-size: .75rem; }
+.chart-heading .chart-export-feedback { flex-basis: 100%; margin: 0; color: var(--danger); }
+.chart-export-feedback:empty { position: absolute; }
+
 .chart-heading h3, .stat-box h3 {
     color: var(--text-color);
     font-size: .875rem;
