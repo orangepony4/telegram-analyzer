@@ -911,6 +911,35 @@ test('breaks adjacent estimates at chronologically placed records with no identi
     assert.match(app.element('monthlyMessageCount').innerHTML, /class="metric-value">6</);
 });
 
+test('orders equal timestamps by numeric message ID in replies and participant names', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const button = app.element('exportReplyTiming');
+    const mode = app.element('replyTiming');
+    const date = '2026-11-10T12:00:00Z';
+    app.selectFile('synthetic.json').complete({ messages: [
+        { id: '104', date, from: 'Newest Alice', from_id: 'user1', reply_to_message_id: '103' },
+        { id: '103', date, from: 'Carol', from_id: 'user3', reply_to_message_id: '102' },
+        { id: 102, date, from: 'Bob', from_id: 'user2', reply_to_message_id: -101 },
+        { id: '-101', date, from: 'Old Alice', from_id: 'user1' },
+    ] });
+    button.click();
+    app.monthlyTab.click();
+    button.click();
+    mode.value = 'direct';
+    mode.change();
+    button.click();
+
+    const csv = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n'
+        + '"Newest Alice","Bob",1,0.000,0,3600\r\n'
+        + '"Bob","Carol",1,0.000,0,3600\r\n'
+        + '"Carol","Newest Alice",1,0.000,0,3600\r\n';
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', csv],
+        ['telegram-analyzer-2026-11-adjacent-replies.csv', csv],
+        ['telegram-analyzer-2026-11-direct-replies.csv', csv],
+    ]);
+});
+
 test('shares a long reply threshold between the overview, monthly report and both CSV scopes', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     app.selectFile('replies.json').complete({ messages: [

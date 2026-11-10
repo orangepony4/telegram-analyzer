@@ -700,8 +700,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function compareMessageIds(first, second) {
-        const firstId = typeof first.id === 'number' ? first.id : 0;
-        const secondId = typeof second.id === 'number' ? second.id : 0;
+        const firstId = numericMessageId(first.id) ?? 0;
+        const secondId = numericMessageId(second.id) ?? 0;
         return firstId - secondId;
     }
 
