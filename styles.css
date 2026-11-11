@@ -1276,7 +1276,9 @@ a { color: var(--accent); }
     .activity-data summary::-webkit-details-marker { display: none; }
     .activity-data table { font-size: 9pt; }
     .participant-table-scroll, .reply-pair-scroll { margin: 0; overflow: visible; }
-    .participant-table :is(th, td):not(:first-child), .reply-pair-table :is(th, td):nth-child(n+3) { white-space: normal; }
+    .participant-table :is(th, td):not(:first-child) { white-space: normal; }
+    .reply-pair-table :is(th, td):nth-child(-n+2) { min-inline-size: 0; width: 35%; }
+    .reply-pair-table :is(th, td):nth-child(n+3) { width: 1%; }
     .activity-data :is(th, td) { padding: 3pt 5pt; }
     .activity-data .activity-month {
         min-height: 0;
