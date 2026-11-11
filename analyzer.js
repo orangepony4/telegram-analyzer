@@ -57,11 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
         panel: document.getElementById('overviewActivityPatterns'),
         weekdays: document.getElementById('overviewWeekdayRows'),
         hours: document.getElementById('overviewHourlyRows'),
+        exportButton: document.getElementById('overviewPatternsCsv'),
     };
     const monthlyPatterns = {
         panel: document.getElementById('monthlyActivityPatterns'),
         weekdays: document.getElementById('monthlyWeekdayRows'),
         hours: document.getElementById('monthlyHourlyRows'),
+        exportButton: document.getElementById('monthlyPatternsCsv'),
     };
     const overviewTypes = {
         panel: document.getElementById('overviewMessageTypes'),
@@ -160,6 +162,8 @@ document.addEventListener('DOMContentLoaded', () => {
         printReplyMethod: ['Reply timing', 'Замер ответов'],
         printAdjacent: ['Adjacent messages', 'Соседние сообщения'],
         printDirect: ['Direct replies', 'Прямые ответы'],
+        activityMissingDate: ['Date unavailable', 'Дата неизвестна'],
+        activityMissingHour: ['Hour unavailable', 'Час неизвестен'],
         participantMatches: [
             (shown, total) => `Showing ${shown} of ${total} participants.`,
             (shown, total) => `Показано ${shown} из ${total} участников.`,
@@ -505,6 +509,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
+    overviewPatterns.exportButton.addEventListener('click', () => {
+        if (overviewData && !overviewPatterns.exportButton.disabled && allStatsTab.classList.contains('active')) {
+            downloadActivityPatterns(overviewData.activity, overviewData.messageCount);
+        }
+    });
+    monthlyPatterns.exportButton.addEventListener('click', () => {
+        const selected = monthsData[currentMonthIndex];
+        if (selected && !monthlyPatterns.exportButton.disabled && monthlyStatsTab.classList.contains('active')) {
+            downloadActivityPatterns(selected.data, selected.data.messageCount, selected.month);
+        }
+    });
     overviewTypes.panel.addEventListener('toggle', refreshOverviewMessageTypes);
     monthlyTypes.panel.addEventListener('toggle', refreshMonthlyMessageTypes);
     overviewTypes.exportButton.addEventListener('click', () => {
@@ -776,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return temp.innerHTML;
     }
 
-    function hasLegacyWallClock(text) {
+    function legacyDateFields(text) {
         let commentDepth = 0;
         let outsideComments = '';
         for (const character of text) {
@@ -789,9 +804,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 outsideComments += character;
             }
         }
+        const offset = /([+-])(\d+)(?::(\d+))?\s*$/.exec(outsideComments);
+        const dateAndClock = outsideComments.slice(0, offset?.index);
+        const hasUtcMarker = /(?:^|[^a-z])(?:gmt|utc?|z)\s*$/i.test(dateAndClock);
+        const followsClock = /\d{1,2}:\d{1,2}(?::\d{1,2}(?:\.\d+)?)?(?:\s*[ap]m)?\s*$/i.test(dateAndClock);
         // A zone offset can contain a colon without specifying an hour of the message.
-        const withoutZoneOffsets = outsideComments.replace(/(?:gmt|utc?|z)\s*[+-]\d{1,2}:\d{1,2}/gi, ' ');
-        return /\d{1,2}:\d{1,2}/.test(withoutZoneOffsets);
+        const withoutZoneOffsets = dateAndClock.replace(/(?:gmt|utc?|z)\s*[+-]\d{1,2}:\d{1,2}/gi, ' ');
+        const hasWallClock = /\d{1,2}:\d{1,2}/.test(withoutZoneOffsets);
+        if (!offset || (!followsClock && !hasUtcMarker)) {
+            return { hasWallClock, offsetMinutes: hasUtcMarker ? 0 : null };
+        }
+
+        const [, sign, digits, minutePart] = offset;
+        const number = Number(digits);
+        const compact = minutePart === undefined && digits.length > 2;
+        const hours = compact ? Math.floor(number / 100) : number;
+        const minutes = compact ? number % 100 : Number(minutePart ?? 0);
+        if (digits.length > 4 || hours > 23 || minutes > 59
+            || (minutePart !== undefined && (digits.length > 2 || minutePart.length > 2))) {
+            return { hasWallClock, offsetMinutes: NaN };
+        }
+        return { hasWallClock, offsetMinutes: (sign === '-' ? -1 : 1) * (hours * 60 + minutes) };
     }
 
     function readMessageTiming(message) {
@@ -821,9 +854,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 const legacy = new Date(text);
-                if (Number.isFinite(legacy.getTime())) {
-                    wall = new Date(legacy.getTime() - legacy.getTimezoneOffset() * 60_000);
-                    hasWallClock = hasLegacyWallClock(text);
+                const legacyTime = legacy.getTime();
+                if (Number.isFinite(legacyTime)) {
+                    const fields = legacyDateFields(text);
+                    if (!Number.isNaN(fields.offsetMinutes)) {
+                        const offset = fields.offsetMinutes ?? -legacy.getTimezoneOffset();
+                        wall = new Date(legacyTime + offset * 60_000);
+                        hasWallClock = fields.hasWallClock;
+                        if (hasWallClock && fields.offsetMinutes !== null && !Number.isFinite(time)) time = legacyTime;
+                    }
                 }
             }
         } else if (typeof date === 'number' && !Number.isFinite(time)) {
@@ -2385,7 +2424,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function refreshOverviewPatterns() {
-        renderActivityPatterns(overviewPatterns, monthsData.length ? overviewData?.activity : undefined);
+        renderActivityPatterns(overviewPatterns, overviewData?.activity, overviewData?.messageCount);
     }
 
     function refreshOverviewParticipants() {
@@ -2448,22 +2487,36 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function refreshMonthlyPatterns() {
-        renderActivityPatterns(monthlyPatterns, monthsData[currentMonthIndex]?.data);
+        const data = monthsData[currentMonthIndex]?.data;
+        renderActivityPatterns(monthlyPatterns, data, data?.messageCount);
     }
 
-    function renderActivityPatterns({ panel, weekdays, hours }, data) {
-        panel.hidden = !data;
-        if (!data) panel.open = false;
+    function renderActivityPatterns({ panel, weekdays, hours, exportButton }, data, total) {
+        panel.hidden = !total;
+        exportButton.disabled = panel.hidden;
+        if (panel.hidden) panel.open = false;
         weekdays.replaceChildren();
         hours.replaceChildren();
-        if (!panel.open || !data) return;
+        if (!panel.open) return;
         // The chart and the table both start the week on Sunday.
-        renderPatternRows(weekdays, data.dayOfWeekActivity, day => weekdayFormat.format(Date.UTC(2024, 0, 7 + day)));
-        renderPatternRows(hours, data.timeOfDay, hour => `${String(hour).padStart(2, '0')}:00`);
+        for (const [day, count] of activityPatternRows(data.dayOfWeekActivity, total)) {
+            const label = day === null ? translate('activityMissingDate') : weekdayFormat.format(Date.UTC(2024, 0, 7 + day));
+            appendCountRow(weekdays, label, count);
+        }
+        for (const [hour, count] of activityPatternRows(data.timeOfDay, total)) {
+            appendCountRow(hours, hour === null ? translate('activityMissingHour') : activityHourLabel(hour), count);
+        }
     }
 
-    function renderPatternRows(container, counts, label) {
-        counts.forEach((count, index) => appendCountRow(container, label(index), count));
+    function activityPatternRows(counts, total) {
+        const rows = Array.from(counts.entries());
+        const unavailable = total - counts.reduce((sum, count) => sum + count, 0);
+        if (unavailable > 0) rows.push([null, unavailable]);
+        return rows;
+    }
+
+    function activityHourLabel(hour) {
+        return `${String(hour).padStart(2, '0')}:00`;
     }
 
     function appendCountRow(container, label, count) {
@@ -3190,6 +3243,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const period = month ? `${month}-` : '';
         downloadCsv(rows, `telegram-analyzer-${period}reactions.csv`);
+    }
+
+    function downloadActivityPatterns(data, total, month) {
+        if (statsContainer.style.display !== 'block') return;
+        const weekdayKeys = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const rows = ['dimension,bucket,records'];
+        for (const [day, count] of activityPatternRows(data.dayOfWeekActivity, total)) {
+            rows.push(`weekday,${day === null ? 'unknown' : weekdayKeys[day]},${count}`);
+        }
+        for (const [hour, count] of activityPatternRows(data.timeOfDay, total)) {
+            rows.push(`hour,${hour === null ? 'unknown' : activityHourLabel(hour)},${count}`);
+        }
+        const period = month ? `${month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}activity-patterns.csv`);
     }
 
     function downloadMessageTypeCounts(counts, month) {

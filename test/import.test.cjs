@@ -1434,16 +1434,19 @@ test('clears the report and account data and aborts a pending replacement withou
     assert.equal(clear.hidden, false);
 });
 
-test('shows written-hour and weekday counts in both scopes without charts', () => {
+test('shows and exports weekday and hour totals including unavailable timing in both scopes', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
     const overall = app.element('overviewActivityPatterns');
     const month = app.element('monthlyActivityPatterns');
+    const overviewCsv = app.element('overviewPatternsCsv');
+    const monthlyCsv = app.element('monthlyPatternsCsv');
     const row = (id, index) => app.element(id).children[index].children.map(cell => cell.textContent);
     app.selectFile('patterns.json').complete({ messages: [
         { id: 1, from: 'Alice', date: '2026-01-05T23:10:00-08:00' },
         { id: 2, from: 'Bob', date: '2026-01-05T23:15:00Z' },
         { id: 3, type: 'service', date: '2026-02-01T04:00:00Z' },
         { id: 4, from: 'Alice' },
+        { id: 5, from: 'Bob', date: '2026-01-06' },
     ] });
     assert.equal(overall.hidden, false);
     assert.equal(app.element('overviewWeekdayRows').children.length, 0);
@@ -1451,31 +1454,63 @@ test('shows written-hour and weekday counts in both scopes without charts', () =
     overall.toggle();
     assert.deepEqual(row('overviewWeekdayRows', 0), ['воскресенье', '1']);
     assert.deepEqual(row('overviewWeekdayRows', 1), ['понедельник', '2']);
-    assert.deepEqual(row('overviewWeekdayRows', 2), ['вторник', '0']);
+    assert.deepEqual(row('overviewWeekdayRows', 2), ['вторник', '1']);
+    assert.deepEqual(row('overviewWeekdayRows', 3), ['среда', '0']);
+    assert.deepEqual(row('overviewWeekdayRows', 7), ['Дата неизвестна', '1']);
     assert.deepEqual(row('overviewHourlyRows', 23), ['23:00', '2']);
     assert.deepEqual(row('overviewHourlyRows', 4), ['04:00', '1']);
-    assert.equal(app.element('overviewHourlyRows').children.length, 24);
+    assert.deepEqual(row('overviewHourlyRows', 24), ['Час неизвестен', '2']);
+    overviewCsv.click();
+    assert.equal(app.downloads[0].name, 'telegram-analyzer-activity-patterns.csv');
+    const whole = await app.downloads[0].blob.text();
+    assert.match(whole, /^dimension,bucket,records\r\nweekday,sunday,1\r\nweekday,monday,2\r\nweekday,tuesday,1\r\n/);
+    assert.match(whole, /weekday,unknown,1\r\nhour,00:00,0\r\n/);
+    assert.match(whole, /hour,23:00,2\r\nhour,unknown,2\r\n$/);
+    assert.doesNotMatch(whole, /Alice|Bob/);
 
     app.monthlyTab.click();
     month.open = true;
     month.toggle();
     assert.deepEqual(row('monthlyWeekdayRows', 0), ['воскресенье', '1']);
     assert.deepEqual(row('monthlyHourlyRows', 23), ['23:00', '0']);
+    monthlyCsv.click();
+    assert.equal(app.downloads[1].name, 'telegram-analyzer-2026-02-activity-patterns.csv');
+    const february = await app.downloads[1].blob.text();
+    assert.match(february, /hour,04:00,1/);
+    assert.doesNotMatch(february, /unknown/);
     app.element('prevMonth').click();
     assert.equal(month.open, true);
     assert.deepEqual(row('monthlyWeekdayRows', 1), ['понедельник', '2']);
     assert.deepEqual(row('monthlyHourlyRows', 23), ['23:00', '2']);
+    assert.deepEqual(row('monthlyHourlyRows', 24), ['Час неизвестен', '1']);
     app.element('languageToggle').click();
     assert.deepEqual(row('overviewWeekdayRows', 1), ['Monday', '2']);
     assert.deepEqual(row('monthlyWeekdayRows', 1), ['Monday', '2']);
+    assert.deepEqual(row('overviewWeekdayRows', 7), ['Date unavailable', '1']);
+    assert.deepEqual(row('monthlyHourlyRows', 24), ['Hour unavailable', '1']);
+    monthlyCsv.click();
+    assert.equal(app.downloads[2].name, 'telegram-analyzer-2026-01-activity-patterns.csv');
+    const january = await app.downloads[2].blob.text();
+    assert.match(january, /weekday,tuesday,1/);
+    assert.match(january, /hour,unknown,1\r\n$/);
+    assert.doesNotMatch(january, /weekday,unknown/);
+    app.allTab.click();
+    overviewCsv.click();
+    assert.equal(await app.downloads[3].blob.text(), whole);
     app.element('clearLoadedData').click();
     assert.equal(overall.hidden, true);
     assert.equal(month.hidden, true);
+    assert.equal(overviewCsv.disabled, true);
+    assert.equal(monthlyCsv.disabled, true);
     assert.equal(app.element('overviewWeekdayRows').children.length, 0);
     assert.equal(app.element('monthlyHourlyRows').children.length, 0);
     app.selectFile('undated.json').complete({ messages: [{ id: 5, from: 'Alice' }] });
-    assert.equal(overall.hidden, true);
+    assert.equal(overall.hidden, false);
     assert.equal(month.hidden, true);
+    overall.open = true;
+    overall.toggle();
+    assert.deepEqual(row('overviewWeekdayRows', 7), ['Date unavailable', '1']);
+    assert.deepEqual(row('overviewHourlyRows', 24), ['Hour unavailable', '1']);
 });
 
 test('exports every date in the selected month without names and includes leap day', async () => {
@@ -3593,6 +3628,46 @@ test('uses explicit ISO offsets for elapsed time when Unix values are absent', (
     const hours = app.charts.get('timeOfDayChart').data.datasets[0].data;
     assert.equal(hours[1], 1);
     assert.equal(hours[3], 1);
+});
+
+test('preserves the written calendar and exact replies for legacy timestamps with explicit zones', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('synthetic-legacy-offsets.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: 'Fri, 31 Oct 2025 23:55:00 -0800' },
+        { id: 2, from: 'Bob', date: 'Sat Nov 1 2025 00:05:00 GMT-08:00 (Zone note)', reply_to_message_id: 1 },
+        { id: 3, from: 'Carol', date: 'Nov 1, 2025 08:15:00 UTC', reply_to_message_id: 2 },
+        { id: 4, from: 'David', date: 'Nov 1, 2025 08:20:00 GMT', reply_to_message_id: 3 },
+        { id: 5, from: 'Eve', date: 'Nov 1, 2025 13:55:00 +0530', reply_to_message_id: 4 },
+        { id: 6, type: 'service', date: '2025/10/31GMT+04:00' },
+        { id: 7, type: 'service', date: 'Nov 1, 2025 08:30:00 GMT+2499' },
+        { id: 8, type: 'service', date: 'Nov 1, 2025 08:35:00 GMT-08:60' },
+    ] });
+    assert.deepEqual(app.alerts, []);
+    assert.deepEqual(Array.from(app.charts.get('monthlyChart').data.labels), ['2025-10', '2025-11']);
+    assert.deepEqual(Array.from(app.charts.get('dayOfWeekChart').data.datasets[0].data), [0, 0, 0, 0, 0, 2, 4]);
+    const hours = app.charts.get('timeOfDayChart').data.datasets[0].data;
+    assert.equal(hours.reduce((total, count) => total + count, 0), 5);
+    assert.equal(hours[0], 1);
+    assert.equal(hours[8], 2);
+    assert.equal(hours[13], 1);
+    assert.equal(hours[23], 1);
+    assert.match(app.element('replyTimingHint').textContent, /4 of 4/);
+
+    const button = app.element('exportReplyTiming');
+    button.click();
+    app.monthlyTab.click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    button.click();
+    const header = 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n';
+    const expected = header + '"Alice","Bob",1,600.000,0,3600\r\n'
+        + '"Bob","Carol",1,600.000,0,3600\r\n"Carol","David",1,300.000,0,3600\r\n'
+        + '"David","Eve",1,300.000,0,3600\r\n';
+    assert.deepEqual(await Promise.all(app.downloads.map(async file => [file.name, await file.blob.text()])), [
+        ['telegram-analyzer-adjacent-replies.csv', expected],
+        ['telegram-analyzer-2025-11-direct-replies.csv', expected],
+    ]);
 });
 
 test('uses one civil timeline for mixed legacy rows and a UTC calendar for Unix-only rows', () => {

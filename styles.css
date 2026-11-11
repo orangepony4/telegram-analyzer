@@ -990,12 +990,21 @@ a { color: var(--accent); }
     cursor: pointer;
 }
 
-.activity-export { margin: 0 12px 8px; }
+.activity-export {
+    max-width: calc(100% - 24px);
+    margin: 0 12px 8px;
+    overflow-wrap: anywhere;
+}
 
 .activity-pattern-tables {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     align-items: start;
+}
+
+.activity-pattern-tables :is(th, td):last-child {
+    width: 1%;
+    white-space: nowrap;
 }
 
 .activity-data table {
