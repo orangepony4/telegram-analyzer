@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Explore Telegram exports with activity charts, participant stats, and reply times. Your files stay in the browser.">
     <title>Telegram Analyzer</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23245442'/%3E%3Cpath d='M7 8h18v13H13l-5 4v-4H7zM12 17v-3m4 3v-5m4 5v-7' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%234e367c'/%3E%3Cpath d='M7 8h18v13H13l-5 4v-4H7zM12 17v-3m4 3v-5m4 5v-7' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="styles.css">
     <script src="vendor/chart.umd.min.js" defer></script>
     <script src="analyzer.js" defer></script>
@@ -180,7 +180,7 @@
                                     <h3 id="monthlyChartLabel" data-ru="Динамика переписки">Activity over time</h3>
                                     <p data-ru="Количество сообщений по месяцам">Messages per month</p>
                                 </div>
-                                <button class="button button-quiet chart-export" type="button" data-chart-png="monthlyChart"
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="monthlyChart" data-chart-file="activity-over-time"
                                         aria-labelledby="trendPngLabel monthlyChartLabel" disabled>
                                     <i class="fas fa-download" aria-hidden="true"></i> <span id="trendPngLabel" data-ru="Скачать PNG">Save PNG</span>
                                 </button>
@@ -201,9 +201,16 @@
                             </fieldset>
                         </section>
                         <section class="chart-card chart-side">
-                            <div class="chart-heading">
-                                <h3 id="messageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
-                                <p data-ru="Текст и медиа в чате">Text and media in the chat</p>
+                            <div class="chart-heading chart-heading-with-export">
+                                <div>
+                                    <h3 id="messageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
+                                    <p data-ru="Текст и медиа в чате">Text and media in the chat</p>
+                                </div>
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="messageTypesChart" data-chart-file="message-types"
+                                        aria-labelledby="typesPngLabel messageTypesChartLabel" disabled>
+                                    <i class="fas fa-download" aria-hidden="true"></i> <span id="typesPngLabel" data-ru="Скачать PNG">Save PNG</span>
+                                </button>
+                                <p class="chart-export-feedback" role="status"></p>
                             </div>
                             <div class="chart-plot"><canvas id="messageTypesChart" role="img" aria-labelledby="messageTypesChartLabel"></canvas></div>
                         </section>
@@ -334,7 +341,7 @@
                                     <h3 id="dailyActivityChartLabel" data-ru="Активность по дням">Daily activity</h3>
                                     <p data-ru="Количество сообщений за каждый день месяца">Messages on each day of the month</p>
                                 </div>
-                                <button class="button button-quiet chart-export" type="button" data-chart-png="dailyActivityChart"
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="dailyActivityChart" data-chart-file="daily-activity"
                                         aria-labelledby="dailyPngLabel dailyActivityChartLabel" disabled>
                                     <i class="fas fa-download" aria-hidden="true"></i> <span id="dailyPngLabel" data-ru="Скачать PNG">Save PNG</span>
                                 </button>
@@ -343,9 +350,16 @@
                             <div class="chart-plot"><canvas id="dailyActivityChart" role="img" aria-labelledby="dailyActivityChartLabel"></canvas></div>
                         </section>
                         <section class="chart-card chart-side">
-                            <div class="chart-heading">
-                                <h3 id="monthlyMessageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
-                                <p data-ru="Текст и медиа за месяц">Text and media in the selected month</p>
+                            <div class="chart-heading chart-heading-with-export">
+                                <div>
+                                    <h3 id="monthlyMessageTypesChartLabel" data-ru="Типы сообщений">Message types</h3>
+                                    <p data-ru="Текст и медиа за месяц">Text and media in the selected month</p>
+                                </div>
+                                <button class="button button-quiet chart-export" type="button" data-chart-png="monthlyMessageTypesChart" data-chart-file="message-types"
+                                        aria-labelledby="monthTypesPngLabel monthlyMessageTypesChartLabel" disabled>
+                                    <i class="fas fa-download" aria-hidden="true"></i> <span id="monthTypesPngLabel" data-ru="Скачать PNG">Save PNG</span>
+                                </button>
+                                <p class="chart-export-feedback" role="status"></p>
                             </div>
                             <div class="chart-plot"><canvas id="monthlyMessageTypesChart" role="img" aria-labelledby="monthlyMessageTypesChartLabel"></canvas></div>
                         </section>

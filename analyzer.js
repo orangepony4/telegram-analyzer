@@ -367,7 +367,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let accountChats = [];
     let currentMonthIndex = 0;
     let monthsData = [];
-    let allParticipants = new Set();
     let trendComparison = null;
     const fullTrendParticipantLimit = 20;
     const leadingTrendParticipantCount = 12;
@@ -540,7 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
     exportMonthlyParticipantsButton.addEventListener('click', downloadMonthlyParticipantSummary);
     exportReplyTimingButton.addEventListener('click', downloadReplyTiming);
     for (const [canvasId, button] of chartPngButtons) {
-        button.addEventListener('click', () => downloadActivityChart(canvasId, button));
+        button.addEventListener('click', () => downloadChartPng(canvasId, button));
     }
     monthlyChartSeries.addEventListener('focusin', event => {
         event.target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -1410,7 +1409,6 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshMonthlyMessageTypes();
         refreshOverviewReactions();
         refreshMonthlyReactions();
-        allParticipants = new Set();
         exportParticipantsButton.disabled = true;
         exportMonthlyParticipantsButton.disabled = true;
     }
@@ -1892,11 +1890,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function analyzeChat(timings) {
-        const messages = timings.map(timing => timing.message);
-        allParticipants = new Set(messages.map(m => m.from).filter(name => name));
-
         // Подготовка данных по месяцам
         const messagesByMonth = {};
+        const allTimeData = {
+            timeOfDay: new Array(24).fill(0),
+            messageTypes: Object.create(null),
+            dayOfWeekActivity: new Array(7).fill(0),
+        };
         const responseTimes = Object.create(null);
         const directResponses = Object.create(null);
         let linkedReplies = 0;
@@ -1907,15 +1907,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const datedParticipants = new Set();
         const reactionCounts = new Map();
         const wordCounts = Object.create(null);
+        const mediaTypeUsage = Object.create(null);
         let previousMessage = null;
         timings.forEach(timing => {
             const { message: msg, calendar, hour, time } = timing;
             const replyLink = replyLinkId(msg);
             if (replyLink !== null) linkedReplies++;
+            const type = getMessageCategory(msg);
+            const sharedContent = isSharedContentCategory(type);
+            allTimeData.messageTypes[type] = (allTimeData.messageTypes[type] ?? 0) + 1;
             const { words, textLength } = msg.from ? countReportText(msg) : { words: 0, textLength: 0 };
             if (msg.from) {
                 wordCounts[msg.from] = (wordCounts[msg.from] ?? 0) + words;
                 addParticipantMessage(participantTotals, msg.from, textLength);
+                const mediaTypes = mediaTypeUsage[msg.from] ??= Object.create(null);
+                if (sharedContent) mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
             if (!calendar) {
                 collectReactionCounts(msg.reactions, reactionCounts);
@@ -1945,10 +1951,14 @@ document.addEventListener('DOMContentLoaded', () => {
             month.messageCount++;
             collectReactionCounts(msg.reactions, reactionCounts, month.reactionCounts);
             if (replyLink !== null) month.linkedReplies++;
-            const type = getMessageCategory(msg);
             month.messageTypes[type] = (month.messageTypes[type] ?? 0) + 1;
-            if (hour !== null) month.timeOfDay[hour]++;
-            month.dayOfWeekActivity[calendar.getUTCDay()]++;
+            if (hour !== null) {
+                month.timeOfDay[hour]++;
+                allTimeData.timeOfDay[hour]++;
+            }
+            const weekday = calendar.getUTCDay();
+            month.dayOfWeekActivity[weekday]++;
+            allTimeData.dayOfWeekActivity[weekday]++;
             month.dailyActivity[calendar.getUTCDate() - 1]++;
 
             if (!msg.from) {
@@ -1958,7 +1968,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             datedParticipants.add(msg.from);
             addParticipantMessage(month.participantTotals, msg.from, textLength);
-            if (isSharedContentCategory(type)) {
+            if (sharedContent) {
                 const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
                 mediaTypes[type] = (mediaTypes[type] ?? 0) + 1;
             }
@@ -1998,11 +2008,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!hasDirectReplies) replyTimingMode = 'adjacent';
         replyTimingSelect.value = replyTimingMode;
         overallParticipantTotals = participantTotals;
-        const allTimeData = calculateAllTimeStats(timings);
         overviewData = {
-            messageCount: messages.length,
+            messageCount: timings.length,
             words: wordCounts,
-            media: calculateMediaTypeUsage(messages),
+            media: mediaTypeUsage,
             activity: allTimeData,
             reactionCounts,
         };
@@ -2110,24 +2119,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function calculateAllTimeStats(timings) {
-        const timeOfDay = new Array(24).fill(0);
-        const messageTypes = Object.create(null);
-        const dayOfWeekActivity = new Array(7).fill(0);
-
-        timings.forEach(({ message: msg, calendar, hour }) => {
-            if (calendar) {
-                if (hour !== null) timeOfDay[hour]++;
-                dayOfWeekActivity[calendar.getUTCDay()]++;
-            }
-
-            const type = getMessageCategory(msg);
-            messageTypes[type] = (messageTypes[type] || 0) + 1;
-        });
-
-        return { timeOfDay, messageTypes, dayOfWeekActivity };
-    }
-
     function displayGeneralStats(messageCount, participantTotals, responseTimes) {
         const messageCountElement = document.getElementById('messageCount');
         const participantStatsElement = document.getElementById('participantStats');
@@ -2189,20 +2180,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const wordCountStatsElement = document.getElementById('wordCountStats');
         const title = `<i class="fas fa-font" aria-hidden="true"></i> ${translate('totalWords')}`;
         wordCountStatsElement.innerHTML = generateWordCountHTML(wordCounts, title);
-    }
-
-    function calculateMediaTypeUsage(messages) {
-        const mediaTypeUsage = Object.create(null);
-        allParticipants.forEach(p => mediaTypeUsage[p] = Object.create(null));
-        messages.forEach(msg => {
-            if (!msg.from) return;
-            const type = getMessageCategory(msg);
-            if (isSharedContentCategory(type)) {
-                const counts = mediaTypeUsage[msg.from];
-                counts[type] = (counts[type] ?? 0) + 1;
-            }
-        });
-        return mediaTypeUsage;
     }
 
     function displayMediaTypeStats(mediaTypeUsage) {
@@ -2849,8 +2826,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function chartSeriesColor(index) {
         const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
-            '#74854b', '#5a8890', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#348076',
-            '#796958', '#567388', '#87575e', '#7f5f92', '#4b7098', '#9b6e45', '#507e60', '#b05a79'];
+            '#9871a9', '#537ca6', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#775ba0',
+            '#796958', '#567388', '#87575e', '#7f5f92', '#4b7098', '#9b6e45', '#9e6884', '#b05a79'];
         return colors[index % colors.length];
     }
 
@@ -2900,16 +2877,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return statsHTML;
     }
 
-    async function downloadActivityChart(canvasId, button) {
+    async function downloadChartPng(canvasId, button) {
         const source = renderedCharts.get(canvasId);
         if (!source || button.disabled || button.getAttribute('aria-busy') === 'true') return;
         const heading = button.parentElement;
         const feedback = heading.querySelector('.chart-export-feedback');
-        const monthly = canvasId === 'dailyActivityChart';
-        const month = monthly ? monthsData[currentMonthIndex]?.month : null;
-        const filename = month
-            ? `telegram-analyzer-${month}-daily-activity.png`
-            : 'telegram-analyzer-activity-over-time.png';
+        const month = source.canvas.closest('#monthly') ? monthsData[currentMonthIndex]?.month : null;
+        const period = month ? month + '-' : '';
+        const filename = `telegram-analyzer-${period}${button.dataset.chartFile}.png`;
         const title = heading.querySelector('h3').textContent;
         const description = heading.querySelector('div > p').textContent;
         const subtitle = month ? `${formatReportMonth(month)} · ${description}` : description;
@@ -2925,6 +2900,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!context) throw new Error('Canvas unavailable');
             const { type, options } = source.config;
             const { labels, datasets } = source.data;
+            const doughnut = type === 'doughnut';
             // Keep indices and styling stable when a series is hidden in the on-screen chart.
             const data = {
                 labels: labels.slice(),
@@ -2936,8 +2912,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const legendFont = { size: 13, family: Chart.defaults.font.family };
             const legendPadding = 8;
             const legendBoxWidth = 20;
+            const legend = doughnut ? Chart.overrides.doughnut.plugins.legend : Chart.defaults.plugins.legend;
             snapshot = new Chart(context, {
                 type, data,
+                plugins: doughnut ? [{
+                    id: 'exportSliceVisibility',
+                    beforeInit(chart) {
+                        labels.forEach((_, index) => {
+                            if (!source.getDataVisibility(index)) chart.toggleDataVisibility(index);
+                        });
+                    }
+                }] : [],
                 options: {
                     ...options,
                     responsive: false,
@@ -2945,13 +2930,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     animation: false,
                     events: [],
                     layout: { padding },
-                    scales: {
+                    scales: doughnut ? undefined : {
                         ...options.scales,
                         x: {
                             ...options.scales.x,
                             ticks: {
                                 ...options.scales.x.ticks,
-                                autoSkip: !monthly,
+                                autoSkip: type !== 'bar',
                                 font: { size: 13 }
                             }
                         },
@@ -2967,7 +2952,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         },
                         subtitle: { display: true, text: subtitle, color: chartTheme.textColor, align: 'start', padding: { bottom: 16 } },
                         legend: {
-                            display: !monthly,
+                            display: type !== 'bar',
                             position: 'bottom',
                             labels: {
                                 color: chartTheme.textColor,
@@ -2977,7 +2962,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 font: legendFont,
                                 filter: item => !item.hidden,
                                 generateLabels(chart) {
-                                    const items = Chart.defaults.plugins.legend.labels.generateLabels(chart);
+                                    const items = legend.labels.generateLabels(chart);
                                     // Fit at least three items per row so the longest legend keeps room for the plot.
                                     const available = (chart.width - 2 * padding) / 3
                                         - legendBoxWidth - legendPadding - legendFont.size;
