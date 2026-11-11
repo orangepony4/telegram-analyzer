@@ -8,12 +8,13 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '..', 'analyzer.js'), 'utf8');
 const russianLocale = { getItem: key => key === 'telegramAnalyzerLocale' ? 'ru' : null };
 
-function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl = Intl, search = '' } = {}) {
+function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl = Intl, search = '', pngChart } = {}) {
     const elements = new Map();
     const charts = new Map();
     const readers = [];
     const alerts = [];
     const downloads = [];
+    const encodes = [];
     let downloadedBlob;
     let focusedElement;
 
@@ -81,13 +82,15 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
     uploadPlaceholder.setAttribute('data-ru', 'Выберите JSON-файл');
 
     class Chart {
-        static defaults = {};
+        static defaults = { font: { family: 'sans-serif' }, plugins: { legend: { labels: {} } } };
         static getChart(id) { return charts.get(id); }
 
         constructor(id, config) {
+            this.config = config;
             this.options = config.options;
             this.data = config.data;
             this.id = id;
+            this.canvas = { closest: () => id === 'dailyActivityChart' };
             this.hiddenDatasets = new Set();
             this.hiddenData = new Set();
             charts.set(id, this);
@@ -139,6 +142,12 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         }
     }
 
+    const pngButton = pngChart ? element('chartPngButton') : null;
+    if (pngButton) {
+        pngButton.dataset = { chartPng: pngChart, chartFile: 'daily-activity' };
+        pngButton.parentElement = { querySelector: element };
+    }
+
     const documentElement = element('html');
     vm.runInNewContext(source, {
         document: {
@@ -150,11 +159,18 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
             querySelectorAll(selector) {
                 if (selector === '.tab-btn') return [allTab, monthlyTab];
                 if (selector.startsWith('[data-ru]')) return [uploadPlaceholder];
+                if (selector === '[data-chart-png]' && pngButton) return [pngButton];
                 return [];
             },
             createElement(tag) {
                 if (tag === 'a') {
                     return { click() { downloads.push({ name: this.download, blob: downloadedBlob }); } };
+                }
+                if (tag === 'canvas') {
+                    return {
+                        getContext: () => ({ save() {}, setTransform() {}, fillRect() {}, restore() {} }),
+                        toBlob(callback) { encodes.push(callback); },
+                    };
                 }
                 if (tag === 'optgroup') {
                     const group = element(Symbol(tag));
@@ -218,11 +234,42 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
     }
 
     return {
-        element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo, documentElement,
+        element, charts, alerts, downloads, allTab, monthlyTab, selectFile, selectDemo, documentElement, encodes, pngButton,
         startupDemo: readers.length ? demoImport(readers[0]) : null,
         get focusedElement() { return focusedElement; },
     };
 }
+
+test('discards stale PNG encodes without ending the rebuilt chart’s export', async () => {
+    const app = createAnalyzer({
+        search: '?view=upload', storage: { getItem: () => null }, pngChart: 'dailyActivityChart',
+    });
+    const { pngButton: button, encodes } = app;
+    app.selectFile('synthetic.png.json').complete({ messages: [
+        { from: 'Alice', date: '2025-01-01T10:00:00Z' },
+        { from: 'Bob', date: '2025-02-01T10:00:00Z' },
+    ] });
+    app.monthlyTab.click();
+
+    const february = button.click();
+    assert.equal(button.getAttribute('aria-busy'), 'true');
+    app.element('prevMonth').click();
+    assert.equal(button.getAttribute('aria-busy'), undefined);
+    const january = button.click();
+    assert.equal(encodes.length, 2);
+
+    encodes.shift()(new Blob(['old image']));
+    await february;
+    assert.deepEqual(app.downloads, []);
+    assert.equal(button.getAttribute('aria-busy'), 'true');
+
+    app.element('clearLoadedData').click();
+    assert.equal(button.getAttribute('aria-busy'), undefined);
+    encodes.shift()(null);
+    await january;
+    assert.deepEqual(app.downloads, []);
+    assert.equal(app.element('.chart-export-feedback').textContent, '');
+});
 
 function openParticipantTable(app, period = 'overview') {
     const panel = app.element(period + 'Participants');

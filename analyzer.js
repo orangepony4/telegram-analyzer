@@ -1535,7 +1535,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderedCharts.clear();
         for (const button of chartPngButtons.values()) {
             button.disabled = true;
-            setLocalizedText(button.parentElement.querySelector('.chart-export-feedback'), '');
+            resetChartPngButton(button);
         }
         renderMonthlyChartLegend();
         for (const canvasId of messageTypeLegends.keys()) renderMessageTypeLegend(canvasId);
@@ -2724,7 +2724,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const exportButton = chartPngButtons.get(canvasId);
         if (exportButton) {
             exportButton.disabled = data.labels.length === 0;
-            setLocalizedText(exportButton.parentElement.querySelector('.chart-export-feedback'), '');
+            resetChartPngButton(exportButton);
         }
         return chart;
     }
@@ -3075,6 +3075,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function resetChartPngButton(button) {
+        button.removeAttribute('aria-busy');
+        setLocalizedText(button.parentElement.querySelector('.chart-export-feedback'), '');
+    }
+
     async function downloadChartPng(canvasId, button) {
         const source = renderedCharts.get(canvasId);
         if (!source || button.disabled || button.getAttribute('aria-busy') === 'true') return;
@@ -3193,13 +3198,15 @@ document.addEventListener('DOMContentLoaded', () => {
             context.fillRect(0, 0, canvas.width, canvas.height);
             context.restore();
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+            // A replacement chart can already own this button when an old encoder returns.
+            if (renderedCharts.get(canvasId) !== source) return;
             if (!blob) throw new Error('PNG encoding failed');
             downloadBlob(blob, filename);
         } catch {
             if (renderedCharts.get(canvasId) === source) setLocalizedText(feedback, translated('chartExportFailed'));
         } finally {
             snapshot?.destroy();
-            button.removeAttribute('aria-busy');
+            if (renderedCharts.get(canvasId) === source) button.removeAttribute('aria-busy');
         }
     }
 
