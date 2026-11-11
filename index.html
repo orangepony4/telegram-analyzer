@@ -88,6 +88,13 @@
                 <p id="importStatus" class="sr-only" role="status"></p>
             </div>
 
+            <details class="export-help" id="exportHelp">
+                <summary data-ru="Где взять JSON?">Where do I get a JSON file?</summary>
+                <p data-ru="Для одного чата откройте его меню в Telegram Desktop и выберите «Экспорт истории чата».">For one chat, open its menu in Telegram Desktop and choose Export chat history.</p>
+                <p data-ru="Для нескольких чатов откройте «Настройки → Продвинутые настройки → Экспорт данных из Telegram» и отметьте нужные типы чатов.">For several chats, open Settings → Advanced → Export Telegram data and select the chat types you want.</p>
+                <p data-ru="Выберите «Машиночитаемый JSON» и откройте здесь файл result.json. Медиа можно оставить выключенными.">Choose Machine-readable JSON and open result.json here. You can leave media unchecked.</p>
+            </details>
+
             <div class="account-chat-chooser" id="accountChatChooser" hidden>
                 <div class="account-chat-field account-chat-search" id="accountChatSearchField" hidden>
                     <label for="accountChatSearch" data-ru="Найти чат по названию">Find a chat by name</label>
@@ -110,11 +117,6 @@
                 <p id="accountChatStatus" class="account-chat-status" role="status"></p>
             </div>
 
-            <details class="export-help">
-                <summary data-ru="Где взять JSON?">Where do I get a JSON file?</summary>
-                <p data-ru="Откройте чат в Telegram Desktop. В меню выберите «Экспорт истории чата» и укажите формат JSON. В анализаторе откройте полученный файл result.json.">In Telegram Desktop, open the chat menu, choose “Export chat history,” and select JSON. Open the resulting result.json file here.</p>
-                <p data-ru="Подходит и общий экспорт аккаунта с включённой историей чатов.">You can also use an account export that includes chat history.</p>
-            </details>
             <p class="source-privacy"><i class="fas fa-shield-alt" aria-hidden="true"></i> <span data-ru="Файлы остаются в браузере">Files stay in your browser</span></p>
         </aside>
 

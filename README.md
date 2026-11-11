@@ -27,7 +27,7 @@ Choose **Print report** to print the selected scope or save it as PDF from the b
 
 ### What the report measures
 
-- Activity charts show messages by month, time of day, and day of the week. In chats with more than 20 participants, the trend chart shows the 12 with the most dated records. Search for another participant by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
+- Activity charts show messages by month, time of day, and day of the week. The monthly trend includes participants with dated records. If more than 20 participants have dated records, the chart shows the 12 with the most records. Search for another participant with dated records by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
 - Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
 - Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records. Use **Daily CSV** to download those same counts for the selected month with `YYYY-MM-DD` dates.
 - Open **Activity by weekday and hour** in either report to read the same counts as the charts, including zero values. The counts follow the calendar time written in the export.
@@ -55,7 +55,7 @@ Choose **Print report** to print the selected scope or save it as PDF from the b
 
 ### Offline use and privacy
 
-Use a modern browser and a Telegram Desktop JSON export to analyze your own data. HTML exports use a different structure. If your import fails, check that you chose the Telegram JSON file.
+Use a modern browser and a Telegram Desktop JSON export to analyze your own data. For several chats, open **Settings → Advanced → Export Telegram data**, select the chat types, and choose **Machine-readable JSON**. If you open an HTML export, the analyzer shows the steps for exporting JSON.
 
 Choosing or dropping a new file stops the previous pending import. If the new file cannot be opened, the last completed report or account chat list remains available.
 
@@ -105,7 +105,7 @@ Telegram Analyzer показывает активность, участнико�
 
 ### Что считает анализатор
 
-- Графики показывают активность по месяцам, времени суток и дням недели. Если в чате больше 20 участников, график динамики показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
+- Графики показывают активность по месяцам, времени суток и дням недели. На график динамики попадают участники с датированными записями. Если таких участников больше 20, график показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника с датированными записями, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
 - В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.
 - В разделе **«По месяцам»** откройте **«Активность по дням в таблице»**, чтобы увидеть число записей за каждый календарный день, включая дни без записей. Кнопка **«CSV по дням»** сохраняет те же значения за выбранный месяц с датами в формате `YYYY-MM-DD`.
 - Раздел **«Активность по дням недели и часам»** есть в обоих отчётах. Таблицы показывают те же значения, что и графики, включая нулевые, по календарному времени из экспорта.
@@ -133,7 +133,7 @@ Telegram Analyzer показывает активность, участнико�
 
 ### Работа без интернета и приватность
 
-Для своего чата нужен современный браузер и JSON-экспорт Telegram Desktop. У HTML-экспорта другая структура. Если файл не открывается, проверьте формат экспорта.
+Для своего чата нужен современный браузер и JSON-экспорт Telegram Desktop. Для нескольких чатов откройте **«Настройки → Продвинутые настройки → Экспорт данных из Telegram»**, отметьте нужные типы чатов и выберите **«Машиночитаемый JSON»**. При открытии HTML-экспорта анализатор покажет шаги для экспорта JSON.
 
 Выбор или перетаскивание нового файла останавливает незавершённый импорт. Если новый файл не открывается, последний готовый отчёт или список чатов аккаунта остаётся доступен.
 

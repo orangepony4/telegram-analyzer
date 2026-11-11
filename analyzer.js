@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const importStatus = document.getElementById('importStatus');
     const sourceFileType = document.getElementById('sourceFileType');
     const fileError = document.getElementById('fileError');
+    const exportHelp = document.getElementById('exportHelp');
     const reportKind = document.getElementById('reportKind');
     const reportTitle = document.getElementById('reportTitle');
     const reportMeta = document.getElementById('reportMeta');
@@ -195,6 +196,10 @@ document.addEventListener('DOMContentLoaded', () => {
         importCanceled: ['Import canceled.', 'Импорт отменён.'],
         reportReady: ['Analysis complete. The report is available below.', 'Анализ завершён. Статистика доступна ниже.'],
         chooseJson: ['Choose a JSON export from Telegram Desktop.', 'Выберите JSON из Telegram Desktop.'],
+        htmlExport: [
+            'This looks like an HTML export. Choose Machine-readable JSON in Telegram Desktop and open result.json here.',
+            'Похоже, это HTML-экспорт. Выберите «Машиночитаемый JSON» в Telegram Desktop и откройте здесь файл result.json.',
+        ],
         noChatHistory: [
             'No chat history found. Choose a chat or account export from Telegram Desktop.',
             'В файле нет истории чата. Выберите экспорт чата или аккаунта из Telegram Desktop.',
@@ -1547,7 +1552,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 restoreImportView(pending.previous);
                 hideLoadingIndicator();
             }
-            showFileError(translated('chooseJson'));
+            const isHtml = /\.html?$/i.test(file.name) || /^text\/html(?:\s*;|$)/i.test(file.type);
+            if (isHtml) exportHelp.open = true;
+            showFileError(translated(isHtml ? 'htmlExport' : 'chooseJson'));
             clearFileInput();
             return;
         }
@@ -1611,6 +1618,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     text = decodeImportText(e.target.result, file.type);
                 } catch {
                     rejectImport('invalidEncoding');
+                    return;
+                }
+                if (/^\s*(?:<!doctype\s+html|<html)(?=[\s>])/i.test(text)) {
+                    exportHelp.open = true;
+                    rejectImport('htmlExport');
                     return;
                 }
                 const data = JSON.parse(text);
@@ -1892,6 +1904,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const replyTargets = findReplyTargets(timings);
         const unplacedGaps = findUnplacedReplyGaps(timings);
         const participantTotals = new Map();
+        const datedParticipants = new Set();
         const reactionCounts = new Map();
         const wordCounts = Object.create(null);
         let previousMessage = null;
@@ -1943,6 +1956,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (msg.type !== 'service' && Number.isFinite(time)) previousMessage = null;
                 return;
             }
+            datedParticipants.add(msg.from);
             addParticipantMessage(month.participantTotals, msg.from, textLength);
             if (isSharedContentCategory(type)) {
                 const mediaTypes = month.mediaTypesStats[msg.from] ??= Object.create(null);
@@ -1998,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshOverviewReactions();
 
         // Создаем графики общей статистики
-        createMonthlyChart(monthsData);
+        createMonthlyChart(monthsData, [...datedParticipants]);
         createResponseTimeChart(selectedResponseTimes(overallResponseStats));
         createTimeOfDayChart(allTimeData.timeOfDay);
         createMessageTypesChart(allTimeData.messageTypes);
@@ -2561,9 +2575,8 @@ document.addEventListener('DOMContentLoaded', () => {
         createDayOfWeekChart(data.dayOfWeekActivity, 'monthlyDayOfWeekChart');
     }
 
-    function createMonthlyChart(monthsData) {
+    function createMonthlyChart(monthsData, participants) {
         const labels = monthsData.map(m => m.month);
-        const participants = Array.from(allParticipants);
         const leadingParticipants = participants.length > fullTrendParticipantLimit
             ? selectLeadingTrendParticipants(participants, monthsData) : participants;
 

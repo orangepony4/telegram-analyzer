@@ -1336,6 +1336,31 @@ test('ignores malformed account groups and hides stale choosers on single or dem
     assert.deepEqual(app.alerts, []);
 });
 
+test('opens the export guide for HTML files and restores the previous report', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const help = app.element('exportHelp');
+    const error = app.element('fileError');
+    app.selectFile('messages.HTML', 'text/html');
+    assert.match(error.textContent, /HTML export.*Machine-readable JSON/);
+    assert.equal(help.open, true);
+
+    const messages = [{ id: 1, from: 'Synthetic', date: '2026-10-01T12:00:00Z', text: 'Hello' }];
+    app.selectFile('saved.json').complete({ name: 'Saved report', messages });
+    help.open = false;
+    app.selectFile('renamed.json', 'text/html').completeRaw('\uFEFF\n<!DOCTYPE html><html><body>Example</body></html>');
+    assert.equal(app.element('reportTitle').textContent, 'Saved report');
+    assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    assert.equal(app.element('.stats-container').style.display, 'block');
+    assert.equal(help.open, true);
+    assert.match(error.textContent, /renamed\.json.*HTML export/);
+    app.element('languageToggle').click();
+    assert.match(error.textContent, /HTML.*Машиночитаемый JSON/);
+
+    app.selectFile('correct.json', 'text/html').complete({ name: 'Replacement report', messages });
+    assert.equal(app.element('reportTitle').textContent, 'Replacement report');
+    assert.equal(error.hidden, true);
+});
+
 test('restores the same month and exports after malformed or unreadable replacements', async () => {
     const app = createAnalyzer();
     const monthExport = app.element('exportMonthlyParticipants');
@@ -1592,7 +1617,7 @@ test('a wrong-format replacement cancels the pending read and restores the previ
     assert.equal(app.element('dropFileName').textContent, 'saved.json');
     assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
     assert.equal(app.element('exportMonthlyParticipants').disabled, false);
-    assert.equal(app.element('fileError').textContent, 'Выберите JSON из Telegram Desktop.');
+    assert.match(app.element('fileError').textContent, /HTML.*Машиночитаемый JSON/);
 });
 
 test('canceling a replacement restores the previous account report and ignores stale callbacks', () => {
@@ -1996,6 +2021,48 @@ test('bounds large trend datasets and keeps any other participant available for 
     assert.equal(select.children.length, 0);
     assert.equal(app.monthlyTab.disabled, true);
     assert.equal(app.element('overviewParticipantCount').textContent, '24');
+});
+
+test('limits the monthly trend using dated participants and keeps undated participants in the chat CSV', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const date = '2026-10-01T08:00:00';
+    const dated = Array.from({ length: 20 }, (_, index) => ({
+        id: index + 1, from: 'Guest ' + (index + 1), date, text: 'Example',
+    }));
+    const undated = [{ id: 40, from: 'Missing date', text: 'Example' },
+        { id: 41, from: 'Invalid date', date: '2026-02-30', text: 'Example' }];
+    const unattributed = { id: 42, date, type: 'service' };
+    const panel = app.element('trendComparisonPanel');
+    const select = app.element('trendComparison');
+    const trend = () => app.charts.get('monthlyChart').data.datasets;
+    app.selectFile('mixed-dates.json').complete({ messages: [...dated, ...undated, unattributed] });
+    assert.equal(panel.hidden, true);
+    assert.deepEqual(Array.from(trend(), series => series.label), [
+        ...dated.map(message => message.from), 'Записи без отправителя',
+    ]);
+    assert.ok(trend().every(series => series.data[0] === 1));
+    assert.equal(app.element('overviewParticipantCount').textContent, '22');
+    app.element('exportParticipants').click();
+    const csv = await app.downloads[0].blob.text();
+    assert.match(csv, /"Missing date",1,7\.0/);
+    assert.match(csv, /"Invalid date",1,7\.0/);
+
+    const dateOnly = { id: 21, from: 'Guest 21', date: '2026-10-01', text: 'Example' };
+    app.selectFile('large-mixed-dates.json').complete({ messages: [...dated, dateOnly, ...undated, unattributed] });
+    assert.equal(panel.hidden, false);
+    assert.deepEqual(select.options.map(option => option.textContent), [
+        'Без сравнения', ...dated.slice(12).map(message => message.from), dateOnly.from,
+    ]);
+    select.value = '8';
+    select.change({ target: select });
+    assert.equal(trend().at(-1).label, dateOnly.from);
+    assert.equal(trend().at(-1).data[0], 1);
+
+    app.selectFile('only-undated.json').complete({ messages: undated });
+    assert.equal(panel.hidden, true);
+    assert.equal(app.element('monthlyChartLegend').hidden, true);
+    assert.equal(trend().length, 0);
+    assert.equal(app.element('overviewParticipantCount').textContent, '2');
 });
 
 test('filters comparison participants by substring while preserving the selected chart series', () => {
