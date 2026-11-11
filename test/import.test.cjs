@@ -1817,6 +1817,31 @@ test('opens Unicode exports with or without a BOM and respects declared charsets
     }
 });
 
+test('imports extensionless exports with JSON MIME parameters and preserves the report on errors', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const variants = [
+        ['application/json; charset=utf-8', 'utf8', 'Synthetic Кириллица'],
+        ['text/json; charset="utf-16le"', 'utf16le', 'Synthetic 日本語 😸'],
+    ];
+    for (const [type, encoding, title] of variants) {
+        const data = JSON.stringify({ name: title, messages: [] });
+        const upload = app.selectFile('synthetic-export', type);
+        assert.equal(app.element('fileError').hidden, true, type);
+        upload.completeRaw(Buffer.from(data, encoding));
+        assert.equal(app.element('fileError').hidden, true, type);
+        assert.equal(app.element('reportTitle').textContent, title, type);
+    }
+
+    app.selectFile('wrong-format', 'text/plain; charset=utf-8');
+    assert.match(app.element('fileError').textContent, /Choose a JSON export from Telegram Desktop/);
+    assert.equal(app.element('reportTitle').textContent, variants[1][2]);
+
+    app.selectFile('malformed-export', 'application/json; charset=utf-8').completeRaw('{ malformed');
+    assert.match(app.element('fileError').textContent, /valid JSON export/);
+    assert.equal(app.element('reportTitle').textContent, variants[1][2]);
+    assert.equal(app.element('dropFileName').textContent, 'synthetic-export');
+});
+
 test('imports Telegram Desktop control escapes without changing literal escape text', async () => {
     const app = createAnalyzer({ search: '?view=upload' });
     const title = 'Synthetic "chat" \u000b \\x1F';

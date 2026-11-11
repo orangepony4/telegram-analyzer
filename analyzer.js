@@ -1939,7 +1939,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return true;
         }
 
-        const mimeType = file.type?.toLowerCase();
+        const mimeType = file.type?.split(';', 1)[0].trim().toLowerCase();
         return mimeType === 'application/json' || mimeType === 'text/json';
     }
 
