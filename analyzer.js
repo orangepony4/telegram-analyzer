@@ -289,6 +289,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ],
         weekdays: [['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']],
         chartResponse: ['Average response time (min)', 'Среднее время ответа (мин)'],
+        replyChartSelection: [
+            (shown, total) => `${shown} of ${total} pairs by reply count`,
+            (shown, total) => `Пар на графике: ${shown} из ${total}, по числу ответов`,
+        ],
         replyCoverage: [
             (timed, linked) => `Direct replies timed · ${timed} of ${linked}`,
             (timed, linked) => `Замерено прямых ответов · ${timed} из ${linked}`,
@@ -3152,17 +3156,75 @@ document.addEventListener('DOMContentLoaded', () => {
         setLocalizedText(button.parentElement.querySelector('.chart-export-feedback'), '');
     }
 
+    function replyPngLabels(context, pairs, fontFamily) {
+        context.save();
+        context.font = `13px ${fontFamily}`;
+        const labels = pairs.map(({ sender, responder }, index) => [
+            fitReplyPngLabel(context, `${index + 1}. ${sender}`),
+            fitReplyPngLabel(context, `→ ${responder}`),
+        ]);
+        context.restore();
+        return labels;
+    }
+
+    function fitReplyPngLabel(context, label) {
+        const text = label.replace(/\s+/g, ' ').trim();
+        const width = 380;
+        if (context.measureText(text).width <= width) return text;
+
+        const characters = Array.from(text);
+        for (let count = Math.min(80, characters.length - 1); count >= 2; count--) {
+            const start = Math.ceil(count / 2);
+            const end = Math.floor(count / 2);
+            const shortened = characters.slice(0, start).join('') + '…' + characters.slice(-end).join('');
+            if (context.measureText(shortened).width <= width) return shortened;
+        }
+        return '…';
+    }
+
+    function chartPngScales(type, scales, replyChart) {
+        if (type === 'doughnut') return undefined;
+        const font = { size: 13 };
+        if (replyChart) {
+            return {
+                x: {
+                    beginAtZero: true,
+                    grid: { color: chartTheme.gridColor },
+                    ticks: { color: chartTheme.textColor, font, maxTicksLimit: 6 },
+                    title: { display: true, text: translate('chartResponse'), color: chartTheme.textColor },
+                },
+                y: {
+                    grid: { display: false },
+                    border: { color: chartTheme.borderColor },
+                    ticks: { color: chartTheme.textColor, font, autoSkip: false },
+                },
+            };
+        }
+        return {
+            ...scales,
+            x: {
+                ...scales.x,
+                ticks: { ...scales.x.ticks, autoSkip: type !== 'bar', font },
+            },
+            y: {
+                ...scales.y,
+                ticks: { ...scales.y.ticks, font },
+            },
+        };
+    }
+
     async function downloadChartPng(canvasId, button) {
         const source = renderedCharts.get(canvasId);
         if (!source || button.disabled || button.getAttribute('aria-busy') === 'true') return;
         const heading = button.parentElement;
         const feedback = heading.querySelector('.chart-export-feedback');
-        const month = source.canvas.closest('#monthly') ? monthsData[currentMonthIndex]?.month : null;
-        const period = month ? month + '-' : '';
-        const filename = `telegram-analyzer-${period}${button.dataset.chartFile}.png`;
+        const month = source.canvas.closest('#monthly') ? monthsData[currentMonthIndex] : null;
+        const period = month ? month.month + '-' : '';
+        const replyChart = button.dataset.chartFile === 'reply-times';
+        const method = replyChart ? replyTimingMode + '-' : '';
+        const filename = `telegram-analyzer-${period}${method}${button.dataset.chartFile}.png`;
         const title = heading.querySelector('h3').textContent;
         const description = heading.querySelector('div > p').textContent;
-        const subtitle = month ? `${formatReportMonth(month)} · ${description}` : description;
         button.setAttribute('aria-busy', 'true');
         setLocalizedText(feedback, '');
 
@@ -3176,11 +3238,25 @@ document.addEventListener('DOMContentLoaded', () => {
             const { type, options } = source.config;
             const { labels, datasets } = source.data;
             const doughnut = type === 'doughnut';
+            let subtitle = month ? `${formatReportMonth(month.month)} · ${description}` : description;
+            let replyPairs = null;
+            if (replyChart) {
+                const pairs = sortedReplyPairs(month?.data ?? overallResponseStats, 'count');
+                replyPairs = pairs.slice(0, 8);
+                const scope = month ? formatReportMonth(month.month) : translate('printWholeChat');
+                const timing = translate(replyTimingMode === 'direct' ? 'printDirect' : 'printAdjacent');
+                subtitle = [
+                    `${scope} · ${timing}`,
+                    translate('replyChartSelection', countFormat.format(replyPairs.length), countFormat.format(pairs.length)),
+                ];
+            }
             // Keep indices and styling stable when a series is hidden in the on-screen chart.
             const data = {
-                labels: labels.slice(),
+                labels: replyPairs ? replyPngLabels(context, replyPairs, Chart.defaults.font.family) : labels.slice(),
                 datasets: datasets.map((dataset, index) => ({
-                    ...dataset, data: dataset.data.slice(), hidden: !source.isDatasetVisible(index)
+                    ...dataset,
+                    data: replyPairs ? replyPairs.map(pair => pair.average / 60) : dataset.data.slice(),
+                    hidden: !source.isDatasetVisible(index),
                 }))
             };
             const padding = 36;
@@ -3200,26 +3276,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }] : [],
                 options: {
                     ...options,
+                    ...(replyChart ? { indexAxis: 'y' } : {}),
                     responsive: false,
                     devicePixelRatio: 2,
                     animation: false,
                     events: [],
                     layout: { padding },
-                    scales: doughnut ? undefined : {
-                        ...options.scales,
-                        x: {
-                            ...options.scales.x,
-                            ticks: {
-                                ...options.scales.x.ticks,
-                                autoSkip: type !== 'bar',
-                                font: { size: 13 }
-                            }
-                        },
-                        y: {
-                            ...options.scales.y,
-                            ticks: { ...options.scales.y.ticks, font: { size: 13 } }
-                        }
-                    },
+                    scales: chartPngScales(type, options.scales, replyChart),
                     plugins: {
                         title: {
                             display: true, text: title, color: chartTheme.tooltipText, align: 'start',

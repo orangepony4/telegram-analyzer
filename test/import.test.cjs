@@ -91,7 +91,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
             this.options = config.options;
             this.data = config.data;
             this.id = id;
-            this.canvas = { closest: () => id === 'dailyActivityChart' };
+            this.canvas = { closest: () => id === 'dailyActivityChart' || id === 'monthlyResponseTimeChart' };
             this.hiddenDatasets = new Set();
             this.hiddenData = new Set();
             charts.set(id, this);
@@ -145,7 +145,9 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
 
     const pngButton = pngChart ? element('chartPngButton') : null;
     if (pngButton) {
-        pngButton.dataset = { chartPng: pngChart, chartFile: 'daily-activity' };
+        pngButton.dataset = {
+            chartPng: pngChart, chartFile: pngChart === 'monthlyResponseTimeChart' ? 'reply-times' : 'daily-activity',
+        };
         pngButton.parentElement = { querySelector: element };
     }
 
@@ -169,7 +171,10 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
                 }
                 if (tag === 'canvas') {
                     return {
-                        getContext: () => ({ save() {}, setTransform() {}, fillRect() {}, restore() {} }),
+                        getContext: () => ({
+                            save() {}, setTransform() {}, fillRect() {}, restore() {},
+                            measureText(text) { return { width: text.length * 8 }; },
+                        }),
                         toBlob(callback) { encodes.push(callback); },
                     };
                 }
@@ -270,6 +275,47 @@ test('discards stale PNG encodes without ending the rebuilt chart’s export', a
     await january;
     assert.deepEqual(app.downloads, []);
     assert.equal(app.element('.chart-export-feedback').textContent, '');
+});
+
+test('saves a readable monthly reply chart of the most measured pairs in the chosen mode', async () => {
+    const app = createAnalyzer({
+        search: '?view=upload', storage: { getItem: () => null }, pngChart: 'monthlyResponseTimeChart',
+    });
+    const messages = [];
+    const prefix = 'A common, unusually long synthetic participant name shared by the whole group · ';
+    const start = Date.parse('2026-01-01T12:00:00Z');
+    for (const [index, pair] of [1, 2, 3, 4, 5, 6, 7, 8, 9, 9].entries()) {
+        const id = messages.length + 1;
+        const time = start + index * 120_000;
+        messages.push({
+            id, from: prefix + 'Sender ' + pair, date: new Date(time).toISOString(),
+        }, {
+            id: id + 1, from: prefix + 'Responder ' + pair, date: new Date(time + pair * 10_000).toISOString(),
+            reply_to_message_id: id,
+        });
+    }
+    app.selectFile('synthetic-reply-chart.json').complete({ messages });
+    app.monthlyTab.click();
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    const source = app.charts.get('monthlyResponseTimeChart');
+    const pending = app.pngButton.click();
+    const snapshot = [...app.charts.values()].find(chart => chart.options.indexAxis === 'y');
+
+    assert.equal(source.data.labels.length, 9);
+    assert.equal(snapshot.data.labels.length, 8);
+    const [sender, responder] = snapshot.data.labels[0];
+    assert.match(sender, /^1\. A common.*….*Sender 9$/);
+    assert.match(responder, /^→ A common.*….*Responder 9$/);
+    assert.equal(snapshot.data.datasets[0].data[0], 1.5);
+    assert.deepEqual(Array.from(snapshot.options.plugins.subtitle.text), [
+        'January 2026 · Direct replies', '8 of 9 pairs by reply count',
+    ]);
+    assert.equal(snapshot.options.scales.x.title.text, 'Average response time (min)');
+    app.encodes.shift()(new Blob(['synthetic image']));
+    await pending;
+    assert.equal(app.downloads[0].name, 'telegram-analyzer-2026-01-direct-reply-times.png');
 });
 
 function openParticipantTable(app, period = 'overview') {
