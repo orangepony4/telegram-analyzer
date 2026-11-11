@@ -558,7 +558,7 @@ a { color: var(--accent); }
 }
 
 .account-chat-field select, #accountChatSearch, .threshold-control input, #replyTiming, #reportMonth,
-#trendComparison, #trendComparisonSearch, .participant-controls :is(input, select) {
+#trendComparison, #trendComparisonSearch, .participant-controls :is(input, select), .reply-pair-sort select {
     max-width: 100%;
     min-height: 40px;
     padding: 6px 8px;
@@ -1058,16 +1058,21 @@ a { color: var(--accent); }
     font-size: .875rem;
 }
 
-.participant-table-scroll {
+.participant-table-scroll, .reply-pair-scroll {
     margin: 0 12px 12px;
     overflow-x: auto;
 }
 
-.participant-table-scroll:focus-visible { outline-offset: -2px; }
-.activity-data .participant-table { width: 100%; margin: 0; }
-.participant-table :is(th, td) { padding-inline: 5px; vertical-align: top; }
+.participant-table-scroll:focus-visible, .reply-pair-scroll:focus-visible { outline-offset: -2px; }
+.activity-data :is(.participant-table, .reply-pair-table) { width: 100%; margin: 0; }
+:is(.participant-table, .reply-pair-table) :is(th, td) { padding-inline: 5px; vertical-align: top; }
 .participant-table th:first-child { min-inline-size: 6rem; }
 .participant-table :is(th, td):not(:first-child) { white-space: nowrap; }
+.reply-pair-table :is(th, td):nth-child(-n+2) { min-inline-size: 5rem; text-align: start; }
+.reply-pair-table :is(th, td):nth-child(n+3) { white-space: nowrap; }
+.reply-pair-empty, .reply-pair-sort { margin: 0 12px 10px; color: var(--text-muted); font-size: .875rem; }
+.reply-pair-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
+.reply-pair-sort select { max-width: 100%; }
 
 .message-type-table :is(th, td) { padding-inline: 3px; }
 .message-type-table :is(th, td):last-child { white-space: nowrap; }
@@ -1243,7 +1248,7 @@ a { color: var(--accent); }
     }
 
     .app-header, .source-rail, .skip-link, .report-toolbar, .month-toolbar,
-    .charts-grid, .charts-unavailable .notice, .threshold-control, .participant-controls, .report button:not(.activity-month),
+    .charts-grid, .charts-unavailable .notice, .threshold-control, .participant-controls, .reply-pair-sort, .report button:not(.activity-month),
     .activity-data:not([open]), .screen-caption { display: none !important; }
 
     .workspace {
@@ -1270,8 +1275,8 @@ a { color: var(--accent); }
     .activity-data summary { min-height: 0; padding: 0; list-style: none; }
     .activity-data summary::-webkit-details-marker { display: none; }
     .activity-data table { font-size: 9pt; }
-    .participant-table-scroll { margin: 0; overflow: visible; }
-    .participant-table :is(th, td):not(:first-child) { white-space: normal; }
+    .participant-table-scroll, .reply-pair-scroll { margin: 0; overflow: visible; }
+    .participant-table :is(th, td):not(:first-child), .reply-pair-table :is(th, td):nth-child(n+3) { white-space: normal; }
     .activity-data :is(th, td) { padding: 3pt 5pt; }
     .activity-data .activity-month {
         min-height: 0;

@@ -53,6 +53,13 @@ document.addEventListener('DOMContentLoaded', () => {
         rows: document.getElementById('monthlyParticipantRows'),
         exportButton: document.getElementById('monthlyParticipantTableCsv'),
     };
+    const [overviewReplyPairs, monthlyReplyPairs] = ['overview', 'monthly'].map(scope => ({
+        panel: document.getElementById(`${scope}ReplyPairs`),
+        content: document.getElementById(`${scope}ReplyPairsContent`),
+        empty: document.getElementById(`${scope}ReplyPairsEmpty`),
+        sort: document.getElementById(`${scope}ReplyPairSort`),
+        rows: document.getElementById(`${scope}ReplyPairRows`),
+    }));
     const overviewPatterns = {
         panel: document.getElementById('overviewActivityPatterns'),
         weekdays: document.getElementById('overviewWeekdayRows'),
@@ -290,9 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
             'В этой сводке нет ссылок на прямые ответы.',
         ],
         participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
-        meanDelay: ['Average reply time by pair', 'Среднее время ответа по парам участников'],
-        monthDelay: ['Average reply time by pair this month', 'Среднее время ответа по парам за месяц'],
-        delayFor: [name => `Average response delay for ${name}`, name => `Средняя задержка ответа ${name}:`],
         mediaUsage: ['Shared content by participant', 'Вложения и другие материалы по участникам:'],
         longResponses: [
             minutes => `Responses after more than ${minutes} min`,
@@ -303,7 +307,6 @@ document.addEventListener('DOMContentLoaded', () => {
             minutes => `Сообщений с ответом > ${minutes} мин (за месяц):`,
         ],
         noData: ['No data', 'Нет данных'],
-        noDelayData: ['No response delays to report.', 'Нет данных для этой статистики.'],
         noLongResponses: ['No responses exceed this threshold.', 'Нет данных для этой статистики (с учетом порога).'],
         toParticipant: ['To', 'К'],
         fromParticipant: ['From', 'От'],
@@ -341,6 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }));
     const localizedText = new Map();
     const chartTranslations = new WeakMap();
+    const replyPairSummaries = new WeakMap();
     const syntheticNames = new Map();
     let language = 'en';
     let countFormat;
@@ -399,9 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- HTML Element IDs (Updated)
-    const averageResponseDelayStatsElement = document.getElementById('averageResponseDelayStats'); // Renamed from averageResponseTimes
     const thresholdExceededMessagesStatsElement = document.getElementById('thresholdExceededMessagesStats'); // Renamed from ignoredMessagesStats
-    const monthlyAverageResponseDelayStatsElement = document.getElementById('monthlyAverageResponseDelayStats'); // Renamed from monthlyIgnoringStats
     const monthlyThresholdExceededMessagesStatsElement = document.getElementById('monthlyThresholdExceededMessagesStats'); // Renamed from monthlyIgnoredMessagesStats
 
     let overallResponseStats = null;
@@ -501,6 +503,10 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyParticipants.panel.addEventListener('toggle', refreshMonthlyParticipants);
     monthlyParticipants.search.addEventListener('input', refreshMonthlyParticipants);
     monthlyParticipants.sort.addEventListener('change', refreshMonthlyParticipants);
+    overviewReplyPairs.panel.addEventListener('toggle', refreshOverviewReplyPairs);
+    overviewReplyPairs.sort.addEventListener('change', refreshOverviewReplyPairs);
+    monthlyReplyPairs.panel.addEventListener('toggle', refreshMonthlyReplyPairs);
+    monthlyReplyPairs.sort.addEventListener('change', refreshMonthlyReplyPairs);
     monthlyParticipants.exportButton.addEventListener('click', () => {
         const selected = monthsData[currentMonthIndex];
         if (selected && monthlyStatsTab.classList.contains('active')) {
@@ -1295,6 +1301,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const { first_name, last_name, phone_number } = contact_information;
             if ([first_name, last_name, phone_number].some(isNonEmptyString)) return 'contact';
         }
+        // Telegram Desktop writes null for a location whose coordinates are unavailable.
+        if (location_information === null) return 'location';
         if (location_information) {
             const { latitude, longitude } = location_information;
             if (Number.isFinite(latitude) && Math.abs(latitude) <= 90
@@ -1520,6 +1528,8 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyParticipants.search.value = '';
         refreshOverviewParticipants();
         refreshMonthlyParticipants();
+        refreshOverviewReplyPairs();
+        refreshMonthlyReplyPairs();
         refreshOverviewPatterns();
         refreshMonthlyPatterns();
         refreshOverviewMessageTypes();
@@ -2183,7 +2193,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderOverviewStatistics() {
         const responseTimes = selectedResponseTimes(overallResponseStats);
         displayGeneralStats(overviewData.messageCount, overallParticipantTotals, responseTimes);
-        displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
+        refreshOverviewReplyPairs();
         displayMediaTypeStats(overviewData.media);
         displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
     }
@@ -2295,22 +2305,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         return totals;
-    }
-
-    function calculateAverageResponseDelay(responseTimes) {
-        const averages = Object.create(null);
-        for (const [sender, responders] of Object.entries(responseTimes)) {
-            for (const [responder, times] of Object.entries(responders)) {
-                const bySender = averages[responder] ??= Object.create(null);
-                bySender[sender] = times.reduce((sum, seconds) => sum + seconds, 0) / times.length;
-            }
-        }
-        return averages;
-    }
-
-    function displayAverageResponseDelayStats(avgDelayStats) {
-        const title = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('meanDelay')}`;
-        averageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(avgDelayStats, title);
     }
 
     function displayMediaTypeStats(mediaTypeUsage) {
@@ -2470,6 +2464,69 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function refreshOverviewReplyPairs() {
+        renderReplyPairTable(overviewReplyPairs, overallResponseStats);
+    }
+
+    function refreshMonthlyReplyPairs() {
+        renderReplyPairTable(monthlyReplyPairs, monthsData[currentMonthIndex]?.data);
+    }
+
+    function getReplyPairSummaries(responseTimes) {
+        if (replyPairSummaries.has(responseTimes)) return replyPairSummaries.get(responseTimes);
+        const summaries = [];
+        for (const [sender, responders] of Object.entries(responseTimes)) {
+            for (const [responder, times] of Object.entries(responders)) {
+                const count = times.length;
+                const ordered = times.slice().sort((first, second) => first - second);
+                const median = (ordered[Math.floor((count - 1) / 2)] + ordered[Math.floor(count / 2)]) / 2;
+                const average = times.reduce((sum, seconds) => sum + seconds, 0) / count;
+                summaries.push({ sender, responder, count, median, average });
+            }
+        }
+        replyPairSummaries.set(responseTimes, summaries);
+        return summaries;
+    }
+
+    function renderReplyPairTable({ panel, content, empty, sort, rows }, data) {
+        panel.hidden = !data;
+        if (panel.hidden) panel.open = false;
+        rows.replaceChildren();
+        if (!panel.open) return;
+
+        const pairs = getReplyPairSummaries(selectedResponseTimes(data)).map(pair => ({
+            ...pair, sender: participantLabel(pair.sender), responder: participantLabel(pair.responder),
+        }));
+        content.hidden = pairs.length === 0;
+        empty.hidden = !content.hidden;
+        const sortBy = sort.value;
+        const byCount = sortBy !== 'fast' && sortBy !== 'slow';
+        const direction = sortBy === 'fast' ? 1 : -1;
+        pairs.sort((first, second) => {
+            const order = byCount ? second.count - first.count : direction * (first.median - second.median);
+            return order || participantNameOrder.compare(first.sender, second.sender)
+                || participantNameOrder.compare(first.responder, second.responder);
+        });
+
+        for (const { sender, responder, count, median, average } of pairs) {
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.scope = 'row';
+            heading.textContent = sender;
+            row.append(heading);
+            for (const value of [responder, countFormat.format(count), formatReplyPairTime(median), formatReplyPairTime(average)]) {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.append(cell);
+            }
+            rows.append(row);
+        }
+    }
+
+    function formatReplyPairTime(seconds) {
+        return formatShortReplyTime(seconds) ?? (singleDecimalFormat.format(seconds / 60) + ' ' + translate('minutes'));
+    }
+
     function matchingParticipants({ sort }, totals, wordCounts, query) {
         const participants = [];
         for (const [key, { messageCount, textLength }] of totals) {
@@ -2582,6 +2639,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
         refreshMonthlyParticipants();
+        refreshMonthlyReplyPairs();
         if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
         refreshMonthlyPatterns();
@@ -2614,11 +2672,6 @@ document.addEventListener('DOMContentLoaded', () => {
         monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, `<i class="fas fa-camera-retro" aria-hidden="true"></i> ${translate('mediaUsage')}`);
 
         displayMonthlyThresholdStats(monthData);
-
-        const monthlyAvgDelayStats = calculateAverageResponseDelay(selectedResponseTimes(data));
-        const delayTitle = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('monthDelay')}`;
-        monthlyAverageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(monthlyAvgDelayStats, delayTitle);
-
 
         const focusedControl = document.activeElement;
         prevMonthButton.disabled = currentMonthIndex === 0;
@@ -3335,35 +3388,6 @@ document.addEventListener('DOMContentLoaded', () => {
         link.download = filename;
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-    }
-
-    function generateAverageResponseDelayHTML(avgDelayStats, title) {
-        let html = `<h3>${title}</h3><ul>`;
-        const validResponders = Object.keys(avgDelayStats).filter(r => r);
-        if (validResponders.length === 0) {
-            return `<p>${translate('noDelayData')}</p>`;
-        }
-
-        validResponders.forEach(responder => {
-            const sanitizedResponder = sanitizeHTML(participantLabel(responder));
-            const initiatorDelays = avgDelayStats[responder];
-            const validInitiators = Object.keys(initiatorDelays).filter(i => i && initiatorDelays[i] !== undefined);
-
-            if (validInitiators.length > 0) {
-                html += `<li><strong>${translate('delayFor', sanitizedResponder)}</strong><ul>`;
-                validInitiators.forEach(initiator => {
-                    const sanitizedInitiator = sanitizeHTML(participantLabel(initiator));
-                    const seconds = initiatorDelays[initiator];
-                    const avgTime = formatShortReplyTime(seconds)
-                        ?? (singleDecimalFormat.format(seconds / 60) + ' ' + translate('minutes'));
-                    html += `<li>${translate('toParticipant')} <strong>${sanitizedInitiator}</strong>: ${avgTime}</li>`;
-                });
-                html += `</ul></li>`;
-            }
-        });
-
-        html += '</ul>';
-        return html;
     }
 
     function generateThresholdExceededMessagesHTML(thresholdMessages, title) {

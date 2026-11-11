@@ -356,6 +356,34 @@
                         </table>
                     </details>
 
+                    <details id="overviewReplyPairs" class="activity-data" hidden>
+                        <summary data-ru="Время ответа по парам">Reply timing by pair</summary>
+                        <p id="overviewReplyPairsEmpty" class="reply-pair-empty" data-ru="Нет измеренных ответов.">No timed replies.</p>
+                        <div id="overviewReplyPairsContent" hidden>
+                            <label class="reply-pair-sort" for="overviewReplyPairSort">
+                                <span data-ru="Сортировка">Sort by</span>
+                                <select id="overviewReplyPairSort">
+                                    <option value="count" data-ru="Число ответов">Reply count</option>
+                                    <option value="slow" data-ru="Долгая медиана">Longest median</option>
+                                    <option value="fast" data-ru="Короткая медиана">Shortest median</option>
+                                </select>
+                            </label>
+                            <div class="reply-pair-scroll" role="region" tabindex="0"
+                                 aria-label="Reply pairs across the whole chat" data-ru-aria-label="Пары ответов за весь чат">
+                                <table class="reply-pair-table">
+                                    <thead><tr>
+                                        <th scope="col" data-ru="Кто написал">Sender</th>
+                                        <th scope="col" data-ru="Кто ответил">Responder</th>
+                                        <th scope="col" data-ru="Ответы">Replies</th>
+                                        <th scope="col" data-ru="Медиана">Median</th>
+                                        <th scope="col" data-ru="Среднее">Average</th>
+                                    </tr></thead>
+                                    <tbody id="overviewReplyPairRows"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </details>
+
                     <section class="detail-section" aria-labelledby="allDetailsHeading">
                         <div class="section-heading">
                             <h2 id="allDetailsHeading" data-ru="Детали переписки">Chat details</h2>
@@ -363,7 +391,6 @@
                         </div>
                         <div class="detail-grid">
                             <div id="participantStats" class="stat-box"></div>
-                            <div id="averageResponseDelayStats" class="stat-box"></div>
                             <div id="mediaTypeStats" class="stat-box"></div>
                             <div id="thresholdExceededMessagesStats" class="stat-box"></div>
                         </div>
@@ -557,13 +584,40 @@
                         </table>
                     </details>
 
+                    <details id="monthlyReplyPairs" class="activity-data" hidden>
+                        <summary data-ru="Время ответа по парам">Reply timing by pair</summary>
+                        <p id="monthlyReplyPairsEmpty" class="reply-pair-empty" data-ru="Нет измеренных ответов.">No timed replies.</p>
+                        <div id="monthlyReplyPairsContent" hidden>
+                            <label class="reply-pair-sort" for="monthlyReplyPairSort">
+                                <span data-ru="Сортировка">Sort by</span>
+                                <select id="monthlyReplyPairSort">
+                                    <option value="count" data-ru="Число ответов">Reply count</option>
+                                    <option value="slow" data-ru="Долгая медиана">Longest median</option>
+                                    <option value="fast" data-ru="Короткая медиана">Shortest median</option>
+                                </select>
+                            </label>
+                            <div class="reply-pair-scroll" role="region" tabindex="0"
+                                 aria-label="Reply pairs in the selected month" data-ru-aria-label="Пары ответов за выбранный месяц">
+                                <table class="reply-pair-table">
+                                    <thead><tr>
+                                        <th scope="col" data-ru="Кто написал">Sender</th>
+                                        <th scope="col" data-ru="Кто ответил">Responder</th>
+                                        <th scope="col" data-ru="Ответы">Replies</th>
+                                        <th scope="col" data-ru="Медиана">Median</th>
+                                        <th scope="col" data-ru="Среднее">Average</th>
+                                    </tr></thead>
+                                    <tbody id="monthlyReplyPairRows"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </details>
+
                     <section class="detail-section" aria-labelledby="monthDetailsHeading">
                         <div class="section-heading">
                             <h2 id="monthDetailsHeading" data-ru="Детали месяца">Monthly details</h2>
                             <label class="threshold-control" for="monthlyIgnoredThreshold"><span data-ru="Долгий ответ, мин">Long reply threshold, min</span> <input type="number" id="monthlyIgnoredThreshold" value="60" min="1"></label>
                         </div>
                         <div class="detail-grid">
-                            <div id="monthlyAverageResponseDelayStats" class="stat-box"></div>
                             <div id="monthlyMediaTypeStats" class="stat-box"></div>
                             <div id="monthlyThresholdExceededMessagesStats" class="stat-box"></div>
                         </div>

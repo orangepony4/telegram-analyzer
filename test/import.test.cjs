@@ -288,6 +288,67 @@ function participantTableStats(app, period) {
         .map(([name, messages, words, average]) => [name, { messages, words, average }]));
 }
 
+function openReplyPairs(app, scope) {
+    const panel = app.element(scope + 'ReplyPairs');
+    assert.equal(panel.hidden, false);
+    panel.open = true;
+    panel.toggle();
+    return app.element(scope + 'ReplyPairRows');
+}
+
+test('compares average, median and reply count within the chosen mode and month', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    const messages = [{ id: 1, from: 'January sender', date: '2026-01-01' }];
+    const start = Date.parse('2026-02-01T12:00:00Z');
+    for (const [index, sender, responder, seconds] of [
+        [0, 'Alice', 'Bob', 1], [1, 'Alice', 'Bob', 2], [2, 'Alice', 'Bob', 57],
+        [3, '<img src=x>', 'Dana', 10], [4, '<img src=x>', 'Dana', 50],
+    ]) {
+        const id = messages.length + 1;
+        const time = start + index * 120_000;
+        messages.push({ id, from: sender, date: new Date(time).toISOString() }, {
+            id: id + 1, from: responder, date: new Date(time + seconds * 1000).toISOString(), reply_to_message_id: id,
+        });
+    }
+    app.selectFile('fictional-replies.json').complete({ messages });
+    const overview = app.element('overviewReplyPairRows');
+    assert.deepEqual(overview.children, []);
+    openReplyPairs(app, 'overview');
+    assert.ok(overview.children.length > 2);
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    assert.deepEqual(participantTableEntries(overview), [
+        ['Alice', 'Bob', '3', '2 sec', '20 sec'],
+        ['<img src=x>', 'Dana', '2', '30 sec', '30 sec'],
+    ]);
+    const overviewSort = app.element('overviewReplyPairSort');
+    overviewSort.value = 'slow';
+    overviewSort.change();
+    assert.equal(participantTableEntries(overview)[0][0], '<img src=x>');
+    overviewSort.value = 'fast';
+    overviewSort.change();
+    assert.equal(participantTableEntries(overview)[0][0], 'Alice');
+
+    app.monthlyTab.click();
+    const monthly = openReplyPairs(app, 'monthly');
+    assert.equal(monthly.children.length, 2);
+    app.element('prevMonth').click();
+    assert.equal(app.element('monthlyReplyPairsContent').hidden, true);
+    assert.equal(app.element('monthlyReplyPairsEmpty').hidden, false);
+    assert.deepEqual(monthly.children, []);
+    app.element('nextMonth').click();
+    app.element('languageToggle').click();
+    assert.deepEqual(participantTableEntries(monthly)[0], ['Alice', 'Bob', '3', '2 сек', '20 сек']);
+    assert.equal(overviewSort.value, 'fast');
+
+    app.element('clearLoadedData').click();
+    for (const scope of ['overview', 'monthly']) {
+        assert.equal(app.element(scope + 'ReplyPairs').hidden, true);
+        assert.deepEqual(app.element(scope + 'ReplyPairRows').children, []);
+    }
+});
+
 test('filters and exports participant table rows in the current sort and scope', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
     app.selectFile('fictional-participants.json').complete({ messages: [
@@ -1390,16 +1451,16 @@ test('shows precise localized short reply times and carries rounded seconds into
     ];
     const assertTimes = (details, column) => {
         for (const [sender, ...times] of expected) {
-            assert.ok(details.innerHTML.includes(sender + '</strong>: ' + times[column] + '</li>'), sender);
+            assert.ok(participantTableEntries(details).some(row => row[0] === sender && row[4] === times[column]), sender);
         }
     };
-    assertTimes(app.element('averageResponseDelayStats'), 0);
+    assertTimes(openReplyPairs(app, 'overview'), 0);
     assert.match(app.element('participantStats').innerHTML, /Dana<\/strong>: 0\.125 sec/);
     app.monthlyTab.click();
     const mode = app.element('replyTiming');
     mode.value = 'direct';
     mode.change();
-    const monthly = app.element('monthlyAverageResponseDelayStats');
+    const monthly = openReplyPairs(app, 'monthly');
     assertTimes(monthly, 0);
     app.element('languageToggle').click();
     assertTimes(monthly, 1);
@@ -2764,7 +2825,7 @@ test('classifies shared polls, contacts and locations without exposing their con
         { location_information: pin },
         { place_name: 'Private venue', address: 'Fictional street', location_information: pin },
         { place_name: 'Venue without coordinates', address: 'Fictional address' },
-        { poll: { question: [true, { text: 42 }] }, contact_information: 'Private malformed', location_information: null },
+        { poll: { question: [true, { text: 42 }] }, contact_information: 'Private malformed' },
         { poll: [], contact_information: {}, location_information: { latitude: '12.34', longitude: -56.78 }, place_name: [] },
         { location_information: { latitude: 91, longitude: 0 }, place_name: ' ' },
         { media_type: 'sticker', poll },
@@ -2796,6 +2857,41 @@ test('classifies shared polls, contacts and locations without exposing their con
     checkReport({ Текст: 4, Опросы: 1, Контакты: 1, Геопозиции: 3, Стикеры: 1, Фото: 1, Файлы: 1 }, 'Текст');
     app.element('languageToggle').click();
     checkReport({ Text: 4, Polls: 1, Contacts: 1, Locations: 3, Stickers: 1, Photos: 1, Files: 1 }, 'Text');
+});
+
+test('counts Telegram locations even when their coordinates are unavailable', async () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('synthetic-geo.json').complete({ messages: [
+        { id: 1, type: 'message', date: '2026-10-01T00:00:00Z', from: 'Sender', location_information: null },
+        { id: 2, type: 'message', date: '2026-10-01T00:00:01Z', from: 'Sender', text: 'Synthetic plain text' },
+        { id: 3, type: 'message', date: '2026-11-01T00:00:00Z', from: 'Sender',
+            location_information: null, live_location_period_seconds: 900 },
+        { id: 4, type: 'message', date: '2026-11-01T00:00:01Z', from: 'Sender',
+            location_information: { latitude: 91, longitude: 0 } },
+        { id: 5, type: 'service', date: '2026-11-01T00:00:02Z', location_information: null },
+    ] });
+
+    const whole = app.charts.get('messageTypesChart');
+    assert.deepEqual(Object.fromEntries(whole.data.labels.map((label, index) => [label, whole.data.datasets[0].data[index]])),
+        { Locations: 2, Text: 2, 'Service events': 1 });
+    assert.match(app.element('mediaTypeStats').innerHTML, /Locations: 2/);
+    app.element('exportOverviewMessageTypes').click();
+
+    app.monthlyTab.click();
+    const monthly = app.element('monthlyMessageTypes');
+    const rows = () => app.element('monthlyMessageTypeRows').children.map(row => row.children.map(cell => cell.textContent));
+    monthly.open = true;
+    monthly.toggle();
+    assert.deepEqual(rows(), [['Locations', '1'], ['Text', '1'], ['Service events', '1']]);
+    app.element('languageToggle').click();
+    assert.deepEqual(rows(), [['Геопозиции', '1'], ['Текст', '1'], ['Служебные события', '1']]);
+    app.element('exportMonthlyMessageTypes').click();
+
+    const files = await Promise.all(app.downloads.map(async ({ name, blob }) => [name, await blob.text()]));
+    assert.deepEqual(files, [
+        ['telegram-analyzer-message-types.csv', 'message_type,count\r\n"location",2\r\n"text",2\r\n"service",1\r\n'],
+        ['telegram-analyzer-2026-11-message-types.csv', 'message_type,count\r\n"location",1\r\n"text",1\r\n"service",1\r\n'],
+    ]);
 });
 
 test('classifies Telegram checklists without counting or exposing checklist contents', async () => {
