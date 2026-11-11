@@ -29,13 +29,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const exportDailyActivityButton = document.getElementById('exportDailyActivity');
     const overviewParticipants = {
         panel: document.getElementById('overviewParticipants'),
+        search: document.getElementById('overviewParticipantSearch'),
         sort: document.getElementById('overviewParticipantSort'),
+        status: document.getElementById('overviewParticipantStatus'),
+        table: document.getElementById('overviewParticipantTable'),
+        units: document.getElementById('overviewParticipantUnits'),
         rows: document.getElementById('overviewParticipantRows'),
+        exportButton: document.getElementById('overviewParticipantTableCsv'),
     };
     const monthlyParticipants = {
         panel: document.getElementById('monthlyParticipants'),
+        search: document.getElementById('monthlyParticipantSearch'),
         sort: document.getElementById('monthlyParticipantSort'),
+        status: document.getElementById('monthlyParticipantStatus'),
+        table: document.getElementById('monthlyParticipantTable'),
+        units: document.getElementById('monthlyParticipantUnits'),
         rows: document.getElementById('monthlyParticipantRows'),
+        exportButton: document.getElementById('monthlyParticipantTableCsv'),
     };
     const overviewPatterns = {
         panel: document.getElementById('overviewActivityPatterns'),
@@ -122,6 +132,18 @@ document.addEventListener('DOMContentLoaded', () => {
         ['verification_codes', 'accountTypeSystem'],
     ]);
     const accountTypeOrder = [...new Set(accountChatTypes.values()), 'accountTypeOther'];
+    const replyPeerPrefixes = new Map([
+        ['private_group', 'chat'],
+        ['private_supergroup', 'channel'],
+        ['public_supergroup', 'channel'],
+        ['private_channel', 'channel'],
+        ['public_channel', 'channel'],
+        ['bot_chat', 'user'],
+        ['saved_messages', 'user'],
+        ['replies', 'user'],
+        ['verification_codes', 'user'],
+    ]);
+    const maximumBarePeerId = 2 ** 48 - 1;
 
     const copy = {
         switchLanguage: ['RU · Switch to Russian', 'EN · Переключить на английский'],
@@ -132,6 +154,11 @@ document.addEventListener('DOMContentLoaded', () => {
         printReplyMethod: ['Reply timing', 'Замер ответов'],
         printAdjacent: ['Adjacent messages', 'Соседние сообщения'],
         printDirect: ['Direct replies', 'Прямые ответы'],
+        participantMatches: [
+            (shown, total) => `Showing ${shown} of ${total} participants.`,
+            (shown, total) => `Показано ${shown} из ${total} участников.`,
+        ],
+        noMatchingParticipants: ['No participants match this search.', 'Участники с таким именем не найдены.'],
         demoReport: ['Demo report', 'Демо-отчёт'],
         demoTitle: ['Sample chat', 'Демонстрационный чат'],
         demoSource: ['Fictional conversation', 'Вымышленная переписка'],
@@ -310,6 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let importPercentFormat;
     let singleDecimalFormat;
     let participantNameOrder;
+    const participantCsvLengthFormat = new Intl.NumberFormat('en', {
+        minimumFractionDigits: 1, maximumFractionDigits: 1, useGrouping: false,
+    });
     let monthFormat;
     let dayFormat;
     let weekdayFormat;
@@ -451,9 +481,22 @@ document.addEventListener('DOMContentLoaded', () => {
     dailyActivity.addEventListener('toggle', refreshDailyActivity);
     exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
     overviewParticipants.panel.addEventListener('toggle', refreshOverviewParticipants);
+    overviewParticipants.search.addEventListener('input', refreshOverviewParticipants);
     overviewParticipants.sort.addEventListener('change', refreshOverviewParticipants);
+    overviewParticipants.exportButton.addEventListener('click', () => {
+        if (allStatsTab.classList.contains('active')) {
+            downloadParticipantTable(overviewParticipants, overallParticipantTotals, overviewData?.words);
+        }
+    });
     monthlyParticipants.panel.addEventListener('toggle', refreshMonthlyParticipants);
+    monthlyParticipants.search.addEventListener('input', refreshMonthlyParticipants);
     monthlyParticipants.sort.addEventListener('change', refreshMonthlyParticipants);
+    monthlyParticipants.exportButton.addEventListener('click', () => {
+        const selected = monthsData[currentMonthIndex];
+        if (selected && monthlyStatsTab.classList.contains('active')) {
+            downloadParticipantTable(monthlyParticipants, selected.data.participantTotals, selected.data.wordCounts, selected.month);
+        }
+    });
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
     overviewTypes.panel.addEventListener('toggle', refreshOverviewMessageTypes);
@@ -875,12 +918,25 @@ document.addEventListener('DOMContentLoaded', () => {
         return message.type === 'service' ? null : numericMessageId(message.reply_to_message_id);
     }
 
-    function findReplyTargets(timings) {
+    function exportedChatPeer({ type, id }) {
+        // Telegram also labels non-admin monoforums as personal_chat.
+        const prefix = replyPeerPrefixes.get(type);
+        const bareId = typeof id === 'string' && /^[1-9]\d{0,14}$/.test(id) ? Number(id) : id;
+        return prefix && Number.isSafeInteger(bareId) && bareId > 0 && bareId <= maximumBarePeerId
+            ? prefix + bareId
+            : null;
+    }
+
+    function isLocalReply({ reply_to_peer_id: peer }, targetId, chatPeer) {
+        // Negative message IDs belong to an older group merged into the current history.
+        return peer == null || (targetId > 0 && peer === chatPeer);
+    }
+
+    function findReplyTargets(timings, chatPeer) {
         const targets = new Map();
         for (const { message } of timings) {
             const id = replyLinkId(message);
-            // Telegram omits reply_to_peer_id when the original is in this chat.
-            if (id !== null && message.reply_to_peer_id == null) targets.set(id, null);
+            if (id !== null && isLocalReply(message, id, chatPeer)) targets.set(id, null);
         }
         if (targets.size === 0) return targets;
 
@@ -893,9 +949,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return targets;
     }
 
-    function measureDirectReply(reply, targetId, targets) {
+    function measureDirectReply(reply, targetId, targets, chatPeer) {
         const { message } = reply;
-        if (message.reply_to_peer_id != null) return null;
+        if (!isLocalReply(message, targetId, chatPeer)) return null;
         const original = targets.get(targetId);
         if (!original || !original.message.from || original.message.type === 'service'
             || original.message.from === message.from) return null;
@@ -1244,7 +1300,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 chats.push({
                     name: accountChatName(chat), number: chats.length + 1,
                     type: accountChatTypes.get(chat.type) ?? 'accountTypeOther',
-                    left: groupIndex === 1, messages: chat.messages,
+                    left: groupIndex === 1, messages: chat.messages, peer: exportedChatPeer(chat),
                 });
             }
         });
@@ -1345,7 +1401,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return accountChatSelect.disabled || value === '' ? undefined : accountChats[Number(value)];
     }
 
-    function renderMessages(messages, { name, isDemo = false, preserveNames = false }) {
+    function renderMessages(messages, { name, peer = null, isDemo = false, preserveNames = false }) {
+        overviewParticipants.search.value = '';
+        monthlyParticipants.search.value = '';
         const timings = orderMessageTimings(messages);
         if (preserveNames) {
             // Keep original names and sender IDs for later selection of this chat.
@@ -1354,7 +1412,7 @@ document.addEventListener('DOMContentLoaded', () => {
         normalizeSenderNames(timings);
         statsContainer.style.display = 'block';
         selectStatsTab(allStatsTab);
-        analyzeChat(timings);
+        analyzeChat(timings, peer);
         const meta = () => {
             const period = reportPeriod();
             const source = translate(isDemo ? 'demoSource' : 'telegramSource');
@@ -1368,7 +1426,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const chat = selectedAccountChat();
         if (!chat) return;
         try {
-            renderMessages(chat.messages, { name: chat.name, preserveNames: true });
+            renderMessages(chat.messages, { name: chat.name, peer: chat.peer, preserveNames: true });
             setLocalizedText(accountChatStatus, () => translate('selectedChat', accountChatLabel(chat)));
             reportTitle.focus();
         } catch (error) {
@@ -1413,6 +1471,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshDailyActivity();
+        overviewParticipants.search.value = '';
+        monthlyParticipants.search.value = '';
         refreshOverviewParticipants();
         refreshMonthlyParticipants();
         refreshOverviewPatterns();
@@ -1668,7 +1728,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (messages) {
                     setLocalizedText(sourceFileType, translated(isDemo ? 'demoData' : 'localFile'));
                     const name = typeof data.name === 'string' ? data.name.trim() : '';
-                    renderMessages(messages, { name: isDemo ? translated('demoTitle') : name || file.name, isDemo });
+                    renderMessages(messages, {
+                        name: isDemo ? translated('demoTitle') : name || file.name,
+                        peer: exportedChatPeer(data),
+                        isDemo,
+                    });
                     status = translated('reportReady');
                 } else {
                     showAccountChooser(chats);
@@ -1919,7 +1983,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function analyzeChat(timings) {
+    function analyzeChat(timings, chatPeer) {
         // Подготовка данных по месяцам
         const messagesByMonth = {};
         const allTimeData = {
@@ -1931,7 +1995,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const directResponses = Object.create(null);
         let linkedReplies = 0;
         let timedReplies = 0;
-        const replyTargets = findReplyTargets(timings);
+        const replyTargets = findReplyTargets(timings, chatPeer);
         const unplacedGaps = findUnplacedReplyGaps(timings);
         const participantTotals = new Map();
         const datedParticipants = new Set();
@@ -2016,7 +2080,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 previousMessage = { sender: msg.from, time, id };
             }
-            const direct = replyLink === null ? null : measureDirectReply(timing, replyLink, replyTargets);
+            const direct = replyLink === null ? null : measureDirectReply(timing, replyLink, replyTargets, chatPeer);
             if (direct) {
                 recordResponse(directResponses, direct.sender, msg.from, direct.seconds);
                 recordResponse(month.directResponses, direct.sender, msg.from, direct.seconds);
@@ -2329,23 +2393,24 @@ document.addEventListener('DOMContentLoaded', () => {
         renderParticipantTable(monthlyParticipants, data?.participantTotals, data?.wordCounts);
     }
 
-    function renderParticipantTable({ panel, sort, rows }, totals, wordCounts) {
+    function renderParticipantTable(view, totals, wordCounts) {
+        const { panel, search, status, table, units, rows, exportButton } = view;
         panel.hidden = !totals?.size;
         if (panel.hidden) panel.open = false;
         rows.replaceChildren();
-        if (!panel.open || panel.hidden) return;
-
-        const participants = Array.from(totals, ([name, { messageCount, textLength }]) => ({
-            name: participantLabel(name),
-            messages: messageCount,
-            words: wordCounts[name] ?? 0,
-            length: textLength / messageCount,
-        }));
-        const sortBy = sort.value || 'messages';
-        participants.sort((first, second) => {
-            const difference = sortBy === 'name' ? 0 : second[sortBy] - first[sortBy];
-            return difference || participantNameOrder.compare(first.name, second.name);
-        });
+        const query = normalizeSearchText(search.value ?? '');
+        const participants = panel.open && !panel.hidden ? matchingParticipants(view, totals, wordCounts, query) : [];
+        const hasRows = participants.length > 0;
+        exportButton.disabled = !hasRows;
+        table.hidden = !hasRows;
+        units.hidden = !hasRows;
+        let message = '';
+        if (panel.open && query) {
+            message = hasRows
+                ? translate('participantMatches', countFormat.format(participants.length), countFormat.format(totals.size))
+                : translate('noMatchingParticipants');
+        }
+        if (status.textContent !== message) status.textContent = message;
 
         for (const { name, messages, words, length } of participants) {
             const row = document.createElement('tr');
@@ -2360,6 +2425,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             rows.append(row);
         }
+    }
+
+    function matchingParticipants({ sort }, totals, wordCounts, query) {
+        const participants = [];
+        for (const [key, { messageCount, textLength }] of totals) {
+            const name = participantLabel(key);
+            if (query && !normalizeSearchText(name).includes(query)) continue;
+            participants.push({
+                name, messages: messageCount, words: wordCounts[key] ?? 0, length: textLength / messageCount,
+            });
+        }
+        const sortBy = sort.value || 'messages';
+        return participants.sort((first, second) => {
+            const difference = sortBy === 'name' ? 0 : second[sortBy] - first[sortBy];
+            return difference || participantNameOrder.compare(first.name, second.name);
+        });
     }
 
     function refreshMonthlyPatterns() {
@@ -3123,6 +3204,19 @@ document.addEventListener('DOMContentLoaded', () => {
             rows.push(`${csvTextField(participant)},${messageCount},${(textLength / messageCount).toFixed(1)}`);
         }
         downloadCsv(rows, filename);
+    }
+
+    function downloadParticipantTable(view, totals, wordCounts, month) {
+        if (view.exportButton.disabled || !view.panel.open || statsContainer.style.display !== 'block') return;
+        const query = normalizeSearchText(view.search.value);
+        const participants = matchingParticipants(view, totals, wordCounts, query);
+        if (!participants.length) return;
+        const rows = ['participant,messages,words,average_length_characters'];
+        for (const { name, messages, words, length } of participants) {
+            rows.push(`${csvTextField(name)},${messages},${words},${participantCsvLengthFormat.format(length)}`);
+        }
+        const period = month ? `${month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}participants-table.csv`);
     }
 
     function csvTextField(value) {

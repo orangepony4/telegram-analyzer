@@ -234,6 +234,78 @@ function participantTableStats(app, period) {
         .map(([name, messages, words, average]) => [name, { messages, words, average }]));
 }
 
+test('filters and exports participant table rows in the current sort and scope', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('fictional-participants.json').complete({ messages: [
+        { from: '=Élodie', date: '2026-10-01', text: 'One' },
+        { from: '=Élodie', date: '2026-11-01', text: 'No' },
+        { from: 'Élodie 2', date: '2026-11-01', text: 'One two three' },
+        { from: 'Other', date: '2026-11-01', text: 'A different participant' },
+    ] });
+
+    const search = app.element('overviewParticipantSearch');
+    const overviewStatus = app.element('overviewParticipantStatus');
+    const sort = app.element('overviewParticipantSort');
+    const download = app.element('overviewParticipantTableCsv');
+    const overviewRows = openParticipantTable(app);
+    search.value = ' E\u0301LO ';
+    search.input();
+    assert.equal(overviewStatus.textContent, 'Showing 2 of 3 participants.');
+    assert.deepEqual(participantTableEntries(overviewRows), [
+        ['=Élodie', '2', '2', '2.5'], ['Élodie 2', '1', '3', '13.0'],
+    ]);
+    sort.value = 'words';
+    sort.change();
+    download.click();
+    assert.equal(app.downloads[0].name, 'telegram-analyzer-participants-table.csv');
+    const header = 'participant,messages,words,average_length_characters\r\n';
+    assert.equal(await app.downloads[0].blob.text(), header + '"Élodie 2",1,3,13.0\r\n"\'=Élodie",2,2,2.5\r\n');
+
+    app.element('languageToggle').click();
+    assert.equal(overviewStatus.textContent, 'Показано 2 из 3 участников.');
+    assert.equal(participantTableEntries(overviewRows)[1][3], '2,5');
+    download.click();
+    assert.equal(await app.downloads[1].blob.text(), await app.downloads[0].blob.text());
+    app.selectFile('broken.json').completeRaw('{');
+    assert.equal(search.value, ' E\u0301LO ');
+    assert.equal(overviewStatus.textContent, 'Показано 2 из 3 участников.');
+
+    app.monthlyTab.click();
+    const monthlyRows = openParticipantTable(app, 'monthly');
+    const monthSearch = app.element('monthlyParticipantSearch');
+    const monthStatus = app.element('monthlyParticipantStatus');
+    const monthExport = app.element('monthlyParticipantTableCsv');
+    assert.equal(monthSearch.value, '');
+    monthSearch.value = 'ÉLODIE 2';
+    monthSearch.input();
+    assert.deepEqual(participantTableEntries(monthlyRows), [['Élodie 2', '1', '3', '13,0']]);
+    monthExport.click();
+    assert.equal(app.downloads[2].name, 'telegram-analyzer-2026-11-participants-table.csv');
+    assert.equal(await app.downloads[2].blob.text(), header + '"Élodie 2",1,3,13.0\r\n');
+    app.element('prevMonth').click();
+    assert.equal(monthStatus.textContent, 'Участники с таким именем не найдены.');
+    assert.equal(app.element('monthlyParticipantTable').hidden, true);
+    assert.equal(monthExport.disabled, true);
+    monthExport.click();
+    assert.equal(app.downloads.length, 3);
+
+    monthSearch.value = '';
+    monthSearch.input();
+    assert.deepEqual(participantTableEntries(monthlyRows), [['=Élodie', '1', '1', '3,0']]);
+    assert.equal(monthStatus.textContent, '');
+    app.element('exportMonthlyParticipants').click();
+    assert.equal(app.downloads[3].name, 'telegram-analyzer-2026-10-participants.csv');
+    assert.equal(await app.downloads[3].blob.text(), 'Участник,Сообщения,Средняя длина сообщения\r\n"\'=Élodie",1,3.0\r\n');
+
+    monthSearch.value = 'Private search';
+    monthSearch.input();
+    app.element('clearLoadedData').click();
+    assert.equal(search.value, '');
+    assert.equal(monthSearch.value, '');
+    assert.equal(overviewStatus.textContent, '');
+    assert.equal(monthStatus.textContent, '');
+});
+
 test('sorts participant tables independently and refreshes the selected month and language', () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
     app.selectFile('ranking.json').complete({ messages: [
@@ -493,6 +565,76 @@ test('matches direct replies in migrated Telegram history with negative message 
     const { labels, datasets } = app.charts.get('responseTimeChart').data;
     assert.deepEqual(Array.from(labels), ['Alice -> Bob', 'Bob -> Alice']);
     assert.deepEqual(Array.from(datasets[0].data), [0, 0]);
+});
+
+test('measures explicit replies to the exported peer without confusing migrated or foreign IDs', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const old = (id, from, extra = {}) => ({ id, from, date: '2026-04-30T12:00:00Z', ...extra });
+    const current = (id, from, minute, extra = {}) => ({
+        id, from, date: `2026-05-01T12:${String(minute).padStart(2, '0')}:00Z`, ...extra,
+    });
+    app.selectFile('group.json').complete({ type: 'public_supergroup', id: 42, messages: [
+        old(-999999999, 'Alice'),
+        old(-999999998, 'Bob', { reply_to_message_id: -999999999 }),
+        current(1, 'Alice', 0),
+        current(2, 'Bob', 2, { reply_to_message_id: '1', reply_to_peer_id: 'channel42' }),
+        current(3, 'Cara', 3, { reply_to_message_id: 1, reply_to_peer_id: 'chat42' }),
+        current(4, 'Cara', 4, { reply_to_message_id: 1, reply_to_peer_id: 'channel43' }),
+        current(5, 'Cara', 5, { reply_to_message_id: -999999999, reply_to_peer_id: 'channel42' }),
+        current(6, 'Cara', 6, { reply_to_message_id: 1, reply_to_peer_id: 42 }),
+        current(7, 'Bob', 7, { reply_to_message_id: 1, reply_to_peer_id: '' }),
+    ] });
+    assert.equal(app.element('replyTimingHint').textContent, 'Замерено прямых ответов · 2 из 7');
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    app.monthlyTab.click();
+    app.element('languageToggle').click();
+    assert.equal(app.element('replyTimingHint').textContent, 'Direct replies timed · 1 of 6');
+    app.element('exportReplyTiming').click();
+    const [csv] = app.downloads;
+    assert.equal(csv.name, 'telegram-analyzer-2026-05-direct-replies.csv');
+    assert.equal(await csv.blob.text(), 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n'
+        + '"Alice","Bob",1,120.000,0,3600\r\n');
+    app.element('prevMonth').click();
+    assert.equal(app.element('replyTimingHint').textContent, 'Direct replies timed · 1 of 1');
+});
+
+test('derives the reply peer for each selected account chat and keeps ambiguous metadata unmeasured', () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const date = '2026-05-01T12:00:00Z';
+    const chat = (name, type, id, peer) => ({
+        name, type, id,
+        messages: [
+            { id: 1, from: 'Alice', date },
+            { id: 2, from: 'Bob', date, reply_to_message_id: 1, reply_to_peer_id: peer },
+        ],
+    });
+    const included = [
+        chat('Basic group', 'private_group', '42', 'chat42'),
+        chat('Bot', 'bot_chat', 42, 'user42'),
+        chat('Channel', 'public_channel', 42, 'channel42'),
+    ];
+    const excluded = [
+        chat('Other channel', 'public_channel', 43, 'channel42'),
+        chat('Personal or monoforum', 'personal_chat', 42, 'user42'),
+        chat('Unknown type', 'constructor', 42, 'channel42'),
+        chat('Missing ID', 'public_channel', undefined, 'channel42'),
+        chat('Noncanonical ID', 'public_channel', '0042', 'channel42'),
+        chat('Invalid ID', 'public_channel', 2 ** 48, 'channel281474976710656'),
+    ];
+    app.selectFile('account.json').complete({
+        chats: { list: [...included, ...excluded] },
+        left_chats: { list: [chat('Left channel', 'private_channel', 44, 'channel44')] },
+    });
+    for (const [index, entry] of [...included, ...excluded, { name: 'Left channel' }].entries()) {
+        chooseAccountChat(app, String(index));
+        app.element('analyzeAccountChat').click();
+        const measured = index < included.length || index === included.length + excluded.length;
+        assert.equal(app.element('directRepliesOption').disabled, !measured, entry.name);
+        assert.equal(app.element('replyTimingHint').textContent,
+            `Замерено прямых ответов · ${measured ? 1 : 0} из 1`, entry.name);
+    }
 });
 
 test('shows timed replies out of recorded links for the current report scope and language', () => {

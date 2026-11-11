@@ -236,17 +236,27 @@
 
                     <details id="overviewParticipants" class="activity-data" hidden>
                         <summary data-ru="Таблица участников">Participants table</summary>
-                        <label class="participant-sort" for="overviewParticipantSort">
-                            <span data-ru="Сортировка">Sort by</span>
-                            <select id="overviewParticipantSort">
-                                <option value="messages" data-ru="Больше сообщений">Most messages</option>
-                                <option value="words" data-ru="Больше слов">Most words</option>
-                                <option value="length" data-ru="Длиннее сообщения">Longest average message</option>
-                                <option value="name" data-ru="Имя">Name</option>
-                            </select>
-                        </label>
+                        <div class="participant-controls">
+                            <label for="overviewParticipantSearch">
+                                <span data-ru="Поиск по имени">Find by name</span>
+                                <input type="search" id="overviewParticipantSearch" aria-controls="overviewParticipantRows" autocomplete="off" spellcheck="false">
+                            </label>
+                            <label for="overviewParticipantSort">
+                                <span data-ru="Сортировка">Sort by</span>
+                                <select id="overviewParticipantSort">
+                                    <option value="messages" data-ru="Сообщения">Messages</option>
+                                    <option value="words" data-ru="Слова">Words</option>
+                                    <option value="length" data-ru="Сред. длина">Avg. length</option>
+                                    <option value="name" data-ru="Имя">Name</option>
+                                </select>
+                            </label>
+                            <button type="button" id="overviewParticipantTableCsv" class="button button-secondary" disabled>
+                                <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV таблицы">Table CSV</span>
+                            </button>
+                        </div>
+                        <p id="overviewParticipantStatus" class="participant-status" role="status"></p>
                         <p id="overviewParticipantUnits" class="participant-units" data-ru="Средняя длина сообщения в символах.">Average message length is measured in characters.</p>
-                        <div class="participant-table-scroll" role="region" tabindex="0"
+                        <div id="overviewParticipantTable" class="participant-table-scroll" role="region" tabindex="0"
                              aria-label="Participants in the whole chat" data-ru-aria-label="Участники всей переписки">
                             <table class="participant-table" aria-describedby="overviewParticipantUnits">
                                 <thead><tr>
@@ -407,17 +417,27 @@
 
                     <details id="monthlyParticipants" class="activity-data" hidden>
                         <summary data-ru="Таблица участников">Participants table</summary>
-                        <label class="participant-sort" for="monthlyParticipantSort">
-                            <span data-ru="Сортировка">Sort by</span>
-                            <select id="monthlyParticipantSort">
-                                <option value="messages" data-ru="Больше сообщений">Most messages</option>
-                                <option value="words" data-ru="Больше слов">Most words</option>
-                                <option value="length" data-ru="Длиннее сообщения">Longest average message</option>
-                                <option value="name" data-ru="Имя">Name</option>
-                            </select>
-                        </label>
+                        <div class="participant-controls">
+                            <label for="monthlyParticipantSearch">
+                                <span data-ru="Поиск по имени">Find by name</span>
+                                <input type="search" id="monthlyParticipantSearch" aria-controls="monthlyParticipantRows" autocomplete="off" spellcheck="false">
+                            </label>
+                            <label for="monthlyParticipantSort">
+                                <span data-ru="Сортировка">Sort by</span>
+                                <select id="monthlyParticipantSort">
+                                    <option value="messages" data-ru="Сообщения">Messages</option>
+                                    <option value="words" data-ru="Слова">Words</option>
+                                    <option value="length" data-ru="Сред. длина">Avg. length</option>
+                                    <option value="name" data-ru="Имя">Name</option>
+                                </select>
+                            </label>
+                            <button type="button" id="monthlyParticipantTableCsv" class="button button-secondary" disabled>
+                                <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV таблицы">Table CSV</span>
+                            </button>
+                        </div>
+                        <p id="monthlyParticipantStatus" class="participant-status" role="status"></p>
                         <p id="monthlyParticipantUnits" class="participant-units" data-ru="Средняя длина сообщения в символах.">Average message length is measured in characters.</p>
-                        <div class="participant-table-scroll" role="region" tabindex="0"
+                        <div id="monthlyParticipantTable" class="participant-table-scroll" role="region" tabindex="0"
                              aria-label="Participants in the selected month" data-ru-aria-label="Участники за месяц">
                             <table class="participant-table" aria-describedby="monthlyParticipantUnits">
                                 <thead><tr>
