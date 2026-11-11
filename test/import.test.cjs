@@ -217,6 +217,78 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
     };
 }
 
+function openParticipantTable(app, period = 'overview') {
+    const panel = app.element(period + 'Participants');
+    assert.equal(panel.hidden, false);
+    panel.open = true;
+    panel.toggle();
+    return app.element(period + 'ParticipantRows');
+}
+
+function participantTableEntries(rows) {
+    return rows.children.map(row => row.children.map(cell => cell.textContent));
+}
+
+function participantTableStats(app, period) {
+    return new Map(participantTableEntries(openParticipantTable(app, period))
+        .map(([name, messages, words, average]) => [name, { messages, words, average }]));
+}
+
+test('sorts participant tables independently and refreshes the selected month and language', () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('ranking.json').complete({ messages: [
+        { from: 'Alex 10', date: '2026-10-01', text: 'One two three four' },
+        { from: 'Alex 2', date: '2026-10-01', text: 'Yes' },
+        { from: 'Alex 2', date: '2026-11-01', text: 'No' },
+        { from: 'Alex 2', text: 'OK' },
+        { from: '<img src=x>', date: '2026-11-01', text: 'Uncharacteristically' },
+        { date: '2026-11-01', text: 'Unattributed' },
+    ] });
+
+    const wholePanel = app.element('overviewParticipants');
+    const monthPanel = app.element('monthlyParticipants');
+    const wholeSort = app.element('overviewParticipantSort');
+    const monthSort = app.element('monthlyParticipantSort');
+    assert.equal(app.element('overviewParticipantRows').children.length, 0);
+    const wholeRows = openParticipantTable(app);
+    assert.deepEqual(participantTableEntries(wholeRows), [
+        ['Alex 2', '3', '3', '2.3'],
+        ['<img src=x>', '1', '1', '20.0'],
+        ['Alex 10', '1', '4', '18.0'],
+    ]);
+
+    const names = rows => participantTableEntries(rows).map(([name]) => name);
+    wholeSort.value = 'words';
+    wholeSort.change();
+    assert.deepEqual(names(wholeRows), ['Alex 10', 'Alex 2', '<img src=x>']);
+    wholeSort.value = 'length';
+    wholeSort.change();
+    assert.deepEqual(names(wholeRows), ['<img src=x>', 'Alex 10', 'Alex 2']);
+    wholeSort.value = 'name';
+    wholeSort.change();
+    assert.deepEqual(names(wholeRows), ['<img src=x>', 'Alex 2', 'Alex 10']);
+
+    app.monthlyTab.click();
+    const monthRows = openParticipantTable(app, 'monthly');
+    monthSort.value = 'length';
+    monthSort.change();
+    assert.deepEqual(names(monthRows), ['<img src=x>', 'Alex 2']);
+    app.element('prevMonth').click();
+    assert.deepEqual(names(monthRows), ['Alex 10', 'Alex 2']);
+    app.element('languageToggle').click();
+    assert.equal(monthSort.value, 'length');
+    assert.equal(wholeSort.value, 'name');
+    assert.deepEqual(participantTableEntries(monthRows), [['Alex 10', '1', '4', '18,0'], ['Alex 2', '1', '1', '3,0']]);
+
+    app.element('clearLoadedData').click();
+    for (const panel of [wholePanel, monthPanel]) {
+        assert.equal(panel.hidden, true);
+        assert.equal(panel.open, false);
+    }
+    assert.equal(wholeRows.children.length, 0);
+    assert.equal(monthRows.children.length, 0);
+});
+
 test('toggles the visible theme in both directions when saving preferences is blocked', t => {
     t.mock.method(console, 'warn', () => {});
     const denyStorage = () => { throw new Error('Storage unavailable'); };
@@ -767,8 +839,9 @@ test('jumps between available months and keeps charts, arrows, language and CSV 
     assert.equal(previous.disabled, true);
     assert.equal(next.disabled, false);
     assert.match(app.element('currentMonth').textContent, /апрель.*2021/);
-    assert.match(app.element('monthlyParticipantStats').innerHTML, /Ari/);
-    assert.doesNotMatch(app.element('monthlyParticipantStats').innerHTML, /Cam/);
+    const april = participantTableStats(app, 'monthly');
+    assert.equal(april.has('Ari'), true);
+    assert.equal(april.has('Cam'), false);
     app.element('exportMonthlyParticipants').click();
     assert.equal(app.downloads[0].name, 'telegram-analyzer-2021-04-participants.csv');
     assert.match(await app.downloads[0].blob.text(), /"Ari",1,/);
@@ -840,7 +913,7 @@ test('opens dated activity as a localized table without charts and jumps to its 
     assert.equal(app.monthlyTab.getAttribute('aria-selected'), 'true');
     assert.equal(app.focusedElement, app.monthlyTab);
     assert.equal(app.element('reportMonth').value, '2021-04');
-    assert.match(app.element('monthlyParticipantStats').innerHTML, /Ari/);
+    assert.equal(participantTableStats(app, 'monthly').has('Ari'), true);
 
     app.selectFile('empty.json').complete({ messages: [{ id: 6, type: 'unsupported' }] });
     assert.equal(details.hidden, true);
@@ -1452,6 +1525,45 @@ test('opens Unicode exports with or without a BOM and respects declared charsets
     }
 });
 
+test('imports Telegram Desktop control escapes without changing literal escape text', async () => {
+    const app = createAnalyzer({ search: '?view=upload' });
+    const title = 'Synthetic "chat" \u000b \\x1F';
+    const sender = 'Sender\u0007';
+    const messages = [
+        { id: 1, from: sender, date: '2026-11-11T09:00:00', text: 'word\u000cnext\nline' },
+    ];
+    const strictJson = JSON.stringify({ name: title, messages });
+    // Telegram Desktop writes these controls as hexadecimal escapes.
+    const telegramJson = strictJson.replace('\\u000b', '\\x0B').replace('\\u0007', '\\x07')
+        .replace('\\f', '\\x0C');
+    assert.throws(() => JSON.parse(telegramJson), SyntaxError);
+
+    for (const [filename, content] of [['strict.json', strictJson], ['telegram.json', telegramJson]]) {
+        app.selectFile(filename).completeRaw(content);
+        assert.equal(app.element('fileError').hidden, true, filename);
+        assert.equal(app.element('reportTitle').textContent, title, filename);
+        app.element('exportParticipants').click();
+        assert.match(await app.downloads.at(-1).blob.text(), /"Sender\u0007",1,14/);
+    }
+});
+
+test('rejects other invalid escapes and malformed replacements after Telegram escape recovery', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('saved.json').complete({ name: 'Saved report', messages: [] });
+    const invalidImports = [
+        '{"name":"Outside range \\x20","messages":[]}',
+        '{"name":"Malformed \\x0B","messages":[}',
+        '{"name":"Outside a string","messages":\\x0B[]}',
+        '{"name":"Other invalid escape \\x07 \\q","messages":[]}',
+    ];
+    for (const content of invalidImports) {
+        app.selectFile('invalid.json').completeRaw(content);
+        assert.match(app.element('fileError').textContent, /valid JSON export/);
+        assert.equal(app.element('reportTitle').textContent, 'Saved report');
+        assert.equal(app.element('dropFileName').textContent, 'saved.json');
+    }
+});
+
 test('rejects malformed text encodings and keeps the current account report', () => {
     const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
     const corruptUtf8 = Buffer.concat([
@@ -1529,8 +1641,8 @@ test('shows text statistics when the chart library is unavailable', () => {
     assert.equal(app.element('.stats-container').style.display, 'block');
     assert.equal(app.element('.stats-container').classList.contains('charts-unavailable'), true);
     assert.equal(app.element('chartsUnavailableNotice').hidden, false);
-    assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
-    assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 2 слов/);
+    assert.equal(participantTableStats(app).get('Alice').words, '2');
+    assert.equal(participantTableStats(app, 'monthly').get('Alice').words, '2');
     assert.equal(app.charts.size, 0);
 });
 
@@ -1558,8 +1670,8 @@ test('keeps text, month navigation, language and CSV usable without a canvas con
         app.element('prevMonth').click();
         app.element('languageToggle').click();
         assert.match(app.element('currentMonth').textContent, /October/i);
-        assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 2 words/);
-        assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 2 words/);
+        assert.equal(participantTableStats(app).get('Alice').words, '2');
+        assert.equal(participantTableStats(app, 'monthly').get('Alice').words, '2');
         const mode = app.element('replyTiming');
         assert.equal(mode.disabled, false);
         mode.value = 'direct';
@@ -2275,7 +2387,7 @@ test('classifies native inline images as rich media in both type exports', async
     const values = chartId => Array.from(app.charts.get(chartId).data.datasets[0].data);
     assert.deepEqual(values('messageTypesChart'), [7, 3]);
     assert.deepEqual(values('monthlyMessageTypesChart'), [1]);
-    assert.match(app.element('wordCountStats').innerHTML, /Paragraph<\/strong>: 2 words/);
+    assert.equal(participantTableStats(app).get('Paragraph').words, '2');
     app.element('exportOverviewMessageTypes').click();
     app.monthlyTab.click();
     app.element('prevMonth').click();
@@ -2334,8 +2446,8 @@ test('counts embedded rich media once per message without exposing attachment da
     const monthly = { Текст: 4, 'Медиа в форматированных постах': 5, Стикеры: 1, Фото: 1, 'Служебные события': 1 };
     assert.deepEqual(counts('messageTypesChart'), { ...monthly, 'Неподдерживаемые записи': 1 });
     assert.deepEqual(counts('monthlyMessageTypesChart'), monthly);
-    assert.match(app.element('wordCountStats').innerHTML, /Synthetic sender<\/strong>: 6 слов/);
-    assert.match(app.element('monthlyWordCountStats').innerHTML, /Synthetic sender<\/strong>: 6 слов/);
+    assert.equal(participantTableStats(app).get('Synthetic sender').words, '6');
+    assert.equal(participantTableStats(app, 'monthly').get('Synthetic sender').words, '6');
     app.element('languageToggle').click();
     const english = { Text: 4, 'Rich media': 5, Stickers: 1, Photos: 1, 'Service events': 1 };
     assert.deepEqual(counts('messageTypesChart'), { ...english, 'Unsupported records': 1 });
@@ -2439,7 +2551,7 @@ test('classifies Telegram checklists without counting or exposing checklist cont
     timing.value = 'direct';
     timing.change();
     assert.deepEqual(chartCounts('responseTimeChart'), { 'Alice -> Bob': 1 });
-    assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 2 слов/);
+    assert.equal(participantTableStats(app).get('Bob').words, '2');
 
     app.element('languageToggle').click();
     for (const id of ['messageTypesChart', 'monthlyMessageTypesChart']) {
@@ -2758,7 +2870,7 @@ test('counts games, invoices, giveaways and paid media without exposing their me
     timing.value = 'direct';
     timing.change();
     assert.deepEqual(chartCounts('monthlyResponseTimeChart'), { 'Alice -> Bob': 1 });
-    assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 1 слов/);
+    assert.equal(participantTableStats(app).get('Bob').words, '1');
 
     app.element('languageToggle').click();
     for (const id of scopes) {
@@ -2813,10 +2925,10 @@ test('counts graphemes across Telegram text entities in report lengths and both 
         text,
     })) });
 
-    assert.match(app.element('participantStats').innerHTML, /Средняя длина: 1\.3 символов/);
+    assert.equal(participantTableStats(app).get('Alice').average, '1,3');
     app.monthlyTab.click();
     app.element('prevMonth').click();
-    assert.match(app.element('monthlyParticipantStats').innerHTML, /Средняя длина: 1\.0 символов/);
+    assert.equal(participantTableStats(app, 'monthly').get('Alice').average, '1,0');
     app.element('exportMonthlyParticipants').click();
     app.element('exportParticipants').click();
     const [month, overall] = app.downloads;
@@ -2921,19 +3033,16 @@ test('counts formatted Telegram Desktop rich text in both report scopes and CSVs
     chooseAccountChat(app, '0');
     app.element('analyzeAccountChat').click();
 
-    for (const id of ['wordCountStats', 'monthlyWordCountStats']) {
-        const html = app.element(id).innerHTML;
-        assert.match(html, /Rich<\/strong>: 10 слов/);
-        assert.match(html, /Legacy<\/strong>: 2 слов/);
-        assert.match(html, /Malformed<\/strong>: 0 слов/);
-        assert.match(html, /Deep<\/strong>: 0 слов/);
-    }
     const text = 'Hello\nWorld again\nOne\nTwo\nNumbers\nThree\nCaption\nMore\nText';
     const expectedLength = text.length.toFixed(1);
-    for (const id of ['participantStats', 'monthlyParticipantStats']) {
-        const html = app.element(id).innerHTML;
-        assert.ok(html.includes('Средняя длина: ' + expectedLength + ' символов'));
-        assert.doesNotMatch(html, /example\.com|private\.jpg|World again|ignored/);
+    for (const period of ['overview', 'monthly']) {
+        const rows = participantTableEntries(openParticipantTable(app, period));
+        const stats = new Map(rows.map(([name, , words, average]) => [name, [words, average]]));
+        assert.deepEqual(stats.get('Rich'), ['10', expectedLength.replace('.', ',')]);
+        assert.deepEqual(stats.get('Legacy'), ['2', '8,0']);
+        assert.deepEqual(stats.get('Malformed'), ['0', '0,0']);
+        assert.deepEqual(stats.get('Deep'), ['0', '0,0']);
+        assert.doesNotMatch(JSON.stringify(rows), /example\.com|private\.jpg|World again|ignored/);
     }
     app.element('exportParticipants').click();
     app.element('exportMonthlyParticipants').click();
@@ -2963,10 +3072,9 @@ test('uses inline images as rich word boundaries without adding text characters'
     app.selectFile('synthetic-rich-words.json').complete({ messages: fixtures.map(([from, blocks], index) => ({
         id: index + 1, type: 'message', from, date: '2026-10-20T12:00:00Z', rich_message: { blocks },
     })) });
-    for (const [from, , words] of fixtures) {
-        const item = from + '</strong>: ' + words + (words === 1 ? ' word' : ' words') + '</li>';
-        assert.ok(app.element('wordCountStats').innerHTML.includes(item), from);
-        assert.ok(app.element('monthlyWordCountStats').innerHTML.includes(item), from);
+    for (const period of ['overview', 'monthly']) {
+        const stats = participantTableStats(app, period);
+        for (const [from, , words] of fixtures) assert.equal(stats.get(from).words, String(words), from);
     }
     app.element('exportParticipants').click();
     app.monthlyTab.click();
@@ -2991,18 +3099,18 @@ test('counts words in unspaced scripts and ignores standalone punctuation and em
         { id: 5, from: 'Russian', text: 'Без даты' },
     ] });
 
-    const overview = app.element('wordCountStats');
-    const month = app.element('monthlyWordCountStats');
+    const overview = participantTableStats(app);
+    const month = participantTableStats(app, 'monthly');
     for (const report of [overview, month]) {
-        assert.match(report.innerHTML, /Punctuation<\/strong>: 0 слов/);
-        assert.match(report.innerHTML, /Emoji<\/strong>: 0 слов/);
-        assert.match(report.innerHTML, /Chinese<\/strong>: 2 слов/);
+        assert.equal(report.get('Punctuation').words, '0');
+        assert.equal(report.get('Emoji').words, '0');
+        assert.equal(report.get('Chinese').words, '2');
     }
-    assert.match(overview.innerHTML, /Russian<\/strong>: 4 слов/);
-    assert.match(month.innerHTML, /Russian<\/strong>: 2 слов/);
+    assert.equal(overview.get('Russian').words, '4');
+    assert.equal(month.get('Russian').words, '2');
     app.element('languageToggle').click();
-    assert.match(overview.innerHTML, /Chinese<\/strong>: 2 words/);
-    assert.match(month.innerHTML, /Emoji<\/strong>: 0 words/);
+    assert.equal(participantTableStats(app).get('Chinese').words, '2');
+    assert.equal(participantTableStats(app, 'monthly').get('Emoji').words, '0');
 
     app.element('exportMonthlyParticipants').click();
     const [{ blob }] = app.downloads;
@@ -3023,7 +3131,7 @@ test('separates words joined by emoji while retaining links, compounds and graph
         ['Links and compound', 'follow-up https://example.test/a🐕b tg://resolve?domain=🐕name', 3],
         ['Emoji only', '🐕 👨‍👩‍👧 1️⃣ 🇺🇳', 0],
     ];
-    const withoutSegmenter = { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat };
+    const withoutSegmenter = { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat, Collator: Intl.Collator };
     const withIncorrectWordFlags = {
         ...withoutSegmenter,
         Segmenter: class extends Intl.Segmenter {
@@ -3037,10 +3145,9 @@ test('separates words joined by emoji while retaining links, compounds and graph
         app.selectFile('synthetic-emoji.json').complete({ messages: fixtures.map(([from, text], index) => ({
             id: index + 1, from, text, date,
         })) });
-        for (const [from, , count] of fixtures) {
-            const item = from + '</strong>: ' + count + (count === 1 ? ' word' : ' words') + '</li>';
-            assert.ok(app.element('wordCountStats').innerHTML.includes(item), from);
-            assert.ok(app.element('monthlyWordCountStats').innerHTML.includes(item), from);
+        for (const period of ['overview', 'monthly']) {
+            const stats = participantTableStats(app, period);
+            for (const [from, , count] of fixtures) assert.equal(stats.get(from).words, String(count), from);
         }
         if (intl === Intl) {
             app.element('exportParticipants').click();
@@ -3050,22 +3157,22 @@ test('separates words joined by emoji while retaining links, compounds and graph
 });
 
 test('falls back to letter and number tokens when word segmentation is unavailable', () => {
-    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat } });
+    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat, Collator: Intl.Collator } });
     const date = '2026-10-10T12:00:00';
     app.selectFile('words.json').complete({ messages: [
         { id: 1, from: 'Alice', date, text: '… 🐈 2️⃣ 你好世界 follow-up e\u0301 7' },
     ] });
-    assert.match(app.element('wordCountStats').innerHTML, /Alice<\/strong>: 4 слов/);
-    assert.match(app.element('monthlyWordCountStats').innerHTML, /Alice<\/strong>: 4 слов/);
+    assert.equal(participantTableStats(app).get('Alice').words, '4');
+    assert.equal(participantTableStats(app, 'monthly').get('Alice').words, '4');
 });
 
 test('falls back to Unicode code points when grapheme segmentation is unavailable', () => {
-    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat } });
+    const app = createAnalyzer({ intl: { DateTimeFormat: Intl.DateTimeFormat, NumberFormat: Intl.NumberFormat, Collator: Intl.Collator } });
     app.selectFile('unicode.json').complete({ messages: [
         { id: 1, from: 'Alice', text: '😀' },
         { id: 2, from: 'Alice', text: 'e\u0301' },
     ] });
-    assert.match(app.element('participantStats').innerHTML, /Средняя длина: 1\.5 символов/);
+    assert.equal(participantTableStats(app).get('Alice').average, '1,5');
 });
 
 test('exports the selected month and keeps the whole-chat CSV unchanged', async () => {
@@ -3123,9 +3230,10 @@ test('counts cross-month replies once and skips service events', () => {
         ],
     });
     assert.deepEqual(app.alerts, []);
-    assert.match(app.element('wordCountStats').innerHTML, /Bob<\/strong>: 3 слов/);
-    assert.match(app.element('monthlyParticipantStats').innerHTML, /<strong>Bob<\/strong>/);
-    assert.doesNotMatch(app.element('monthlyParticipantStats').innerHTML, /<strong>__proto__<\/strong>/);
+    assert.equal(participantTableStats(app).get('Bob').words, '3');
+    const november = participantTableStats(app, 'monthly');
+    assert.equal(november.has('Bob'), true);
+    assert.equal(november.has('__proto__'), false);
     assert.match(app.element('participantStats').innerHTML, /<strong>Bob<\/strong>: 10 мин/);
     for (const id of ['responseTimeChart', 'monthlyResponseTimeChart']) {
         const chart = app.charts.get(id);
@@ -3137,7 +3245,7 @@ test('counts cross-month replies once and skips service events', () => {
     assert.match(app.element('monthlyThresholdExceededMessagesStats').innerHTML, /<strong>Bob<\/strong>: 1/);
     app.element('prevMonth').click();
     assert.match(app.element('currentMonth').textContent, /октябрь/);
-    assert.doesNotMatch(app.element('monthlyWordCountStats').innerHTML, /<strong>Bob<\/strong>/);
+    assert.equal(participantTableStats(app, 'monthly').has('Bob'), false);
     assert.equal(app.charts.get('monthlyResponseTimeChart').data.labels.length, 0);
 });
 
@@ -3455,7 +3563,7 @@ test('matches old numeric sender IDs and keeps the latest dated name', async () 
     assert.deepEqual(app.alerts, []);
     const participantStats = app.element('participantStats').innerHTML;
     assert.match(participantStats, /<strong>Новое имя<\/strong>/);
-    assert.match(participantStats, /Сообщений: 4/);
+    assert.equal(participantTableStats(app).get('Новое имя').messages, '4');
     assert.doesNotMatch(participantStats, /Старое имя|Недатированное имя|user101/);
     assert.equal(app.charts.get('responseTimeChart').data.labels.length, 0);
 });

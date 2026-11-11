@@ -27,6 +27,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const dailyActivity = document.getElementById('dailyActivity');
     const dailyActivityRows = document.getElementById('dailyActivityRows');
     const exportDailyActivityButton = document.getElementById('exportDailyActivity');
+    const overviewParticipants = {
+        panel: document.getElementById('overviewParticipants'),
+        sort: document.getElementById('overviewParticipantSort'),
+        rows: document.getElementById('overviewParticipantRows'),
+    };
+    const monthlyParticipants = {
+        panel: document.getElementById('monthlyParticipants'),
+        sort: document.getElementById('monthlyParticipantSort'),
+        rows: document.getElementById('monthlyParticipantRows'),
+    };
     const overviewPatterns = {
         panel: document.getElementById('overviewActivityPatterns'),
         weekdays: document.getElementById('overviewWeekdayRows'),
@@ -242,13 +252,10 @@ document.addEventListener('DOMContentLoaded', () => {
             'No direct reply links in this view.',
             'В этой сводке нет ссылок на прямые ответы.',
         ],
-        participantStats: ['Participant statistics', 'Статистика по участникам:'],
         participantResponse: ['Average response time by participant', 'Среднее время ответа по участникам:'],
         meanDelay: ['Average reply time by pair', 'Среднее время ответа по парам участников'],
         monthDelay: ['Average reply time by pair this month', 'Среднее время ответа по парам за месяц'],
         delayFor: [name => `Average response delay for ${name}`, name => `Средняя задержка ответа ${name}:`],
-        totalWords: ['Total word count', 'Общее количество слов:'],
-        monthWords: ['Word count', 'Количество слов:'],
         mediaUsage: ['Shared content by participant', 'Вложения и другие материалы по участникам:'],
         longResponses: [
             minutes => `Responses after more than ${minutes} min`,
@@ -261,9 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
         noData: ['No data', 'Нет данных'],
         noDelayData: ['No response delays to report.', 'Нет данных для этой статистики.'],
         noLongResponses: ['No responses exceed this threshold.', 'Нет данных для этой статистики (с учетом порога).'],
-        averageLength: [length => `Average length · ${length} characters`, length => `Средняя длина: ${length} символов`],
-        messageTotal: [count => `Messages · ${count}`, count => `Сообщений: ${count}`],
-        wordTotal: [count => `${count} ${count === 1 ? 'word' : 'words'}`, count => `${count} слов`],
         toParticipant: ['To', 'К'],
         fromParticipant: ['From', 'От'],
         seconds: ['sec', 'сек'],
@@ -304,7 +308,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let language = 'en';
     let countFormat;
     let importPercentFormat;
-    let replyMinutesFormat;
+    let singleDecimalFormat;
+    let participantNameOrder;
     let monthFormat;
     let dayFormat;
     let weekdayFormat;
@@ -445,6 +450,10 @@ document.addEventListener('DOMContentLoaded', () => {
     exportMonthlyActivityButton.addEventListener('click', downloadMonthlyActivity);
     dailyActivity.addEventListener('toggle', refreshDailyActivity);
     exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
+    overviewParticipants.panel.addEventListener('toggle', refreshOverviewParticipants);
+    overviewParticipants.sort.addEventListener('change', refreshOverviewParticipants);
+    monthlyParticipants.panel.addEventListener('toggle', refreshMonthlyParticipants);
+    monthlyParticipants.sort.addEventListener('change', refreshMonthlyParticipants);
     overviewPatterns.panel.addEventListener('toggle', refreshOverviewPatterns);
     monthlyPatterns.panel.addEventListener('toggle', refreshMonthlyPatterns);
     overviewTypes.panel.addEventListener('toggle', refreshOverviewMessageTypes);
@@ -621,7 +630,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const locale = next === 'ru' ? 'ru-RU' : 'en';
         countFormat = new Intl.NumberFormat(locale);
         importPercentFormat = new Intl.NumberFormat(locale, { style: 'percent' });
-        replyMinutesFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        singleDecimalFormat = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+        participantNameOrder = new Intl.Collator(locale, { numeric: true, sensitivity: 'base' });
         monthFormat = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric', timeZone: 'UTC' });
         dayFormat = new Intl.DateTimeFormat(locale, { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
         weekdayFormat = new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' });
@@ -1403,6 +1413,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshReportMonthOptions();
         refreshMonthlyActivity();
         refreshDailyActivity();
+        refreshOverviewParticipants();
+        refreshMonthlyParticipants();
         refreshOverviewPatterns();
         refreshMonthlyPatterns();
         refreshOverviewMessageTypes();
@@ -1539,6 +1551,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return decoder.decode(bytes);
     }
 
+    function parseExportJson(text) {
+        try {
+            return JSON.parse(text);
+        } catch (error) {
+            if (!text.includes('\\x')) throw error;
+
+            // Telegram Desktop emits these C0 control characters as \xNN.
+            // Match escape pairs together so escaped quotes and backslashes stay intact.
+            let insideString = false;
+            const repaired = text.replace(/"|\\(?:x(0[0-8BCEF]|1[0-9A-F])|[\s\S])/g, (token, code) => {
+                if (token === '"') insideString = !insideString;
+                return insideString && code ? '\\u00' + code : token;
+            });
+            if (repaired === text) throw error;
+            return JSON.parse(repaired);
+        }
+    }
+
     function processSelectedFile(file, { isDemo = false } = {}) {
         if (!file) {
             return;
@@ -1623,7 +1653,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     rejectImport('htmlExport');
                     return;
                 }
-                const data = JSON.parse(text);
+                const data = parseExportJson(text);
                 const messages = validMessages(data?.messages) ? data.messages : null;
                 const chats = messages ? [] : findAccountChats(data);
                 if (!messages && !chats.length) {
@@ -2016,6 +2046,7 @@ document.addEventListener('DOMContentLoaded', () => {
             reactionCounts,
         };
         renderOverviewStatistics();
+        refreshOverviewParticipants();
         refreshOverviewPatterns();
         refreshOverviewMessageTypes();
         refreshOverviewReactions();
@@ -2043,7 +2074,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const responseTimes = selectedResponseTimes(overallResponseStats);
         displayGeneralStats(overviewData.messageCount, overallParticipantTotals, responseTimes);
         displayAverageResponseDelayStats(calculateAverageResponseDelay(responseTimes));
-        displayWordCountStats(overviewData.words);
         displayMediaTypeStats(overviewData.media);
         displayThresholdExceededMessagesStats(calculateThresholdExceededMessages(responseTimes, ignoredMessageThreshold));
     }
@@ -2077,6 +2107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!overviewData || statsContainer.style.display !== 'block') return;
 
         renderOverviewStatistics();
+        refreshOverviewParticipants();
         refreshOverviewPatterns();
         refreshOverviewMessageTypes();
         refreshOverviewReactions();
@@ -2139,8 +2170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setMessageMetric(messageCountElement, messageCount);
         document.getElementById('overviewParticipantCount').textContent = countFormat.format(participantTotals.size);
         document.getElementById('overviewMonthCount').textContent = countFormat.format(monthsData.length);
-        // Combine participant stats and average response time
-        participantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals) + avgResponseTimeHTML;
+        participantStatsElement.innerHTML = avgResponseTimeHTML;
     }
 
     function setMessageMetric(element, count) {
@@ -2174,12 +2204,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayAverageResponseDelayStats(avgDelayStats) {
         const title = `<i class="fas fa-hourglass-half" aria-hidden="true"></i> ${translate('meanDelay')}`;
         averageResponseDelayStatsElement.innerHTML = generateAverageResponseDelayHTML(avgDelayStats, title);
-    }
-
-    function displayWordCountStats(wordCounts) {
-        const wordCountStatsElement = document.getElementById('wordCountStats');
-        const title = `<i class="fas fa-font" aria-hidden="true"></i> ${translate('totalWords')}`;
-        wordCountStatsElement.innerHTML = generateWordCountHTML(wordCounts, title);
     }
 
     function displayMediaTypeStats(mediaTypeUsage) {
@@ -2296,6 +2320,48 @@ document.addEventListener('DOMContentLoaded', () => {
         renderActivityPatterns(overviewPatterns, monthsData.length ? overviewData?.activity : undefined);
     }
 
+    function refreshOverviewParticipants() {
+        renderParticipantTable(overviewParticipants, overallParticipantTotals, overviewData?.words);
+    }
+
+    function refreshMonthlyParticipants() {
+        const data = monthsData[currentMonthIndex]?.data;
+        renderParticipantTable(monthlyParticipants, data?.participantTotals, data?.wordCounts);
+    }
+
+    function renderParticipantTable({ panel, sort, rows }, totals, wordCounts) {
+        panel.hidden = !totals?.size;
+        if (panel.hidden) panel.open = false;
+        rows.replaceChildren();
+        if (!panel.open || panel.hidden) return;
+
+        const participants = Array.from(totals, ([name, { messageCount, textLength }]) => ({
+            name: participantLabel(name),
+            messages: messageCount,
+            words: wordCounts[name] ?? 0,
+            length: textLength / messageCount,
+        }));
+        const sortBy = sort.value || 'messages';
+        participants.sort((first, second) => {
+            const difference = sortBy === 'name' ? 0 : second[sortBy] - first[sortBy];
+            return difference || participantNameOrder.compare(first.name, second.name);
+        });
+
+        for (const { name, messages, words, length } of participants) {
+            const row = document.createElement('tr');
+            const heading = document.createElement('th');
+            heading.scope = 'row';
+            heading.textContent = name;
+            row.append(heading);
+            for (const value of [countFormat.format(messages), countFormat.format(words), singleDecimalFormat.format(length)]) {
+                const cell = document.createElement('td');
+                cell.textContent = value;
+                row.append(cell);
+            }
+            rows.append(row);
+        }
+    }
+
     function refreshMonthlyPatterns() {
         renderActivityPatterns(monthlyPatterns, monthsData[currentMonthIndex]?.data);
     }
@@ -2377,6 +2443,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateMonthlyStats({ rebuildCharts = true } = {}) {
+        refreshMonthlyParticipants();
         if (rebuildCharts) updateReplyTimingControls();
         refreshDailyActivity();
         refreshMonthlyPatterns();
@@ -2398,8 +2465,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function displayMonthlyStats(monthData) {
         const { data } = monthData;
         const monthlyMessageCountElement = document.getElementById('monthlyMessageCount');
-        const monthlyParticipantStatsElement = document.getElementById('monthlyParticipantStats');
-        const monthlyWordCountStatsElement = document.getElementById('monthlyWordCountStats');
         const monthlyMediaTypeStatsElement = document.getElementById('monthlyMediaTypeStats');
         const { participantTotals } = data;
         exportMonthlyParticipantsButton.disabled = participantTotals.size === 0;
@@ -2407,10 +2472,6 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('monthlyParticipantCount').textContent = countFormat.format(participantTotals.size);
         document.getElementById('monthlyActiveDayCount').textContent = countFormat.format(countActiveDays(data));
 
-        // Use helper functions for monthly stats display
-        monthlyParticipantStatsElement.innerHTML = generateParticipantStatsHTML(participantTotals);
-
-        monthlyWordCountStatsElement.innerHTML = generateWordCountHTML(data.wordCounts, `<i class="fas fa-font" aria-hidden="true"></i> ${translate('monthWords')}`);
 
         monthlyMediaTypeStatsElement.innerHTML = generateMediaTypeHTML(data.mediaTypesStats, `<i class="fas fa-camera-retro" aria-hidden="true"></i> ${translate('mediaUsage')}`);
 
@@ -2857,26 +2918,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function generateParticipantStatsHTML(totalsByParticipant) {
-        let statsHTML = `<h3><i class="fas fa-users" aria-hidden="true"></i> ${translate('participantStats')}</h3><ul>`;
-        for (const [participant, { messageCount, textLength }] of totalsByParticipant) {
-            const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
-            const avgLength = textLength / messageCount;
-
-            statsHTML += `
-                <li>
-                    <strong>${sanitizedParticipant}</strong>:
-                    <ul>
-                        <li><i class="fas fa-comment" aria-hidden="true"></i> ${translate('messageTotal', messageCount)}</li>
-                        <li><i class="fas fa-text-width" aria-hidden="true"></i> ${translate('averageLength', avgLength.toFixed(1))}</li>
-                    </ul>
-                </li>
-            `;
-        }
-        statsHTML += '</ul>';
-        return statsHTML;
-    }
-
     async function downloadChartPng(canvasId, button) {
         const source = renderedCharts.get(canvasId);
         if (!source || button.disabled || button.getAttribute('aria-busy') === 'true') return;
@@ -3123,7 +3164,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const sanitizedInitiator = sanitizeHTML(participantLabel(initiator));
                     const seconds = initiatorDelays[initiator];
                     const avgTime = formatShortReplyTime(seconds)
-                        ?? (replyMinutesFormat.format(seconds / 60) + ' ' + translate('minutes'));
+                        ?? (singleDecimalFormat.format(seconds / 60) + ' ' + translate('minutes'));
                     html += `<li>${translate('toParticipant')} <strong>${sanitizedInitiator}</strong>: ${avgTime}</li>`;
                 });
                 html += `</ul></li>`;
@@ -3169,18 +3210,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         return `<h3>${title}</h3><ul>${sections.join('')}</ul>`;
-    }
-
-    function generateWordCountHTML(wordCounts, title) {
-        let wordCountHTML = `<h3>${title}</h3><ul>`;
-        for (const participant in wordCounts) {
-            if (Object.hasOwnProperty.call(wordCounts, participant) && participant) {
-                const sanitizedParticipant = sanitizeHTML(participantLabel(participant));
-                wordCountHTML += `<li><strong>${sanitizedParticipant}</strong>: ${translate('wordTotal', wordCounts[participant])}</li>`;
-            }
-        }
-        wordCountHTML += '</ul>';
-        return wordCountHTML;
     }
 
     function generateMediaTypeHTML(mediaTypeUsage, title) {

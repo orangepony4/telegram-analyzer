@@ -234,6 +234,32 @@
                         </section>
                     </div>
 
+                    <details id="overviewParticipants" class="activity-data" hidden>
+                        <summary data-ru="Таблица участников">Participants table</summary>
+                        <label class="participant-sort" for="overviewParticipantSort">
+                            <span data-ru="Сортировка">Sort by</span>
+                            <select id="overviewParticipantSort">
+                                <option value="messages" data-ru="Больше сообщений">Most messages</option>
+                                <option value="words" data-ru="Больше слов">Most words</option>
+                                <option value="length" data-ru="Длиннее сообщения">Longest average message</option>
+                                <option value="name" data-ru="Имя">Name</option>
+                            </select>
+                        </label>
+                        <p id="overviewParticipantUnits" class="participant-units" data-ru="Средняя длина сообщения в символах.">Average message length is measured in characters.</p>
+                        <div class="participant-table-scroll" role="region" tabindex="0"
+                             aria-label="Participants in the whole chat" data-ru-aria-label="Участники всей переписки">
+                            <table class="participant-table" aria-describedby="overviewParticipantUnits">
+                                <thead><tr>
+                                    <th scope="col" data-ru="Участник">Participant</th>
+                                    <th scope="col" data-ru="Сообщения">Messages</th>
+                                    <th scope="col" data-ru="Слова">Words</th>
+                                    <th scope="col" data-ru="Сред. длина">Avg. length</th>
+                                </tr></thead>
+                                <tbody id="overviewParticipantRows"></tbody>
+                            </table>
+                        </div>
+                    </details>
+
                     <details id="monthlyActivity" class="activity-data" hidden>
                         <summary data-ru="Активность по месяцам в таблице">Monthly activity table</summary>
                         <button type="button" id="exportMonthlyActivity" class="button button-secondary activity-export" disabled>
@@ -304,7 +330,6 @@
                         <div class="detail-grid">
                             <div id="participantStats" class="stat-box"></div>
                             <div id="averageResponseDelayStats" class="stat-box"></div>
-                            <div id="wordCountStats" class="stat-box"></div>
                             <div id="mediaTypeStats" class="stat-box"></div>
                             <div id="thresholdExceededMessagesStats" class="stat-box"></div>
                         </div>
@@ -380,6 +405,32 @@
                         </section>
                     </div>
 
+                    <details id="monthlyParticipants" class="activity-data" hidden>
+                        <summary data-ru="Таблица участников">Participants table</summary>
+                        <label class="participant-sort" for="monthlyParticipantSort">
+                            <span data-ru="Сортировка">Sort by</span>
+                            <select id="monthlyParticipantSort">
+                                <option value="messages" data-ru="Больше сообщений">Most messages</option>
+                                <option value="words" data-ru="Больше слов">Most words</option>
+                                <option value="length" data-ru="Длиннее сообщения">Longest average message</option>
+                                <option value="name" data-ru="Имя">Name</option>
+                            </select>
+                        </label>
+                        <p id="monthlyParticipantUnits" class="participant-units" data-ru="Средняя длина сообщения в символах.">Average message length is measured in characters.</p>
+                        <div class="participant-table-scroll" role="region" tabindex="0"
+                             aria-label="Participants in the selected month" data-ru-aria-label="Участники за месяц">
+                            <table class="participant-table" aria-describedby="monthlyParticipantUnits">
+                                <thead><tr>
+                                    <th scope="col" data-ru="Участник">Participant</th>
+                                    <th scope="col" data-ru="Сообщения">Messages</th>
+                                    <th scope="col" data-ru="Слова">Words</th>
+                                    <th scope="col" data-ru="Сред. длина">Avg. length</th>
+                                </tr></thead>
+                                <tbody id="monthlyParticipantRows"></tbody>
+                            </table>
+                        </div>
+                    </details>
+
                     <details id="dailyActivity" class="activity-data" hidden>
                         <summary data-ru="Активность по дням в таблице">Daily activity table</summary>
                         <button type="button" id="exportDailyActivity" class="button button-secondary activity-export" disabled>
@@ -444,9 +495,7 @@
                             <label class="threshold-control" for="monthlyIgnoredThreshold"><span data-ru="Долгий ответ, мин">Long reply threshold, min</span> <input type="number" id="monthlyIgnoredThreshold" value="60" min="1"></label>
                         </div>
                         <div class="detail-grid">
-                            <div id="monthlyParticipantStats" class="stat-box"></div>
                             <div id="monthlyAverageResponseDelayStats" class="stat-box"></div>
-                            <div id="monthlyWordCountStats" class="stat-box"></div>
                             <div id="monthlyMediaTypeStats" class="stat-box"></div>
                             <div id="monthlyThresholdExceededMessagesStats" class="stat-box"></div>
                         </div>

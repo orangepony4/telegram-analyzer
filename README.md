@@ -21,13 +21,16 @@ The app opens with a fictional three-month conversation. Explore the charts and 
 3. If you open an account export containing chat history, enter any part of a name in **Find a chat by name** to narrow the list. If the export contains several chat types, combine the search with **Chat type**. The selected chat's full name, message count, and list number appear below the controls. Choose **Analyze chat** to open its report and CSV exports.
 4. Open **Overview** for the full chat or **By month** to jump to any month with records. Use the arrows to move between months with records. Select a name in the monthly activity chart legend to show or hide its line. The theme control in the header switches between light and dark.
 
+The analyzer also opens exports in which Telegram Desktop writes control characters as `\xNN` escapes. [Telegram Desktop JSON writer](https://github.com/telegramdesktop/tdesktop/blob/v7.3.2/Telegram/SourceFiles/export/output/export_output_json.cpp#L29-L57)
+
 Choose **Table view** to hide the charts and bring the expandable tables and text summaries closer. Choose it again to restore the charts. The current month, reply settings, and open tables stay selected.
 
-Choose **Print report** to print the selected scope or save it as PDF from the browser dialog. The printout includes the text summary and any tables you expanded. Use **Save PNG** separately for charts.
+Choose **Print report** to print the selected scope or save it as PDF from the browser dialog. The printout includes the text summary and any tables you expanded. Open **Participants table** first to include the participant counts and lengths. Use **Save PNG** separately for charts.
 
 ### What the report measures
 
 - Activity charts show messages by month, time of day, and day of the week. The monthly trend includes participants with dated records. If more than 20 participants have dated records, the chart shows the 12 with the most records. Search for another participant with dated records by any part of their name to add them for comparison. Participant details include message counts, word counts, average message length, and shared content types. The JSON records are enough to count photos and files skipped during export, as well as polls, shared contacts, and locations.
+- Open **Participants table** in **Overview** or **By month** to compare message counts, word counts and average message length in one place. Choose **Sort by** to rank participants by any of those measures or to list them by name.
 - Open **Monthly activity table** in **Overview** to read dated record totals and active days for every month, including when charts are unavailable. Select a month to open its report or choose **Activity CSV** to export all of the table's totals. The file uses `YYYY-MM` months and has the same columns in both languages.
 - Open **Daily activity table** in **By month** to read the count for every calendar day, including days with no records. Use **Daily CSV** to download those same counts for the selected month with `YYYY-MM-DD` dates.
 - Open **Activity by weekday and hour** in either report to read the same counts as the charts, including zero values. The counts follow the calendar time written in the export.
@@ -99,11 +102,15 @@ Telegram Analyzer показывает активность, участнико�
 3. Если вы открыли экспорт аккаунта с историей чатов, введите любую часть названия в поле **«Найти чат по названию»**. Если в экспорте несколько типов чатов, можно также выбрать **«Тип чата»**. Под списком появятся полное название выбранного чата, число сообщений и номер в списке. Нажмите **«Показать статистику»**, чтобы открыть его отчёт и выгрузки CSV.
 4. Во вкладке **«Обзор»** видна статистика за всё время. Во вкладке **«По месяцам»** можно сразу выбрать любой месяц с записями или перейти к соседнему месяцу с записями стрелками. Нажмите имя в легенде графика динамики, чтобы скрыть или показать его линию. Кнопка в шапке переключает светлую и тёмную темы.
 
+Анализатор также открывает файлы, в которых Telegram Desktop записал управляющие символы в виде последовательностей `\xNN`. [Код экспорта JSON в Telegram Desktop](https://github.com/telegramdesktop/tdesktop/blob/v7.3.2/Telegram/SourceFiles/export/output/export_output_json.cpp#L29-L57)
+
 Нажмите **«Режим таблиц»**, чтобы скрыть графики и быстрее перейти к раскрывающимся таблицам и текстовым сводкам. Повторное нажатие возвращает графики. Выбранный месяц, настройки замера ответов и раскрытые таблицы сохраняются.
 
-Кнопка **«Печать отчёта»** открывает диалог браузера для печати или сохранения в PDF. В документ попадут текстовая сводка выбранного периода и раскрытые таблицы. Графики можно отдельно скачать кнопкой **«Скачать PNG»**.
+Кнопка **«Печать отчёта»** открывает диалог браузера для печати или сохранения в PDF. В документ попадут текстовая сводка выбранного периода и раскрытые таблицы. Чтобы добавить число сообщений, слов и среднюю длину по участникам, раскройте **«Таблицу участников»**. Графики можно отдельно скачать кнопкой **«Скачать PNG»**.
 
 ### Что считает анализатор
+
+Откройте **«Таблица участников»** в разделах **«Обзор»** или **«По месяцам»**. Количество сообщений, количество слов и средняя длина сообщения видны рядом. Меню **«Сортировка»** позволяет расположить участников по любому из этих показателей или по имени.
 
 - Графики показывают активность по месяцам, времени суток и дням недели. На график динамики попадают участники с датированными записями. Если таких участников больше 20, график показывает 12 участников с наибольшим числом записей с датой. Для сравнения можно добавить ещё одного участника с датированными записями, найдя его по любой части имени. По участникам можно посмотреть количество сообщений и слов, среднюю длину и типы отправленных материалов. JSON содержит достаточно данных для подсчёта опросов, контактов, геопозиций, фотографий и файлов, даже если вложения не были скачаны.
 - В разделе **«Обзор»** откройте **«Активность по месяцам в таблице»**. Там видны число записей с датой и количество активных дней за каждый месяц, даже если графики недоступны. Нажмите на месяц, чтобы открыть его отчёт, или нажмите **«CSV активности»**, чтобы выгрузить всю таблицу. Месяцы записаны в формате `YYYY-MM`, названия столбцов одинаковы в обоих языках.

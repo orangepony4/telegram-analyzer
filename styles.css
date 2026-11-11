@@ -1013,6 +1013,34 @@ a { color: var(--accent); }
 .activity-data th:first-child { text-align: start; }
 .activity-data th[scope="row"] { font-weight: 500; }
 .activity-data tbody tr:last-child > * { border-bottom: 0; }
+.participant-sort {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin: 0 12px 10px;
+    color: var(--text-muted);
+    font-size: .8125rem;
+}
+
+.participant-sort select { max-width: 100%; }
+.participant-units {
+    margin: 0 12px 6px;
+    color: var(--text-muted);
+    font-size: .875rem;
+}
+
+.participant-table-scroll {
+    margin: 0 12px 12px;
+    overflow-x: auto;
+}
+
+.participant-table-scroll:focus-visible { outline-offset: -2px; }
+.activity-data .participant-table { width: 100%; margin: 0; }
+.participant-table :is(th, td) { padding-inline: 5px; vertical-align: top; }
+.participant-table th:first-child { min-inline-size: 6rem; }
+.participant-table :is(th, td):not(:first-child) { white-space: nowrap; }
+
 .message-type-table :is(th, td) { padding-inline: 3px; }
 .message-type-table :is(th, td):last-child { white-space: nowrap; }
 
@@ -1187,7 +1215,7 @@ a { color: var(--accent); }
     }
 
     .app-header, .source-rail, .skip-link, .report-toolbar, .month-toolbar,
-    .charts-grid, .charts-unavailable .notice, .threshold-control, .report button:not(.activity-month),
+    .charts-grid, .charts-unavailable .notice, .threshold-control, .participant-sort, .report button:not(.activity-month),
     .activity-data:not([open]), .screen-caption { display: none !important; }
 
     .workspace {
@@ -1214,6 +1242,8 @@ a { color: var(--accent); }
     .activity-data summary { min-height: 0; padding: 0; list-style: none; }
     .activity-data summary::-webkit-details-marker { display: none; }
     .activity-data table { font-size: 9pt; }
+    .participant-table-scroll { margin: 0; overflow: visible; }
+    .participant-table :is(th, td):not(:first-child) { white-space: normal; }
     .activity-data :is(th, td) { padding: 3pt 5pt; }
     .activity-data .activity-month {
         min-height: 0;
