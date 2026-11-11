@@ -53,6 +53,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
                 getAttribute: name => attributes.get(name),
                 removeAttribute: name => attributes.delete(name),
                 querySelector: () => null,
+                scrollIntoView() {},
                 focus() {
                     if (!this.disabled) focusedElement = this;
                 },
@@ -347,6 +348,74 @@ test('compares average, median and reply count within the chosen mode and month'
         assert.equal(app.element(scope + 'ReplyPairs').hidden, true);
         assert.deepEqual(app.element(scope + 'ReplyPairRows').children, []);
     }
+});
+
+test('exports the sorted reply-pair table with precise seconds and formula-safe names', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    const sender = '=Example("A")';
+    const messages = [
+        { id: 1, from: 'Alice', date: '2026-01-01T12:00:00Z' },
+        { id: 2, from: 'Bob', date: '2026-01-01T12:02:00Z', reply_to_message_id: 1 },
+    ];
+    const start = Date.parse('2026-02-01T12:00:00Z');
+    for (const [index, delay] of [1000, 1001, 1002, 5000].entries()) {
+        const id = messages.length + 1;
+        const time = start + index * 120_000;
+        messages.push({ id, from: sender, date: new Date(time).toISOString() }, {
+            id: id + 1, from: 'Dana', date: new Date(time + delay).toISOString(), reply_to_message_id: id,
+        });
+    }
+    messages.push({ id: messages.length + 1, from: 'March participant', date: '2026-03-01T12:00:00Z' });
+    app.selectFile('fictional-replies.json').complete({ messages });
+
+    const overviewExport = app.element('overviewReplyPairCsv');
+    const monthlyExport = app.element('monthlyReplyPairCsv');
+    assert.equal(overviewExport.disabled, true);
+    overviewExport.click();
+    assert.equal(app.downloads.length, 0);
+    const overviewRows = openReplyPairs(app, 'overview');
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    const sort = app.element('overviewReplyPairSort');
+    sort.value = 'slow';
+    sort.change();
+    assert.deepEqual(participantTableEntries(overviewRows).map(row => row[0]), ['Alice', sender]);
+    overviewExport.click();
+    const whole = app.downloads.at(-1);
+    assert.equal(whole.name, 'telegram-analyzer-direct-reply-pairs.csv');
+    const header = 'sender,responder,timed_replies,median_seconds,average_seconds\r\n';
+    const februaryRow = `"'=Example(""A"")","Dana",4,1.0015,2.001\r\n`;
+    assert.equal(Buffer.from(await whole.blob.arrayBuffer()).toString('utf8'),
+        '\uFEFF' + header + '"Alice","Bob",1,120.0000,120.000\r\n' + februaryRow);
+
+    app.monthlyTab.click();
+    openReplyPairs(app, 'monthly');
+    assert.equal(monthlyExport.disabled, true);
+    overviewExport.click();
+    monthlyExport.click();
+    assert.equal(app.downloads.length, 1);
+    app.element('prevMonth').click();
+    app.element('languageToggle').click();
+    monthlyExport.click();
+    const month = app.downloads.at(-1);
+    assert.equal(month.name, 'telegram-analyzer-2026-02-direct-reply-pairs.csv');
+    assert.equal(await month.blob.text(), header + februaryRow);
+    app.element('exportReplyTiming').click();
+    const legacy = app.downloads.at(-1);
+    assert.equal(legacy.name, 'telegram-analyzer-2026-02-direct-replies.csv');
+    assert.equal(await legacy.blob.text(), 'sender,responder,timed_replies,average_seconds,long_replies,threshold_seconds\r\n'
+        + `"'=Example(""A"")","Dana",4,2.001,0,3600\r\n`);
+
+    mode.value = 'adjacent';
+    mode.change();
+    monthlyExport.click();
+    const adjacent = app.downloads.at(-1);
+    assert.equal(adjacent.name, 'telegram-analyzer-2026-02-adjacent-reply-pairs.csv');
+    assert.match(await adjacent.blob.text(), /"Dana","'=Example\(""A""\)",3,/);
+    app.element('clearLoadedData').click();
+    monthlyExport.click();
+    assert.equal(app.downloads.length, 4);
 });
 
 test('filters and exports participant table rows in the current sort and scope', async () => {
@@ -2097,6 +2166,39 @@ test('canceling an initial read restores the empty screen and allows retry in th
     assert.equal(app.element('reportTitle').textContent, 'Retry chat');
     assert.equal(app.element('clearLoadedData').hidden, false);
     assert.equal(app.focusedElement, app.element('jsonFile'));
+});
+
+test('focuses an opened report or account chooser when the reader has not moved focus', async () => {
+    const app = createAnalyzer();
+    const input = app.element('jsonFile');
+    const theme = app.element('themeToggleBtn');
+    const report = app.element('reportTitle');
+    theme.focus();
+    await app.startupDemo.complete();
+    assert.equal(app.focusedElement, theme);
+
+    input.focus();
+    app.selectFile('chat.json').complete({ name: 'Chat', messages: [] });
+    assert.equal(app.focusedElement, report);
+
+    input.focus();
+    app.selectFile('account.json').complete({ chats: { list: [{ name: 'Chat', messages: [] }] } });
+    assert.equal(app.focusedElement, app.element('accountChatChooser'));
+
+    const demoButton = app.element('loadDemoChat');
+    demoButton.focus();
+    await app.selectDemo().complete();
+    assert.equal(app.focusedElement, report);
+
+    input.focus();
+    const slowImport = app.selectFile('slow.json');
+    theme.focus();
+    slowImport.complete({ name: 'Slow chat', messages: [] });
+    assert.equal(app.focusedElement, theme);
+
+    input.focus();
+    app.selectFile('invalid.json').completeRaw('invalid');
+    assert.equal(app.focusedElement, input);
 });
 
 test('shows localized byte progress for the current measurable read and resets it on cancel or completion', () => {

@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         empty: document.getElementById(`${scope}ReplyPairsEmpty`),
         sort: document.getElementById(`${scope}ReplyPairSort`),
         rows: document.getElementById(`${scope}ReplyPairRows`),
+        exportButton: document.getElementById(`${scope}ReplyPairCsv`),
     }));
     const overviewPatterns = {
         panel: document.getElementById('overviewActivityPatterns'),
@@ -505,8 +506,15 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyParticipants.sort.addEventListener('change', refreshMonthlyParticipants);
     overviewReplyPairs.panel.addEventListener('toggle', refreshOverviewReplyPairs);
     overviewReplyPairs.sort.addEventListener('change', refreshOverviewReplyPairs);
+    overviewReplyPairs.exportButton.addEventListener('click', () => {
+        if (allStatsTab.classList.contains('active')) downloadReplyPairTable(overviewReplyPairs, overallResponseStats);
+    });
     monthlyReplyPairs.panel.addEventListener('toggle', refreshMonthlyReplyPairs);
     monthlyReplyPairs.sort.addEventListener('change', refreshMonthlyReplyPairs);
+    monthlyReplyPairs.exportButton.addEventListener('click', () => {
+        const selected = selectedReplyMonth();
+        if (selected) downloadReplyPairTable(monthlyReplyPairs, selected.data, selected.month);
+    });
     monthlyParticipants.exportButton.addEventListener('click', () => {
         const selected = monthsData[currentMonthIndex];
         if (selected && monthlyStatsTab.classList.contains('active')) {
@@ -594,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
         fileInput.addEventListener('change', handleFileSelect);
     }
 
-    demoButton?.addEventListener('click', loadDemoChat);
+    demoButton?.addEventListener('click', () => loadDemoChat());
     demoDownloadButton?.addEventListener('click', () => {
         const file = createDemoFile();
         downloadBlob(file, file.name);
@@ -652,7 +660,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const view = new URLSearchParams(location.search).getAll('view');
     if (view.length !== 1 || view[0] !== 'upload') {
-        loadDemoChat();
+        loadDemoChat({ focusResult: false });
     }
 
     function translate(key, ...args) {
@@ -753,8 +761,8 @@ document.addEventListener('DOMContentLoaded', () => {
         processSelectedFile(file);
     }
 
-    function loadDemoChat() {
-        processSelectedFile(createDemoFile(), { isDemo: true });
+    function loadDemoChat({ focusResult = true } = {}) {
+        processSelectedFile(createDemoFile(), { isDemo: true, focusResult });
     }
 
     function createDemoFile() {
@@ -1685,7 +1693,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function processSelectedFile(file, { isDemo = false } = {}) {
+    function processSelectedFile(file, { isDemo = false, focusResult = true } = {}) {
         if (!file) {
             return;
         }
@@ -1724,11 +1732,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         setReportPlaceholder(translated(isDemo ? 'preparingDemo' : 'readingFile'), translated('reportAfterRead'));
         showLoadingIndicator();
+        const focusBeforeRead = document.activeElement;
 
-        const finish = status => {
+        const finish = (status, destination) => {
             activeImport = null;
             hideLoadingIndicator(status);
             clearFileInput();
+            if (focusResult && destination && document.activeElement === focusBeforeRead) {
+                const isChooser = destination === accountChatChooser;
+                destination.focus({ preventScroll: isChooser });
+                if (isChooser) destination.scrollIntoView({ block: 'start' });
+            }
         };
         const rejectImport = key => {
             if (hasPrevious) {
@@ -1756,6 +1770,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             let status = '';
             let replacing = false;
+            let destination;
             try {
                 let text;
                 try {
@@ -1790,12 +1805,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         isDemo,
                     });
                     status = translated('reportReady');
+                    destination = reportTitle;
                 } else {
                     showAccountChooser(chats);
                     setLocalizedText(sourceFileType, translated('accountExport'));
                     setReportHeader(translated('accountExport'), translated('selectChat'), translated('accountInstructions'));
                     setReportPlaceholder(translated('noChatSelected'), translated('chooseToAnalyze'));
                     status = translated('accountReady');
+                    destination = accountChatChooser;
                 }
             } catch (error) {
                 if (replacing) {
@@ -1806,7 +1823,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     rejectImport('invalidJson');
                 }
             } finally {
-                finish(status);
+                finish(status, destination);
             }
         };
 
@@ -2488,25 +2505,27 @@ document.addEventListener('DOMContentLoaded', () => {
         return summaries;
     }
 
-    function renderReplyPairTable({ panel, content, empty, sort, rows }, data) {
-        panel.hidden = !data;
-        if (panel.hidden) panel.open = false;
-        rows.replaceChildren();
-        if (!panel.open) return;
-
+    function sortedReplyPairs(data, sortBy) {
         const pairs = getReplyPairSummaries(selectedResponseTimes(data)).map(pair => ({
             ...pair, sender: participantLabel(pair.sender), responder: participantLabel(pair.responder),
         }));
-        content.hidden = pairs.length === 0;
-        empty.hidden = !content.hidden;
-        const sortBy = sort.value;
         const byCount = sortBy !== 'fast' && sortBy !== 'slow';
         const direction = sortBy === 'fast' ? 1 : -1;
-        pairs.sort((first, second) => {
+        return pairs.sort((first, second) => {
             const order = byCount ? second.count - first.count : direction * (first.median - second.median);
             return order || participantNameOrder.compare(first.sender, second.sender)
                 || participantNameOrder.compare(first.responder, second.responder);
         });
+    }
+
+    function renderReplyPairTable({ panel, content, empty, sort, rows, exportButton }, data) {
+        panel.hidden = !data;
+        if (panel.hidden) panel.open = false;
+        rows.replaceChildren();
+        const pairs = panel.open ? sortedReplyPairs(data, sort.value) : [];
+        exportButton.disabled = pairs.length === 0;
+        content.hidden = exportButton.disabled;
+        empty.hidden = !content.hidden;
 
         for (const { sender, responder, count, median, average } of pairs) {
             const row = document.createElement('tr');
@@ -3345,6 +3364,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const period = month ? `${month.month}-` : '';
         downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-replies.csv`);
+    }
+
+    function downloadReplyPairTable({ panel, sort, exportButton }, data, month) {
+        if (exportButton.disabled || !panel.open || statsContainer.style.display !== 'block') return;
+        const rows = ['sender,responder,timed_replies,median_seconds,average_seconds'];
+        for (const { sender, responder, count, median, average } of sortedReplyPairs(data, sort.value)) {
+            rows.push([csvTextField(sender), csvTextField(responder), count, median.toFixed(4), average.toFixed(3)].join(','));
+        }
+        const period = month ? `${month}-` : '';
+        downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-reply-pairs.csv`);
     }
 
     function downloadParticipantSummary(participantTotals, filename) {

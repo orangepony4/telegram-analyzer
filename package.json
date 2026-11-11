@@ -1,6 +1,6 @@
 {
   "name": "telegram-chat-analyzer",
-  "version": "1.30.2",
+  "version": "1.31.0",
   "description": "Анализатор чатов Telegram с визуализацией",
   "main": "server.js",
   "scripts": {
