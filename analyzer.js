@@ -15,6 +15,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsContainer = document.querySelector('.stats-container');
     const monthlyChartLegend = document.getElementById('monthlyChartLegend');
     const monthlyChartSeries = document.getElementById('monthlyChartSeries');
+    const messageTypeLegends = new Map(['messageTypesChart', 'monthlyMessageTypesChart'].map(id => [
+        id, {
+            panel: document.getElementById(`${id}Legend`),
+            buttons: document.getElementById(`${id}Series`),
+        },
+    ]));
     const trendComparisonPanel = document.getElementById('trendComparisonPanel');
     const trendComparisonSearch = document.getElementById('trendComparisonSearch');
     const trendComparisonSearchStatus = document.getElementById('trendComparisonSearchStatus');
@@ -1493,6 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setLocalizedText(button.parentElement.querySelector('.chart-export-feedback'), '');
         }
         renderMonthlyChartLegend();
+        for (const canvasId of messageTypeLegends.keys()) renderMessageTypeLegend(canvasId);
         resetTrendComparison();
     }
 
@@ -2176,19 +2183,16 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshOverviewMessageTypes();
         refreshOverviewReactions();
         updateMonthlyStats({ rebuildCharts: false });
-        for (const chart of renderedCharts.values()) {
+        for (const [canvasId, chart] of renderedCharts) {
             chartTranslations.get(chart)?.(chart.data);
             chart.options.locale = language;
             chart.update('none');
+            const legend = messageTypeLegends.get(canvasId);
+            if (legend) updateChartLegendLabels(legend.buttons, chart.data.labels);
         }
 
         const trend = renderedCharts.get('monthlyChart');
-        if (trend && monthlyChartSeries) {
-            trend.data.datasets.forEach((dataset, index) => {
-                const label = monthlyChartSeries.children[index]?.children[1];
-                if (label) label.textContent = dataset.label;
-            });
-        }
+        if (trend) updateChartLegendLabels(monthlyChartSeries, trend.data.datasets.map(dataset => dataset.label));
     }
 
     function recordResponse(responseTimes, sender, responder, seconds) {
@@ -2614,18 +2618,7 @@ document.addEventListener('DOMContentLoaded', () => {
             animation: chartAnimation(),
             interaction: type === 'line' ? { mode: 'index', intersect: false } : undefined,
             plugins: {
-                legend: {
-                    display: doughnut,
-                    position: 'bottom',
-                    labels: {
-                        color: () => chartTheme.textColor,
-                        boxWidth: 8,
-                        boxHeight: 8,
-                        usePointStyle: true,
-                        pointStyle: 'circle',
-                        padding: 14
-                    }
-                },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: () => chartTheme.surface,
                     borderColor: () => chartTheme.borderColor,
@@ -2824,36 +2817,64 @@ document.addEventListener('DOMContentLoaded', () => {
         if (trendComparisonSearchStatus.textContent !== status) trendComparisonSearchStatus.textContent = status;
     }
 
+    function createChartLegendButton(chart, swatch, text, isVisible, setVisibility) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'chart-series-toggle';
+        button.setAttribute('aria-pressed', String(isVisible()));
+        swatch.setAttribute('aria-hidden', 'true');
+        const label = document.createElement('span');
+        label.textContent = text;
+        button.append(swatch, label);
+        button.addEventListener('click', () => {
+            const visible = !isVisible();
+            setVisibility(visible);
+            chart.update('none');
+            button.setAttribute('aria-pressed', String(visible));
+        });
+        return button;
+    }
+
+    function updateChartLegendLabels(buttons, labels) {
+        labels.forEach((text, index) => {
+            const label = buttons.children[index]?.children[1];
+            if (label) label.textContent = text;
+        });
+    }
+
     function renderMonthlyChartLegend(chart) {
         const datasets = chart?.data.datasets ?? [];
         monthlyChartSeries.replaceChildren();
         monthlyChartLegend.hidden = datasets.length === 0;
         for (const [index, dataset] of datasets.entries()) {
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'chart-series-toggle';
-            button.setAttribute('aria-pressed', String(chart.isDatasetVisible(index)));
-
             const swatch = document.createElement('span');
             swatch.className = 'chart-series-swatch';
-            swatch.setAttribute('aria-hidden', 'true');
             swatch.dataset.point = dataset.pointStyle;
             swatch.dataset.dashed = String(Boolean(dataset.borderDash?.length));
             // The primary series uses the theme accent, which the CSS also supplies.
             if (typeof dataset.borderColor === 'string') {
                 swatch.style.setProperty('--series-color', dataset.borderColor);
             }
-            const label = document.createElement('span');
-            label.textContent = dataset.label;
-            button.append(swatch, label);
-            button.addEventListener('click', () => {
-                const visible = !chart.isDatasetVisible(index);
-                chart.setDatasetVisibility(index, visible);
-                chart.update('none');
-                button.setAttribute('aria-pressed', String(visible));
-            });
-            monthlyChartSeries.append(button);
+            monthlyChartSeries.append(createChartLegendButton(chart, swatch, dataset.label,
+                () => chart.isDatasetVisible(index), visible => chart.setDatasetVisibility(index, visible)));
         }
+    }
+
+    function renderMessageTypeLegend(canvasId, colors = []) {
+        const { panel, buttons } = messageTypeLegends.get(canvasId);
+        const chart = renderedCharts.get(canvasId);
+        const labels = chart?.data.labels ?? [];
+        buttons.replaceChildren();
+        panel.hidden = labels.length === 0;
+        labels.forEach((label, index) => {
+            const swatch = document.createElement('span');
+            swatch.className = 'chart-slice-swatch';
+            swatch.style.setProperty('--series-color', chartSeriesColor(colors[index], 'var(--chart-accent)'));
+            const button = createChartLegendButton(chart, swatch, label,
+                () => chart.getDataVisibility(index), () => chart.toggleDataVisibility(index));
+            button.setAttribute('aria-controls', canvasId);
+            buttons.append(button);
+        });
     }
 
     function createResponseTimeChart(responseTimes, canvasId = 'responseTimeChart') {
@@ -2930,12 +2951,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createMessageTypesChart(messageTypes, canvasId = 'messageTypesChart') {
         const types = Object.keys(messageTypes);
+        const colors = types.map(messageTypeColorIndex);
         createChart(canvasId, {
             type: 'doughnut',
             data: {
                 datasets: [{
                     data: Object.values(messageTypes),
-                    backgroundColor: ({ dataIndex }) => chartSeriesColor(messageTypeColorIndex(types[dataIndex])),
+                    backgroundColor: ({ dataIndex }) => chartSeriesColor(colors[dataIndex] ?? 0),
                     borderColor: () => chartTheme.surface,
                     hoverBorderColor: () => chartTheme.surface,
                     borderWidth: 2,
@@ -2946,6 +2968,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 chartData.labels = types.map(mediaLabel);
             }
         });
+        renderMessageTypeLegend(canvasId, colors);
     }
 
     function formatShortReplyTime(seconds) {
@@ -2966,8 +2989,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function chartSeriesColor(index) {
-        const colors = [chartTheme.accent, '#a76d3a', '#6379a6', '#a2678f',
+    function chartSeriesColor(index, accent = chartTheme.accent) {
+        const colors = [accent, '#a76d3a', '#6379a6', '#a2678f',
             '#9871a9', '#537ca6', '#bd775d', '#817a9f', '#977637', '#6d54a2', '#ae6b79', '#775ba0',
             '#796958', '#567388', '#87575e', '#7f5f92', '#4b7098', '#9b6e45', '#9e6884', '#b05a79'];
         return colors[index % colors.length];

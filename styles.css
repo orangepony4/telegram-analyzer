@@ -965,6 +965,14 @@ a { color: var(--accent); }
     clip-path: polygon(50% 0, 100% 100%, 0 100%);
 }
 
+.chart-slice-swatch {
+    flex: 0 0 10px;
+    height: 10px;
+    border: 1px solid var(--series-color);
+    border-radius: 50%;
+    background: var(--series-color);
+}
+
 :is(.charts-unavailable, .table-view) .charts-grid { display: none; }
 
 .activity-data {

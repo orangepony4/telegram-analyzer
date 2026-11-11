@@ -89,6 +89,7 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
             this.data = config.data;
             this.id = id;
             this.hiddenDatasets = new Set();
+            this.hiddenData = new Set();
             charts.set(id, this);
         }
 
@@ -96,6 +97,12 @@ function createAnalyzer({ chartsAvailable = true, storage = russianLocale, intl 
         setDatasetVisibility(index, visible) {
             if (visible) this.hiddenDatasets.delete(index);
             else this.hiddenDatasets.add(index);
+        }
+
+        getDataVisibility(index) { return !this.hiddenData.has(index); }
+        toggleDataVisibility(index) {
+            if (this.hiddenData.has(index)) this.hiddenData.delete(index);
+            else this.hiddenData.add(index);
         }
 
         update() {}
@@ -2214,6 +2221,62 @@ test('exposes and toggles every trend series without replacing focused legend co
     app.selectFile('empty.json').complete({ messages: [] });
     assert.equal(legend.hidden, true);
     assert.deepEqual(series.children, []);
+});
+
+test('toggles message types independently by scope and updates legend labels in place', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null, setItem() {} } });
+    const october = '2026-10-01T12:00:00Z';
+    const november = '2026-11-01T12:00:00Z';
+    app.selectFile('categories.json').complete({ messages: [
+        { id: 1, from: 'Alice', date: october, text: 'Hello' },
+        { id: 2, from: 'Bob', date: november, text: 'Hello again' },
+        { id: 3, from: 'Alice', date: november, photo: 'synthetic-photo.jpg' },
+    ] });
+
+    const wholeId = 'messageTypesChart';
+    const monthId = 'monthlyMessageTypesChart';
+    const whole = app.charts.get(wholeId);
+    const month = app.charts.get(monthId);
+    const wholeLegend = app.element(wholeId + 'Legend');
+    const monthLegend = app.element(monthId + 'Legend');
+    const wholeButtons = app.element(wholeId + 'Series');
+    const monthButtons = app.element(monthId + 'Series');
+    for (const [legend, buttons, chart] of [[wholeLegend, wholeButtons, whole], [monthLegend, monthButtons, month]]) {
+        assert.equal(legend.hidden, false);
+        assert.equal(chart.options.plugins.legend.display, false);
+        assert.deepEqual(buttons.children.map(button => button.children[1].textContent), ['Text', 'Photos']);
+        assert.equal(buttons.children[0].getAttribute('aria-controls'), chart.id);
+        assert.equal(buttons.children[0].getAttribute('aria-pressed'), 'true');
+    }
+
+    const text = wholeButtons.children[0];
+    text.focus();
+    text.click();
+    assert.equal(whole.getDataVisibility(0), false);
+    assert.equal(month.getDataVisibility(0), true);
+    assert.equal(text.getAttribute('aria-pressed'), 'false');
+    app.element('languageToggle').click();
+    app.element('themeToggleBtn').click();
+    assert.equal(wholeButtons.children[0], text);
+    assert.equal(text.children[1].textContent, 'Текст');
+    assert.equal(text.getAttribute('aria-pressed'), 'false');
+    assert.equal(app.focusedElement, text);
+    assert.equal(whole.getDataVisibility(0), false);
+
+    app.monthlyTab.click();
+    const photos = monthButtons.children[1];
+    photos.click();
+    assert.equal(month.getDataVisibility(1), false);
+    assert.equal(whole.getDataVisibility(1), true);
+    app.element('prevMonth').click();
+    assert.equal(monthButtons.children.length, 1);
+    assert.equal(monthButtons.children[0].getAttribute('aria-pressed'), 'true');
+
+    app.element('clearLoadedData').click();
+    assert.equal(wholeLegend.hidden, true);
+    assert.equal(monthLegend.hidden, true);
+    assert.deepEqual(wholeButtons.children, []);
+    assert.deepEqual(monthButtons.children, []);
 });
 
 test('bounds large trend datasets and keeps any other participant available for comparison', async () => {
