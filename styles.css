@@ -559,7 +559,7 @@ a { color: var(--accent); }
 }
 
 .account-chat-field select, #accountChatSearch, .threshold-control input, #replyTiming, #reportMonth,
-#trendComparison, #trendComparisonSearch, .participant-controls :is(input, select), .reply-pair-sort select {
+#trendComparison, #trendComparisonSearch, :is(.participant-controls, .reply-pair-controls) :is(input, select) {
     max-width: 100%;
     min-height: 40px;
     padding: 6px 8px;
@@ -1032,7 +1032,7 @@ a { color: var(--accent); }
 .activity-data th:first-child { text-align: start; }
 .activity-data th[scope="row"] { font-weight: 500; }
 .activity-data tbody tr:last-child > * { border-bottom: 0; }
-.participant-controls {
+:is(.participant-controls, .reply-pair-controls) {
     display: flex;
     align-items: end;
     flex-wrap: wrap;
@@ -1042,18 +1042,18 @@ a { color: var(--accent); }
     font-size: .8125rem;
 }
 
-.participant-controls label {
+:is(.participant-controls, .reply-pair-controls) label {
     display: grid;
     min-width: 0;
     max-width: 100%;
     gap: 4px;
 }
 
-.participant-controls label:first-child { flex: 0 1 16rem; }
-.participant-controls :is(input, select) { width: 100%; }
-.participant-controls button { margin-inline-start: auto; }
-.participant-status:empty { margin: 0; }
-.participant-units, .participant-status {
+:is(.participant-controls, .reply-pair-controls) label:first-child { flex: 0 1 16rem; }
+:is(.participant-controls, .reply-pair-controls) :is(input, select) { width: 100%; }
+:is(.participant-controls, .reply-pair-controls) button { margin-inline-start: auto; }
+:is(.participant-status, .reply-pair-status):empty { margin: 0; }
+.participant-units, .participant-status, .reply-pair-status {
     margin: 0 12px 6px;
     color: var(--text-muted);
     font-size: .875rem;
@@ -1071,11 +1071,8 @@ a { color: var(--accent); }
 .participant-table :is(th, td):not(:first-child) { white-space: nowrap; }
 .reply-pair-table :is(th, td):nth-child(-n+2) { min-inline-size: 5rem; text-align: start; }
 .reply-pair-table :is(th, td):nth-child(n+3) { white-space: nowrap; }
-.reply-pair-empty, .reply-pair-controls { margin: 0 12px 10px; color: var(--text-muted); font-size: .875rem; }
-.reply-pair-controls, .reply-pair-sort { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; }
-.reply-pair-sort { max-width: 100%; }
-.reply-pair-sort select { max-width: 100%; }
-.reply-pair-controls button { max-width: 100%; margin-inline-start: auto; overflow-wrap: anywhere; }
+.reply-pair-empty { margin: 0 12px 10px; color: var(--text-muted); font-size: .875rem; }
+.reply-pair-controls button { max-width: 100%; overflow-wrap: anywhere; }
 
 .message-type-table :is(th, td) { padding-inline: 3px; }
 .message-type-table :is(th, td):last-child { white-space: nowrap; }
@@ -1187,7 +1184,7 @@ a { color: var(--accent); }
     .source-file { padding: 2px 0 4px; }
     .export-help { padding: 0; }
     .button, .icon-button, .nav-btn, .tab-btn, .account-chat-field select, .threshold-control input, #accountChatSearch, #replyTiming, #reportMonth,
-    #trendComparison, #trendComparisonSearch { min-height: 44px; }
+    #trendComparison, #trendComparisonSearch, .reply-pair-controls :is(input, select) { min-height: 44px; }
     .icon-button, .nav-btn { width: 44px; }
     .report-heading { margin-bottom: 13px; padding-bottom: 12px; }
     .report-heading h1, .report-heading h2 { font-size: clamp(1.625rem, 6.7vw, 2.375rem); }

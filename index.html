@@ -304,6 +304,9 @@
                         <button type="button" id="exportMonthlyActivity" class="button button-secondary activity-export" disabled>
                             <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV активности">Activity CSV</span>
                         </button>
+                        <button type="button" id="exportParticipantActivity" class="button button-secondary activity-export" disabled>
+                            <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV участников по месяцам">Participants by month CSV</span>
+                        </button>
                         <table>
                             <caption>
                                 <span class="screen-caption" data-ru="Выберите месяц, чтобы открыть его отчёт. В таблице учтены все записи с датой.">Select a month to open its report. Counts include all dated records.</span>
@@ -369,7 +372,12 @@
                         <p id="overviewReplyPairsEmpty" class="reply-pair-empty" data-ru="Нет измеренных ответов.">No timed replies.</p>
                         <div id="overviewReplyPairsContent" hidden>
                             <div class="reply-pair-controls">
-                                <label class="reply-pair-sort" for="overviewReplyPairSort">
+                                <label for="overviewReplyPairSearch">
+                                    <span data-ru="Найти по участнику">Find by participant</span>
+                                    <input type="search" id="overviewReplyPairSearch" aria-controls="overviewReplyPairTable"
+                                           aria-describedby="overviewReplyPairStatus" autocomplete="off" spellcheck="false">
+                                </label>
+                                <label for="overviewReplyPairSort">
                                     <span data-ru="Сортировка">Sort by</span>
                                     <select id="overviewReplyPairSort">
                                         <option value="count" data-ru="Число ответов">Reply count</option>
@@ -381,7 +389,8 @@
                                     <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV пар ответов">Reply pairs CSV</span>
                                 </button>
                             </div>
-                            <div class="reply-pair-scroll" role="region" tabindex="0"
+                            <p id="overviewReplyPairStatus" class="reply-pair-status" role="status"></p>
+                            <div id="overviewReplyPairTable" class="reply-pair-scroll" role="region" tabindex="0" hidden
                                  aria-label="Reply pairs across the whole chat" data-ru-aria-label="Пары ответов за весь чат">
                                 <table class="reply-pair-table">
                                     <thead><tr>
@@ -611,7 +620,12 @@
                         <p id="monthlyReplyPairsEmpty" class="reply-pair-empty" data-ru="Нет измеренных ответов.">No timed replies.</p>
                         <div id="monthlyReplyPairsContent" hidden>
                             <div class="reply-pair-controls">
-                                <label class="reply-pair-sort" for="monthlyReplyPairSort">
+                                <label for="monthlyReplyPairSearch">
+                                    <span data-ru="Найти по участнику">Find by participant</span>
+                                    <input type="search" id="monthlyReplyPairSearch" aria-controls="monthlyReplyPairTable"
+                                           aria-describedby="monthlyReplyPairStatus" autocomplete="off" spellcheck="false">
+                                </label>
+                                <label for="monthlyReplyPairSort">
                                     <span data-ru="Сортировка">Sort by</span>
                                     <select id="monthlyReplyPairSort">
                                         <option value="count" data-ru="Число ответов">Reply count</option>
@@ -623,7 +637,8 @@
                                     <i class="fas fa-download" aria-hidden="true"></i> <span data-ru="CSV пар ответов">Reply pairs CSV</span>
                                 </button>
                             </div>
-                            <div class="reply-pair-scroll" role="region" tabindex="0"
+                            <p id="monthlyReplyPairStatus" class="reply-pair-status" role="status"></p>
+                            <div id="monthlyReplyPairTable" class="reply-pair-scroll" role="region" tabindex="0" hidden
                                  aria-label="Reply pairs in the selected month" data-ru-aria-label="Пары ответов за выбранный месяц">
                                 <table class="reply-pair-table">
                                     <thead><tr>

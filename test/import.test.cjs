@@ -396,6 +396,77 @@ test('compares average, median and reply count within the chosen mode and month'
     }
 });
 
+test('filters reply pairs by either participant and exports the same sorted rows', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
+    const messages = [];
+    for (const [date, sender, responder, delay] of [
+        ['2026-01-01', 'Café Unit', 'Dana', 10],
+        ['2026-01-02', 'Jamie', 'Omega', 20],
+        ['2026-02-01', 'Dana', 'Cafe\u0301 Unit', 70],
+        ['2026-02-02', 'Café Unit', 'Jamie', 30],
+        ['2026-02-03', 'Zeta', 'Unit 5', 60],
+    ]) {
+        const id = messages.length + 1;
+        const time = Date.parse(date + 'T12:00:00Z');
+        messages.push({ id, from: sender, date: new Date(time).toISOString() }, {
+            id: id + 1, from: responder, date: new Date(time + delay * 1000).toISOString(), reply_to_message_id: id,
+        });
+    }
+    app.selectFile('synthetic-filter-replies.json').complete({ messages });
+    const overviewRows = openReplyPairs(app, 'overview');
+    const mode = app.element('replyTiming');
+    mode.value = 'direct';
+    mode.change();
+    const sort = app.element('overviewReplyPairSort');
+    sort.value = 'slow';
+    sort.change();
+    const overviewSearch = app.element('overviewReplyPairSearch');
+    const overviewStatus = app.element('overviewReplyPairStatus');
+    const overviewExport = app.element('overviewReplyPairCsv');
+    overviewSearch.focus();
+    overviewSearch.value = '  CAFÉ  ';
+    overviewSearch.input();
+    assert.equal(app.focusedElement, overviewSearch);
+    assert.deepEqual(participantTableEntries(overviewRows).map(row => row.slice(0, 2)), [
+        ['Dana', 'Cafe\u0301 Unit'], ['Café Unit', 'Jamie'], ['Café Unit', 'Dana'],
+    ]);
+    assert.equal(overviewStatus.textContent, 'Showing 3 of 5 pairs.');
+    overviewExport.click();
+    const csv = app.downloads.at(-1);
+    assert.equal(csv.name, 'telegram-analyzer-direct-reply-pairs-filtered.csv');
+    assert.equal(await csv.blob.text(), 'sender,responder,timed_replies,median_seconds,average_seconds\r\n'
+        + '"Dana","Cafe\u0301 Unit",1,70.0000,70.000\r\n"Café Unit","Jamie",1,30.0000,30.000\r\n'
+        + '"Café Unit","Dana",1,10.0000,10.000\r\n');
+
+    app.monthlyTab.click();
+    const monthRows = openReplyPairs(app, 'monthly');
+    const monthSearch = app.element('monthlyReplyPairSearch');
+    const monthExport = app.element('monthlyReplyPairCsv');
+    assert.equal(monthRows.children.length, 3);
+    monthSearch.value = 'omega';
+    monthSearch.input();
+    assert.equal(monthRows.children.length, 0);
+    assert.equal(app.element('monthlyReplyPairStatus').textContent, 'No pairs match this search.');
+    assert.equal(app.element('monthlyReplyPairsContent').hidden, false);
+    assert.equal(app.element('monthlyReplyPairTable').hidden, true);
+    assert.equal(monthExport.disabled, true);
+    monthExport.click();
+    assert.equal(app.downloads.length, 1);
+    app.element('prevMonth').click();
+    app.element('languageToggle').click();
+    assert.equal(app.element('monthlyReplyPairStatus').textContent, 'Показано пар: 1 из 2.');
+    assert.equal(monthSearch.value, 'omega');
+    assert.equal(overviewSearch.value, '  CAFÉ  ');
+    assert.equal(monthExport.disabled, false);
+    monthExport.click();
+    assert.equal(app.downloads.at(-1).name, 'telegram-analyzer-2026-01-direct-reply-pairs-filtered.csv');
+    assert.match(await app.downloads.at(-1).blob.text(), /"Jamie","Omega",1,20.0000,20.000\r\n$/);
+
+    app.selectFile('new-chat.json').complete({ messages });
+    assert.equal(overviewSearch.value, '');
+    assert.equal(monthSearch.value, '');
+});
+
 test('exports the sorted reply-pair table with precise seconds and formula-safe names', async () => {
     const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload', storage: { getItem: () => null } });
     const sender = '=Example("A")';
@@ -1022,6 +1093,46 @@ test('filters account chats by part of a name without changing the open report o
     assert.deepEqual(values(), ['', '0']);
 });
 
+test('opens the sole matching account chat with Enter outside of text composition', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    app.selectFile('account.json').complete({ chats: { list: [
+        { type: 'personal_chat', name: 'Project', messages: [] },
+        { type: 'private_group', name: 'Project', messages: [{ id: 1, from: 'Ari', date: '2026-01-01' }] },
+    ] } });
+    const search = app.element('accountChatSearch');
+    const type = app.element('accountChatType');
+    const title = app.element('reportTitle');
+    let handled = 0;
+    const enter = options => search.keydown({ key: 'Enter', preventDefault: () => handled++, ...options });
+    search.value = 'project';
+    search.input();
+    enter();
+    assert.equal(handled, 0);
+    assert.equal(title.textContent, 'Choose a chat');
+
+    type.value = 'accountTypeGroup';
+    type.change();
+    assert.match(app.element('accountChatSearchStatus').textContent, /1 of 2.*Press Enter/);
+    enter({ isComposing: true });
+    enter({ repeat: true });
+    enter({ ctrlKey: true });
+    assert.equal(handled, 0);
+    assert.equal(title.textContent, 'Choose a chat');
+    enter();
+    assert.equal(handled, 1);
+    assert.equal(app.element('accountChatSelect').value, '1');
+    assert.equal(app.element('analyzeAccountChat').disabled, false);
+    assert.equal(title.textContent, 'Project');
+    assert.equal(app.focusedElement, title);
+    assert.equal(app.element('overviewParticipantCount').textContent, '1');
+
+    search.value = 'nothing';
+    search.input();
+    enter();
+    assert.equal(handled, 1);
+    assert.equal(title.textContent, 'Project');
+});
+
 test('combines account chat type and name filters and preserves them on language change or canceled import', () => {
     const app = createAnalyzer({ search: '?view=upload' });
     const type = app.element('accountChatType');
@@ -1085,6 +1196,39 @@ test('combines account chat type and name filters and preserves them on language
     assert.equal(type.value, '');
     assert.equal(search.value, '');
     assert.deepEqual(values(), ['', '0', '1']);
+});
+
+test('names standalone and account exports of Telegram system chats in the selected language', () => {
+    const app = createAnalyzer({ search: '?view=upload', storage: { getItem: () => null } });
+    const reportTitle = app.element('reportTitle');
+    const language = app.element('languageToggle');
+    const messages = [{ id: 1, from: 'Synthetic sender', date: '2026-11-01T12:00:00' }];
+    const systemChats = [
+        ['saved_messages', 'Saved Messages', 'Избранное'],
+        ['replies', 'Replies', 'Ответы'],
+        ['verification_codes', 'Verification Codes', 'Коды подтверждения'],
+    ];
+    for (const [type, english, russian] of systemChats) {
+        app.selectFile('result.json').complete({ type, id: 42, messages });
+        assert.equal(reportTitle.textContent, english);
+        language.click();
+        assert.equal(reportTitle.textContent, russian);
+        language.click();
+    }
+    app.selectFile('unnamed-chat.json').complete({ type: 'personal_chat', messages });
+    assert.equal(reportTitle.textContent, 'unnamed-chat.json');
+    app.selectFile('named-chat.json').complete({ type: 'saved_messages', name: ' Custom title ', messages });
+    assert.equal(reportTitle.textContent, 'Custom title');
+
+    app.selectFile('account.json').complete({ chats: { list: systemChats.map(([type]) => ({ type, messages })) } });
+    for (const [index, [, english, russian]] of systemChats.entries()) {
+        chooseAccountChat(app, String(index));
+        app.element('analyzeAccountChat').click();
+        assert.equal(reportTitle.textContent, english);
+        language.click();
+        assert.equal(reportTitle.textContent, russian);
+        language.click();
+    }
 });
 
 test('lists valid account chats safely and waits for an explicit analysis', () => {
@@ -1324,6 +1468,49 @@ test('exports dated monthly activity as stable CSV without charts or participant
     assert.equal(activity.hidden, true);
     assert.equal(exportActivity.disabled, true);
     exportActivity.click();
+    assert.equal(app.downloads.length, 2);
+});
+
+test('exports all dated participant activity with safe names and a blank row for unattributed records', async () => {
+    const app = createAnalyzer({ chartsAvailable: false, search: '?view=upload' });
+    const activity = app.element('monthlyActivity');
+    const button = app.element('exportParticipantActivity');
+    assert.equal(button.disabled, true);
+    app.selectFile('participant-activity.json').complete({ messages: [
+        { id: 4, from: '=SUM(1,2)', from_id: 'user7', date: '2026-02-01T09:00:00Z' },
+        { id: 1, from: 'Previous name', from_id: 'user7', date: '2026-01-31T23:30:00-08:00' },
+        { id: 2, from: 'Béa "B"', date: '2026-01-31T23:35:00-08:00' },
+        { id: 3, type: 'service', date: '2026-01-31T23:40:00-08:00' },
+        { id: 5, date: '2026-03-01' },
+        { id: 6, from: 'Undated participant' },
+    ] });
+    assert.equal(button.disabled, false);
+    button.click();
+    assert.equal(app.downloads.length, 0);
+    activity.open = true;
+    activity.toggle();
+    button.click();
+    app.element('languageToggle').click();
+    button.click();
+    assert.equal(app.downloads.length, 2);
+    const expected = [
+        '\uFEFFmonth,participant,records',
+        `2026-01,"'=SUM(1,2)",1`,
+        '2026-01,"Béa ""B""",1',
+        '2026-01,,1',
+        `2026-02,"'=SUM(1,2)",1`,
+        '2026-03,,1',
+        '',
+    ].join('\r\n');
+    for (const { name, blob } of app.downloads) {
+        assert.equal(name, 'telegram-analyzer-participants-by-month.csv');
+        assert.equal(Buffer.from(await blob.arrayBuffer()).toString('utf8'), expected);
+    }
+    const pending = app.selectFile('replacement.json');
+    button.click();
+    pending.complete({ messages: [{ id: 7, type: 'unsupported' }] });
+    assert.equal(button.disabled, true);
+    button.click();
     assert.equal(app.downloads.length, 2);
 });
 

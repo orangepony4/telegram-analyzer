@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const monthlyActivity = document.getElementById('monthlyActivity');
     const monthlyActivityRows = document.getElementById('monthlyActivityRows');
     const exportMonthlyActivityButton = document.getElementById('exportMonthlyActivity');
+    const exportParticipantActivityButton = document.getElementById('exportParticipantActivity');
     const dailyActivity = document.getElementById('dailyActivity');
     const dailyActivityRows = document.getElementById('dailyActivityRows');
     const exportDailyActivityButton = document.getElementById('exportDailyActivity');
@@ -57,7 +58,10 @@ document.addEventListener('DOMContentLoaded', () => {
         panel: document.getElementById(`${scope}ReplyPairs`),
         content: document.getElementById(`${scope}ReplyPairsContent`),
         empty: document.getElementById(`${scope}ReplyPairsEmpty`),
+        search: document.getElementById(`${scope}ReplyPairSearch`),
+        status: document.getElementById(`${scope}ReplyPairStatus`),
         sort: document.getElementById(`${scope}ReplyPairSort`),
+        table: document.getElementById(`${scope}ReplyPairTable`),
         rows: document.getElementById(`${scope}ReplyPairRows`),
         exportButton: document.getElementById(`${scope}ReplyPairCsv`),
     }));
@@ -177,6 +181,11 @@ document.addEventListener('DOMContentLoaded', () => {
             (shown, total) => `Показано ${shown} из ${total} участников.`,
         ],
         noMatchingParticipants: ['No participants match this search.', 'Участники с таким именем не найдены.'],
+        replyPairMatches: [
+            (shown, total) => `Showing ${shown} of ${total} pairs.`,
+            (shown, total) => `Показано пар: ${shown} из ${total}.`,
+        ],
+        noMatchingReplyPairs: ['No pairs match this search.', 'Пары по этому запросу не найдены.'],
         demoReport: ['Demo report', 'Демо-отчёт'],
         demoTitle: ['Sample chat', 'Демонстрационный чат'],
         demoSource: ['Fictional conversation', 'Вымышленная переписка'],
@@ -215,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             (shown, total) => `${shown} of ${total} chats`,
             (shown, total) => `Найдено ${shown} из ${total}`,
         ],
+        accountSearchOpen: ['Press Enter in search to open the match.', 'Нажмите Enter в поле поиска, чтобы открыть найденный чат.'],
         accountOption: [
             (name, suffix, count, number) => `${name}${suffix} · ${count} ${count === 1 ? 'message' : 'messages'} · #${number}`,
             (name, suffix, count, number) => `${name}${suffix} · ${count} сообщ. · #${number}`,
@@ -495,6 +505,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     monthlyActivity.addEventListener('toggle', refreshMonthlyActivity);
     exportMonthlyActivityButton.addEventListener('click', downloadMonthlyActivity);
+    exportParticipantActivityButton.addEventListener('click', downloadParticipantActivity);
     dailyActivity.addEventListener('toggle', refreshDailyActivity);
     exportDailyActivityButton.addEventListener('click', downloadDailyActivity);
     overviewParticipants.panel.addEventListener('toggle', refreshOverviewParticipants);
@@ -509,11 +520,13 @@ document.addEventListener('DOMContentLoaded', () => {
     monthlyParticipants.search.addEventListener('input', refreshMonthlyParticipants);
     monthlyParticipants.sort.addEventListener('change', refreshMonthlyParticipants);
     overviewReplyPairs.panel.addEventListener('toggle', refreshOverviewReplyPairs);
+    overviewReplyPairs.search.addEventListener('input', refreshOverviewReplyPairs);
     overviewReplyPairs.sort.addEventListener('change', refreshOverviewReplyPairs);
     overviewReplyPairs.exportButton.addEventListener('click', () => {
         if (allStatsTab.classList.contains('active')) downloadReplyPairTable(overviewReplyPairs, overallResponseStats);
     });
     monthlyReplyPairs.panel.addEventListener('toggle', refreshMonthlyReplyPairs);
+    monthlyReplyPairs.search.addEventListener('input', refreshMonthlyReplyPairs);
     monthlyReplyPairs.sort.addEventListener('change', refreshMonthlyReplyPairs);
     monthlyReplyPairs.exportButton.addEventListener('click', () => {
         const selected = selectedReplyMonth();
@@ -614,6 +627,16 @@ document.addEventListener('DOMContentLoaded', () => {
     clearLoadedDataButton.addEventListener('click', clearLoadedData);
     cancelImportButton.addEventListener('click', cancelImport);
     accountChatSearch.addEventListener('input', refreshAccountChooser);
+    accountChatSearch.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' || event.isComposing || event.repeat
+            || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+        const options = accountChatSelect.options;
+        if (accountChatSelect.disabled || options.length !== 2) return;
+        event.preventDefault();
+        accountChatSelect.value = options[1].value;
+        analyzeAccountChatButton.disabled = false;
+        analyzeAccountChat();
+    });
     accountChatType.addEventListener('change', refreshAccountChooser);
     accountChatSelect.addEventListener('change', () => {
         const chat = selectedAccountChat();
@@ -1345,13 +1368,13 @@ document.addEventListener('DOMContentLoaded', () => {
             && (message.from === undefined || message.from === null || typeof message.from === 'string'));
     }
 
-    function accountChatName(chat) {
+    function exportedChatName(chat, fallback = translated('untitledChat')) {
         if (typeof chat.name === 'string' && chat.name.trim()) return chat.name.trim();
         switch (chat.type) {
             case 'saved_messages': return translated('savedMessages');
             case 'replies': return translated('replies');
             case 'verification_codes': return translated('verificationCodes');
-            default: return translated('untitledChat');
+            default: return fallback;
         }
     }
 
@@ -1363,7 +1386,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const chat of list) {
                 if (!validMessages(chat?.messages)) continue;
                 chats.push({
-                    name: accountChatName(chat), number: chats.length + 1,
+                    name: exportedChatName(chat), number: chats.length + 1,
                     type: accountChatTypes.get(chat.type) ?? 'accountTypeOther',
                     left: groupIndex === 1, messages: chat.messages, peer: exportedChatPeer(chat),
                 });
@@ -1424,8 +1447,9 @@ document.addEventListener('DOMContentLoaded', () => {
         accountChatSelect.disabled = matches.length === 0;
         analyzeAccountChatButton.disabled = !stillSelected;
         if (selected && !stillSelected) setLocalizedText(accountChatStatus, translated('selectChatStatus'));
-        const status = translate('accountSearchMatches',
+        const counts = translate('accountSearchMatches',
             countFormat.format(matches.length), countFormat.format(accountChats.length));
+        const status = matches.length === 1 ? `${counts}. ${translate('accountSearchOpen')}` : counts;
         if (accountChatSearchStatus.textContent !== status) accountChatSearchStatus.textContent = status;
     }
 
@@ -1469,6 +1493,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderMessages(messages, { name, peer = null, isDemo = false, preserveNames = false }) {
         overviewParticipants.search.value = '';
         monthlyParticipants.search.value = '';
+        overviewReplyPairs.search.value = '';
+        monthlyReplyPairs.search.value = '';
         const timings = orderMessageTimings(messages);
         if (preserveNames) {
             // Keep original names and sender IDs for later selection of this chat.
@@ -1538,6 +1564,8 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshDailyActivity();
         overviewParticipants.search.value = '';
         monthlyParticipants.search.value = '';
+        overviewReplyPairs.search.value = '';
+        monthlyReplyPairs.search.value = '';
         refreshOverviewParticipants();
         refreshMonthlyParticipants();
         refreshOverviewReplyPairs();
@@ -1802,9 +1830,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearReport();
                 if (messages) {
                     setLocalizedText(sourceFileType, translated(isDemo ? 'demoData' : 'localFile'));
-                    const name = typeof data.name === 'string' ? data.name.trim() : '';
                     renderMessages(messages, {
-                        name: isDemo ? translated('demoTitle') : name || file.name,
+                        name: isDemo ? translated('demoTitle') : exportedChatName(data, file.name),
                         peer: exportedChatPeer(data),
                         isDemo,
                     });
@@ -2374,6 +2401,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function refreshMonthlyActivity() {
         monthlyActivity.hidden = monthsData.length === 0;
         exportMonthlyActivityButton.disabled = monthlyActivity.hidden;
+        exportParticipantActivityButton.disabled = monthlyActivity.hidden;
         if (monthlyActivity.hidden) monthlyActivity.open = false;
         monthlyActivityRows.replaceChildren();
         if (!monthlyActivity.open) return;
@@ -2509,10 +2537,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return summaries;
     }
 
-    function sortedReplyPairs(data, sortBy) {
-        const pairs = getReplyPairSummaries(selectedResponseTimes(data)).map(pair => ({
-            ...pair, sender: participantLabel(pair.sender), responder: participantLabel(pair.responder),
-        }));
+    function sortedReplyPairs(summaries, sortBy, query = '') {
+        const pairs = [];
+        for (const pair of summaries) {
+            const sender = participantLabel(pair.sender);
+            const responder = participantLabel(pair.responder);
+            if (query && !normalizeSearchText(sender).includes(query) && !normalizeSearchText(responder).includes(query)) continue;
+            pairs.push({ ...pair, sender, responder });
+        }
         const byCount = sortBy !== 'fast' && sortBy !== 'slow';
         const direction = sortBy === 'fast' ? 1 : -1;
         return pairs.sort((first, second) => {
@@ -2522,14 +2554,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function renderReplyPairTable({ panel, content, empty, sort, rows, exportButton }, data) {
+    function renderReplyPairTable({ panel, content, empty, search, status, sort, table, rows, exportButton }, data) {
         panel.hidden = !data;
         if (panel.hidden) panel.open = false;
         rows.replaceChildren();
-        const pairs = panel.open ? sortedReplyPairs(data, sort.value) : [];
+        const summaries = panel.open ? getReplyPairSummaries(selectedResponseTimes(data)) : [];
+        const query = normalizeSearchText(search.value ?? '');
+        const pairs = sortedReplyPairs(summaries, sort.value, query);
         exportButton.disabled = pairs.length === 0;
-        content.hidden = exportButton.disabled;
+        content.hidden = summaries.length === 0;
         empty.hidden = !content.hidden;
+        table.hidden = exportButton.disabled;
+        let message = '';
+        if (query && summaries.length) {
+            message = pairs.length
+                ? translate('replyPairMatches', countFormat.format(pairs.length), countFormat.format(summaries.length))
+                : translate('noMatchingReplyPairs');
+        }
+        if (status.textContent !== message) status.textContent = message;
 
         for (const { sender, responder, count, median, average } of pairs) {
             const row = document.createElement('tr');
@@ -3241,7 +3283,8 @@ document.addEventListener('DOMContentLoaded', () => {
             let subtitle = month ? `${formatReportMonth(month.month)} · ${description}` : description;
             let replyPairs = null;
             if (replyChart) {
-                const pairs = sortedReplyPairs(month?.data ?? overallResponseStats, 'count');
+                const summaries = getReplyPairSummaries(selectedResponseTimes(month?.data ?? overallResponseStats));
+                const pairs = sortedReplyPairs(summaries, 'count');
                 replyPairs = pairs.slice(0, 8);
                 const scope = month ? formatReportMonth(month.month) : translate('printWholeChat');
                 const timing = translate(replyTimingMode === 'direct' ? 'printDirect' : 'printAdjacent');
@@ -3363,6 +3406,19 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadCsv(rows, 'telegram-analyzer-monthly-activity.csv');
     }
 
+    function downloadParticipantActivity() {
+        if (exportParticipantActivityButton.disabled || !monthlyActivity.open
+            || !allStatsTab.classList.contains('active') || statsContainer.style.display !== 'block') return;
+        const rows = ['month,participant,records'];
+        for (const { month, data } of monthsData) {
+            for (const [participant, { messageCount }] of data.participantTotals) {
+                rows.push(`${month},${csvTextField(participantLabel(participant))},${messageCount}`);
+            }
+            if (data.unattributedCount) rows.push(`${month},,${data.unattributedCount}`);
+        }
+        downloadCsv(rows, 'telegram-analyzer-participants-by-month.csv');
+    }
+
     function downloadDailyActivity() {
         const selected = monthsData[currentMonthIndex];
         if (exportDailyActivityButton.disabled || !selected || !monthlyStatsTab.classList.contains('active')
@@ -3429,14 +3485,19 @@ document.addEventListener('DOMContentLoaded', () => {
         downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-replies.csv`);
     }
 
-    function downloadReplyPairTable({ panel, sort, exportButton }, data, month) {
+    function downloadReplyPairTable({ panel, search, sort, exportButton }, data, month) {
         if (exportButton.disabled || !panel.open || statsContainer.style.display !== 'block') return;
+        const query = normalizeSearchText(search.value ?? '');
+        const summaries = getReplyPairSummaries(selectedResponseTimes(data));
+        const pairs = sortedReplyPairs(summaries, sort.value, query);
+        if (!pairs.length) return;
         const rows = ['sender,responder,timed_replies,median_seconds,average_seconds'];
-        for (const { sender, responder, count, median, average } of sortedReplyPairs(data, sort.value)) {
+        for (const { sender, responder, count, median, average } of pairs) {
             rows.push([csvTextField(sender), csvTextField(responder), count, median.toFixed(4), average.toFixed(3)].join(','));
         }
         const period = month ? `${month}-` : '';
-        downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-reply-pairs.csv`);
+        const filtered = query ? '-filtered' : '';
+        downloadCsv(rows, `telegram-analyzer-${period}${replyTimingMode}-reply-pairs${filtered}.csv`);
     }
 
     function downloadParticipantSummary(participantTotals, filename) {
