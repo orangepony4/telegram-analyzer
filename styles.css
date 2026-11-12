@@ -1236,7 +1236,7 @@ a { color: var(--accent); }
 @media print {
     @page { margin: 14mm; }
 
-    body {
+    :root, body.theme-muted-light {
         color-scheme: light;
         --background: #fff;
         --surface: #fff;
@@ -1263,6 +1263,7 @@ a { color: var(--accent); }
     .report-heading h1 { font-size: 24pt; }
     .report-kind { color: var(--text-muted); }
     .print-context { display: block; margin-bottom: 10pt; color: var(--text-muted); font-size: 10pt; }
+    .reply-pair-status { font-size: 10pt; }
     .print-caption { display: inline; }
     .metric-band { border: 1px solid var(--border); border-radius: 0; break-inside: avoid; }
     .metric { padding: 7pt; }
